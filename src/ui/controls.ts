@@ -12,9 +12,14 @@ export function createSegmented(
   options: SegOption[],
   active: string,
   onChange: (value: string) => void,
-): { el: HTMLElement; setActive: (value: string) => void } {
+): { el: HTMLElement; setActive: (value: string) => void; layout: () => void } {
   const el = document.createElement('div');
   el.className = 'segmented';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'segmented__thumb';
+  el.appendChild(thumb);
+
   const buttons = new Map<string, HTMLElement>();
 
   for (const opt of options) {
@@ -22,7 +27,6 @@ export function createSegmented(
     btn.type = 'button';
     btn.className = 'segmented__btn';
     btn.textContent = opt.label;
-    if (opt.value === active) btn.classList.add('is-active');
     btn.addEventListener('click', () => {
       onChange(opt.value);
     });
@@ -30,11 +34,36 @@ export function createSegmented(
     el.appendChild(btn);
   }
 
-  const setActive = (value: string) => {
-    for (const [v, b] of buttons) b.classList.toggle('is-active', v === value);
+  // Position the sliding thumb over the active button. When `animate` is false
+  // the move is committed without a transition (used on first layout / open so
+  // the thumb doesn't slide in from the edge).
+  const position = (animate: boolean) => {
+    let activeBtn: HTMLElement | undefined;
+    for (const b of buttons.values()) {
+      if (b.classList.contains('is-active')) {
+        activeBtn = b;
+        break;
+      }
+    }
+    if (!activeBtn) return;
+    if (!animate) el.classList.remove('segmented--ready');
+    thumb.style.width = `${activeBtn.offsetWidth}px`;
+    thumb.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
+    if (!animate) {
+      void thumb.offsetWidth; // commit the move before re-enabling transitions
+      el.classList.add('segmented--ready');
+    }
   };
 
-  return { el, setActive };
+  const setActive = (value: string) => {
+    for (const [v, b] of buttons) b.classList.toggle('is-active', v === value);
+    position(true);
+  };
+
+  const layout = () => position(false);
+
+  setActive(active);
+  return { el, setActive, layout };
 }
 
 export interface PopoverOpts {
@@ -54,9 +83,9 @@ export class SettingsPopover {
   readonly el: HTMLElement;
   private popover: HTMLElement;
   private autoSwitch!: HTMLElement;
-  private themeSeg!: { el: HTMLElement; setActive: (v: string) => void };
-  private modeSeg!: { el: HTMLElement; setActive: (v: string) => void };
-  private sizeSeg!: { el: HTMLElement; setActive: (v: string) => void };
+  private themeSeg!: { el: HTMLElement; setActive: (v: string) => void; layout: () => void };
+  private modeSeg!: { el: HTMLElement; setActive: (v: string) => void; layout: () => void };
+  private sizeSeg!: { el: HTMLElement; setActive: (v: string) => void; layout: () => void };
   private open = false;
   private opts: PopoverOpts;
 
@@ -99,8 +128,6 @@ export class SettingsPopover {
     modeLabel.className = 'popover__label';
     modeLabel.textContent = 'Game';
 
-    const modeRow = document.createElement('div');
-    modeRow.className = 'popover__row';
     this.modeSeg = createSegmented(
       [
         { label: 'Standard', value: 'standard' },
@@ -109,23 +136,25 @@ export class SettingsPopover {
       this.opts.mode,
       (v) => this.opts.onMode(v as 'standard' | 'classic'),
     );
-    modeRow.append(this.modeSeg.el);
 
     const sizeLabel = document.createElement('div');
     sizeLabel.className = 'popover__label';
-    sizeLabel.style.marginTop = '8px';
     sizeLabel.textContent = 'Board Size';
 
-    const sizeRow = document.createElement('div');
-    sizeRow.className = 'popover__row';
     this.sizeSeg = createSegmented(
       SIZES.map((s) => ({ label: `${s}×${s}`, value: String(s) })),
       String(this.opts.size),
       (v) => this.opts.onSize(Number(v)),
     );
-    sizeRow.append(this.sizeSeg.el);
 
-    gameGroup.append(modeLabel, modeRow, sizeLabel, sizeRow);
+    gameGroup.append(modeLabel, this.modeSeg.el);
+
+    const sizeGroup = document.createElement('div');
+    sizeGroup.className = 'popover__group';
+    sizeGroup.append(sizeLabel, this.sizeSeg.el);
+
+    const dividerGameSize = document.createElement('div');
+    dividerGameSize.className = 'popover__divider';
 
     const divider1 = document.createElement('div');
     divider1.className = 'popover__divider';
@@ -146,6 +175,9 @@ export class SettingsPopover {
       (v) => this.opts.onTheme(v as ThemePref),
     );
     themeGroup.append(themeLabel, this.themeSeg.el);
+
+    const dividerThemeAuto = document.createElement('div');
+    dividerThemeAuto.className = 'popover__divider';
 
     const autoRow = document.createElement('div');
     autoRow.className = 'popover__row';
@@ -171,7 +203,7 @@ export class SettingsPopover {
     danger.textContent = 'Clear all progress';
     danger.addEventListener('click', () => this.opts.onClearAll());
 
-    this.popover.append(gameGroup, divider1, themeGroup, autoRow, divider2, danger);
+    this.popover.append(gameGroup, dividerGameSize, sizeGroup, divider1, themeGroup, dividerThemeAuto, autoRow, divider2, danger);
   }
 
   toggle(): void {
@@ -181,6 +213,13 @@ export class SettingsPopover {
   private openPopover(): void {
     this.open = true;
     this.popover.hidden = false;
+    requestAnimationFrame(() => this.layoutThumbs());
+  }
+
+  private layoutThumbs(): void {
+    this.modeSeg.layout();
+    this.sizeSeg.layout();
+    this.themeSeg.layout();
   }
 
   close(): void {

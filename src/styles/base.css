@@ -82,11 +82,12 @@ button:disabled {
   --badge-text: #ffffff;
 
   /* dropdown (settings popover) */
-  --dropdown-bg: #e0dad1;
-  --dropdown-selected: #d4ccc1;
+  --dropdown-bg: #ffffff;
+  --dropdown-selected: #8f7a66;
   --dropdown-selected-text: #ffffff;
   --dropdown-text: #756452;
   --dropdown-text-secondary: #786755;
+  --divider: #d4c8b0;
 
   /* modal / popup (win, game over, confirm) */
   --modal-bg: #534f48;
@@ -97,14 +98,29 @@ button:disabled {
   /* footer */
   --footer-text: #c5bdb1;
 
-  --seg-track: var(--dropdown-bg);
+  --seg-track: #e0dad1;
   --seg-active: var(--dropdown-selected);
   --seg-active-text: var(--dropdown-selected-text);
   --popover-bg: var(--dropdown-bg);
 
   --shadow: 0 10px 28px rgba(117, 100, 82, 0.22);
   --shadow-tile: 0 1px 2px rgba(117, 100, 82, 0.25);
-  --shadow-board: 0 14px 32px rgba(117, 100, 82, 0.28), 0 2px 8px rgba(117, 100, 82, 0.16);
+  --shadow-board: 0 6px 16px rgba(117, 100, 82, 0.14), 0 1px 3px rgba(117, 100, 82, 0.08);
+
+  /* tile colors */
+  --tile-2-bg: #eee4da; --tile-2-fg: #756452;
+  --tile-4-bg: #ede0c8; --tile-4-fg: #756452;
+  --tile-8-bg: #f2b179; --tile-8-fg: #f9f6f2;
+  --tile-16-bg: #f59563; --tile-16-fg: #f9f6f2;
+  --tile-32-bg: #f67c5f; --tile-32-fg: #f9f6f2;
+  --tile-64-bg: #f65e3b; --tile-64-fg: #f9f6f2;
+  --tile-128-bg: #edcf72; --tile-128-fg: #f9f6f2;
+  --tile-256-bg: #edcc61; --tile-256-fg: #f9f6f2;
+  --tile-512-bg: #baac9a; --tile-512-fg: #f9f6f2;
+  --tile-1024-bg: #988776; --tile-1024-fg: #f9f6f2;
+  --tile-2048-bg: #756452; --tile-2048-fg: #f9f6f2;
+  --tile-super-bg: #3c3a32; --tile-super-fg: #f9f6f2;
+
   color-scheme: light;
 }
 
@@ -127,8 +143,8 @@ button:disabled {
   /* buttons */
   --accent: #baac9a;
   --accent-strong: #c9bcac;
-  --btn-bg: #a89686;
-  --btn-bg-hover: #b8a696;
+  --btn-bg: #6f5d4a;
+  --btn-bg-hover: #7d6b58;
   --btn-text: #ffffff;
 
   /* score indicators */
@@ -146,11 +162,12 @@ button:disabled {
   --badge-text: #ffffff;
 
   /* dropdown */
-  --dropdown-bg: #2a251f;
-  --dropdown-selected: #3d352b;
-  --dropdown-selected-text: #ffffff;
+  --dropdown-bg: #211d17;
+  --dropdown-selected: #baac9a;
+  --dropdown-selected-text: #1a1610;
   --dropdown-text: #e8dcce;
   --dropdown-text-secondary: #b7a893;
+  --divider: #42392f;
 
   /* modal / popup */
   --modal-bg: #3d3a34;
@@ -161,14 +178,20 @@ button:disabled {
   /* footer */
   --footer-text: #6f6459;
 
-  --seg-track: var(--dropdown-bg);
+  --seg-track: #2c2820;
   --seg-active: var(--dropdown-selected);
   --seg-active-text: var(--dropdown-selected-text);
   --popover-bg: var(--dropdown-bg);
 
   --shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
   --shadow-tile: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-board: 0 14px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-board: 0 6px 16px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  /* warmer, less-bright low tiles in dark mode */
+  --tile-2-bg: #ddd0b8;
+  --tile-4-bg: #d3c4a8;
+  --tile-8-bg: #f0a868;
+
   color-scheme: dark;
 }
 

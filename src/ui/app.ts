@@ -23,6 +23,10 @@ import {
 
 type Armed = 'none' | 'swap' | 'delete';
 
+function modeOrder(m: GameMode): number {
+  return m === 'standard' ? 0 : 1;
+}
+
 interface OverlayAction {
   label: string;
   primary?: boolean;
@@ -41,6 +45,11 @@ export class App {
   private pendingNew = false;
   private armed: Armed = 'none';
   private autoOn = false;
+  private lastScore = 0;
+  private lastBest = 0;
+  private lastSize: number;
+  private lastMode: GameMode;
+  private lastBadgeMode: string | null = null;
   private autoTimer: ReturnType<typeof setTimeout> | null = null;
   private currentOverlay: HTMLElement | null = null;
 
@@ -52,7 +61,7 @@ export class App {
   private swapBtn!: HTMLElement;
   private deleteBtn!: HTMLElement;
   private hintEl!: HTMLElement;
-  private resumeBtn!: HTMLElement;
+  private newGameBtn!: HTMLElement;
   private themeBtn!: HTMLElement;
   private modeBadge!: HTMLElement;
 
@@ -60,6 +69,8 @@ export class App {
     this.data = load();
     this.size = this.data.settings.lastSize || DEFAULT_SIZE;
     this.mode = this.data.settings.lastMode || DEFAULT_MODE;
+    this.lastSize = this.size;
+    this.lastMode = this.mode;
   }
 
   start(): void {
@@ -122,36 +133,20 @@ export class App {
     themeBtn.innerHTML = currentResolved() === 'dark' ? Icons.sun : Icons.moon;
     themeBtn.addEventListener('click', () => this.onThemeToggle());
 
-    const resumeBtn = document.createElement('button');
-    resumeBtn.type = 'button';
-    resumeBtn.className = 'btn btn--ghost';
-    resumeBtn.textContent = 'Resume';
-    resumeBtn.style.display = 'none';
-    resumeBtn.addEventListener('click', () => this.resumeGame());
-
     const newGameBtn = document.createElement('button');
     newGameBtn.type = 'button';
-    newGameBtn.className = 'btn btn--primary';
+    newGameBtn.className = 'btn btn--primary topbar__primary';
     newGameBtn.textContent = 'New Game';
-    newGameBtn.addEventListener('click', () => this.confirmNewGame());
+    newGameBtn.addEventListener('click', () => {
+      if (this.pendingNew) this.resumeGame();
+      else this.confirmNewGame();
+    });
 
-    actions.append(scores, themeBtn, resumeBtn, newGameBtn);
+    actions.append(scores, themeBtn, newGameBtn);
     topbar.append(left, actions);
 
     const shell = document.createElement('main');
     shell.className = 'app';
-
-    // tagline
-    const titleRow = document.createElement('div');
-    titleRow.className = 'title-row';
-    const titleText = document.createElement('div');
-    titleText.className = 'title-row__text';
-    const h1 = document.createElement('h1');
-    h1.textContent = 'Join the tiles, get to 2048!';
-    const p = document.createElement('p');
-    p.textContent = 'Arrow keys, WASD, or swipe to move.';
-    titleText.append(h1, p);
-    titleRow.append(titleText);
 
     // stage: board + hint + powerups
     const stage = document.createElement('div');
@@ -181,14 +176,10 @@ export class App {
 
     stage.append(hintEl, powerups);
 
-    const foot = document.createElement('footer');
-    foot.className = 'foot';
-    foot.textContent = 'A clean 2048 rewrite. Progress saves to your browser.';
-
-    shell.append(titleRow, stage, foot);
+    shell.append(stage);
     app.append(topbar, shell);
 
-    this.resumeBtn = resumeBtn;
+    this.newGameBtn = newGameBtn;
     this.themeBtn = themeBtn;
 
     this.input = new Input(this.board.el, {
@@ -255,7 +246,6 @@ export class App {
     this.board.setSize(size);
     this.board.fullRender(this.session.state.grid, !saved);
     this.updateUI();
-    this.updateResumeVisibility();
     this.handleWinOver();
   }
 
@@ -268,6 +258,7 @@ export class App {
     this.data.settings.lastMode = mode;
     this.persist();
     this.loadGame(size, mode);
+    this.popover.update({ size, mode });
   }
 
   // ---------- Moves ----------
@@ -281,7 +272,6 @@ export class App {
     if (this.pendingNew) this.pendingNew = false;
     this.saveCurrent();
     this.updateUI();
-    this.updateResumeVisibility();
     this.handleWinOver();
   }
 
@@ -315,7 +305,6 @@ export class App {
     if (!this.pendingNew) this.saveCurrent();
     this.board.fullRender(this.session.state.grid, true);
     this.updateUI();
-    this.updateResumeVisibility();
   }
 
   private resumeGame(): void {
@@ -323,25 +312,19 @@ export class App {
     const saved = getGame(this.data, this.size, this.mode);
     if (!saved || saved.over || saved.moveCount === 0) {
       this.pendingNew = false;
-      this.updateResumeVisibility();
+      this.updatePrimaryButton();
       return;
     }
     this.session = restoreSession(saved);
     this.pendingNew = false;
     this.board.fullRender(this.session.state.grid);
     this.updateUI();
-    this.updateResumeVisibility();
-  }
-
-  private updateResumeVisibility(): void {
-    const saved = getGame(this.data, this.size, this.mode);
-    const show = this.pendingNew && !!saved && !saved.over && saved.moveCount > 0;
-    this.resumeBtn.style.display = show ? '' : 'none';
   }
 
   // ---------- Powerups ----------
   private powerupUndo(): void {
     if (!this.session.canUndo) return;
+    this.clearPendingNew();
     this.session.undo();
     this.saveCurrent();
     this.board.fullRender(this.session.state.grid);
@@ -355,12 +338,13 @@ export class App {
       return;
     }
     this.stopAuto();
+    this.clearPendingNew();
     this.armed = 'swap';
     this.board.enterSelectMode(2, (cells) => {
       if (cells.length === 2) {
         this.session.swap(cells[0].row, cells[0].col, cells[1].row, cells[1].col);
         this.saveCurrent();
-        this.board.fullRender(this.session.state.grid);
+        this.board.animateSwap(cells[0].id, cells[1].id);
       }
       this.armed = 'none';
       this.updateUI();
@@ -374,6 +358,7 @@ export class App {
       return;
     }
     this.stopAuto();
+    this.clearPendingNew();
     this.armed = 'delete';
     this.board.enterSelectMode(1, (cells) => {
       if (cells.length === 1) {
@@ -397,9 +382,37 @@ export class App {
   // ---------- UI sync ----------
   private updateUI(): void {
     const s = this.session.state;
-    this.scoreVal.textContent = String(s.score);
-    this.bestVal.textContent = String(s.best);
-    this.modeBadge.textContent = this.mode;
+
+    // Detect a mode / size switch so the odometer always rolls, and rolls in
+    // the direction that matches the navigation (forward/backward).
+    const switched = this.lastSize !== this.size || this.lastMode !== this.mode;
+    let dir: 'down' | 'up' = 'down';
+    if (switched) {
+      dir =
+        this.size !== this.lastSize
+          ? this.size > this.lastSize
+            ? 'down'
+            : 'up'
+          : modeOrder(this.mode) > modeOrder(this.lastMode)
+            ? 'down'
+            : 'up';
+    }
+    const anim = switched ? { force: true, dir } : undefined;
+    this.setScore(this.scoreVal, s.score, this.lastScore, anim);
+    this.setScore(this.bestVal, s.best, this.lastBest, anim);
+    this.lastScore = s.score;
+    this.lastBest = s.best;
+    this.lastSize = this.size;
+    this.lastMode = this.mode;
+
+    // Mode badge — animate the label on change, skip on initial load.
+    if (this.lastBadgeMode !== this.mode) {
+      if (this.lastBadgeMode === null) this.modeBadge.textContent = this.mode;
+      else this.animateModeBadge(this.mode);
+      this.lastBadgeMode = this.mode;
+    }
+
+    this.updatePrimaryButton();
 
     const isStandard = this.mode === 'standard';
     this.powerupsRow.style.display = isStandard ? '' : 'none';
@@ -429,6 +442,110 @@ export class App {
     this.scoreVal.classList.remove('is-bump');
     void this.scoreVal.offsetWidth; // restart animation
     this.scoreVal.classList.add('is-bump');
+  }
+
+  /**
+   * Update a score readout. When `anim.force` is set (mode/size switch) the
+   * odometer rolls regardless of direction. Without `anim.force` it only rolls
+   * on decreases — so normal play (score only goes up) is never disturbed.
+   */
+  private setScore(
+    el: HTMLElement,
+    value: number,
+    prev: number,
+    anim?: { force?: boolean; dir?: 'down' | 'up' },
+  ): void {
+    const text = String(value);
+    if (anim?.force) {
+      this.scrollScoreTo(el, text, anim.dir ?? 'down');
+    } else if (value < prev) {
+      this.scrollScoreTo(el, text, 'down');
+    } else {
+      el.textContent = text;
+    }
+  }
+
+  private scrollScoreTo(el: HTMLElement, text: string, dir: 'down' | 'up'): void {
+    const prev = el.textContent ?? '';
+    el.textContent = '';
+    const reel = document.createElement('span');
+    reel.className = 'score-reel';
+    const top = document.createElement('span');
+    const bottom = document.createElement('span');
+    if (dir === 'down') {
+      // new enters from below: [old, new], roll up
+      top.textContent = prev;
+      bottom.textContent = text;
+      reel.style.transform = 'translateY(0)';
+    } else {
+      // new enters from above: [new, old], roll down
+      top.textContent = text;
+      bottom.textContent = prev;
+      reel.style.transform = 'translateY(-50%)';
+    }
+    reel.append(top, bottom);
+    el.appendChild(reel);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        reel.style.transform = dir === 'down' ? 'translateY(-50%)' : 'translateY(0)';
+      }),
+    );
+    window.setTimeout(() => {
+      if (el.firstElementChild === reel) el.textContent = text;
+    }, 420);
+  }
+
+  // ---------- Mode badge slide ----------
+  private animateModeBadge(newMode: string): void {
+    const badge = this.modeBadge;
+    const oldText = badge.textContent ?? '';
+    if (oldText === newMode) return;
+    const oldWidth = badge.offsetWidth;
+    badge.textContent = '';
+    const reel = document.createElement('span');
+    reel.className = 'mode-reel';
+    const a = document.createElement('span');
+    a.textContent = oldText;
+    const b = document.createElement('span');
+    b.textContent = newMode;
+    reel.append(a, b);
+    badge.appendChild(reel);
+    const aWidth = a.offsetWidth;
+    const bWidth = b.offsetWidth;
+    const padX = oldWidth - aWidth; // horizontal padding of the badge
+    badge.style.width = `${oldWidth}px`;
+    reel.style.transform = 'translateX(0)';
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        badge.style.width = `${padX + bWidth}px`;
+        reel.style.transform = `translateX(-${aWidth}px)`;
+      }),
+    );
+    window.setTimeout(() => {
+      badge.textContent = newMode;
+      badge.style.width = '';
+    }, 240);
+  }
+
+  // ---------- Primary button toggle (New Game / Resume) ----------
+  private updatePrimaryButton(): void {
+    if (this.pendingNew) {
+      this.newGameBtn.textContent = 'Resume';
+      this.newGameBtn.classList.remove('btn--primary');
+      this.newGameBtn.classList.add('btn--ghost');
+    } else {
+      this.newGameBtn.textContent = 'New Game';
+      this.newGameBtn.classList.add('btn--primary');
+      this.newGameBtn.classList.remove('btn--ghost');
+    }
+  }
+
+  /** Commit the pending new game (if any) and revert the button to New Game. */
+  private clearPendingNew(): void {
+    if (!this.pendingNew) return;
+    this.pendingNew = false;
+    this.saveCurrent();
+    this.updatePrimaryButton();
   }
 
   private handleWinOver(): void {
@@ -529,6 +646,7 @@ export class App {
 
   // ---------- Auto-play ----------
   private toggleAuto(force?: boolean): void {
+    this.clearPendingNew();
     const next = force ?? !this.autoOn;
     if (next) this.startAuto();
     else this.stopAuto();
@@ -578,6 +696,7 @@ export class App {
 
   // ---------- Theme & settings ----------
   private onThemeToggle(): void {
+    this.clearPendingNew();
     const pref = toggleTheme();
     this.data.settings.theme = pref;
     this.persist();
@@ -586,6 +705,7 @@ export class App {
   }
 
   private onThemePref(pref: 'light' | 'dark' | 'system'): void {
+    this.clearPendingNew();
     setThemePref(pref);
     this.data.settings.theme = pref;
     this.persist();

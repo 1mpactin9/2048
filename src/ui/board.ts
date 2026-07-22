@@ -12,6 +12,7 @@ interface TileRec {
 export interface SelectResult {
   row: number;
   col: number;
+  id: number;
 }
 
 /**
@@ -68,7 +69,10 @@ export class BoardRenderer {
   private layout(): void {
     const w = this.el.clientWidth;
     if (w === 0) return;
-    this.gap = Math.max(6, Math.round(w * 0.026));
+    // For 8×8 boards the border feels proportionally too thick — dial it down.
+    const ratio = this.size >= 8 ? 0.015 : 0.026;
+    const minGap = this.size >= 8 ? 5 : 6;
+    this.gap = Math.max(minGap, Math.round(w * ratio));
     const inner = w - this.gap * 2;
     this.cellSize = (inner - this.gap * (this.size - 1)) / this.size;
     this.el.style.setProperty('--gap', `${this.gap}px`);
@@ -183,6 +187,21 @@ export class BoardRenderer {
     }, SLIDE_MS);
   }
 
+  /** Animate two tiles trading places (swap powerup). Both slide simultaneously. */
+  animateSwap(idA: number, idB: number): void {
+    const a = this.tiles.get(idA);
+    const b = this.tiles.get(idB);
+    if (!a || !b) return;
+    const row = a.row;
+    const col = a.col;
+    a.row = b.row;
+    a.col = b.col;
+    b.row = row;
+    b.col = col;
+    this.positionTile(a);
+    this.positionTile(b);
+  }
+
   // ---------- Select mode (swap / delete) ----------
   enterSelectMode(max: number, onSelected: (cells: SelectResult[]) => void): void {
     this.exitSelectMode();
@@ -219,7 +238,7 @@ export class BoardRenderer {
       tileEl.classList.remove('is-selected');
       return;
     }
-    sm.picked.push({ row, col });
+    sm.picked.push({ row, col, id: Number(tileEl.dataset.id) });
     tileEl.classList.add('is-selected');
     if (sm.picked.length >= sm.max) {
       const result = [...sm.picked];

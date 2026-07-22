@@ -19,24 +19,25 @@ export const POWERUP_QUOTA: Powerups = { undo: 2, swap: 2, delete: 2 };
 export const MAX_HISTORY = 16;
 
 /**
- * Tile colors per value (same in light and dark - tiles are the focal point).
- * Values above 2048 fall back to SUPER_TILE.
+ * Tile colors per value, exposed as CSS custom-property references so the
+ * palette can adapt per theme (see --tile-* in base.css).  Values above 2048
+ * fall back to SUPER_TILE.
  */
 export const TILE_COLORS: Record<number, { bg: string; fg: string }> = {
-  2:    { bg: '#eee4da', fg: '#756452' },
-  4:    { bg: '#ede0c8', fg: '#756452' },
-  8:    { bg: '#f2b179', fg: '#f9f6f2' },
-  16:   { bg: '#f59563', fg: '#f9f6f2' },
-  32:   { bg: '#f67c5f', fg: '#f9f6f2' },
-  64:   { bg: '#f65e3b', fg: '#f9f6f2' },
-  128:  { bg: '#edcf72', fg: '#f9f6f2' },
-  256:  { bg: '#edcc61', fg: '#f9f6f2' },
-  512:  { bg: '#baac9a', fg: '#f9f6f2' },
-  1024: { bg: '#988776', fg: '#f9f6f2' },
-  2048: { bg: '#756452', fg: '#f9f6f2' },
+  2:    { bg: 'var(--tile-2-bg)', fg: 'var(--tile-2-fg)' },
+  4:    { bg: 'var(--tile-4-bg)', fg: 'var(--tile-4-fg)' },
+  8:    { bg: 'var(--tile-8-bg)', fg: 'var(--tile-8-fg)' },
+  16:   { bg: 'var(--tile-16-bg)', fg: 'var(--tile-16-fg)' },
+  32:   { bg: 'var(--tile-32-bg)', fg: 'var(--tile-32-fg)' },
+  64:   { bg: 'var(--tile-64-bg)', fg: 'var(--tile-64-fg)' },
+  128:  { bg: 'var(--tile-128-bg)', fg: 'var(--tile-128-fg)' },
+  256:  { bg: 'var(--tile-256-bg)', fg: 'var(--tile-256-fg)' },
+  512:  { bg: 'var(--tile-512-bg)', fg: 'var(--tile-512-fg)' },
+  1024: { bg: 'var(--tile-1024-bg)', fg: 'var(--tile-1024-fg)' },
+  2048: { bg: 'var(--tile-2048-bg)', fg: 'var(--tile-2048-fg)' },
 };
 
-export const SUPER_TILE = { bg: '#3c3a32', fg: '#f9f6f2' };
+export const SUPER_TILE = { bg: 'var(--tile-super-bg)', fg: 'var(--tile-super-fg)' };
 
 export function tileColor(value: number): { bg: string; fg: string } {
   return TILE_COLORS[value] ?? SUPER_TILE;
