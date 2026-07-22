@@ -446,6 +446,60 @@
   text-decoration: underline;
 }
 
+/* ---------- Game-over indicator (below the board) ---------- */
+.game-over-bar {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+  margin: 12px auto 0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--cell-bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #5b8def 22%, transparent);
+}
+
+.game-over-bar.is-visible {
+  display: flex;
+  animation: freeze-in 0.3s ease-out;
+}
+
+.game-over-bar__icon {
+  display: inline-flex;
+  color: #5b8def;
+}
+
+.game-over-bar__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.game-over-bar__text {
+  opacity: 0.8;
+}
+
+.game-over-bar__action {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+@keyframes freeze-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ---------- Settings popover ---------- */
 .popover-wrap {
   position: relative;
@@ -467,6 +521,9 @@
 
 .popover__group {
   padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .popover__label {
@@ -475,7 +532,6 @@
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--dropdown-text-secondary);
-  margin-bottom: 8px;
 }
 
 .popover__row {
@@ -483,15 +539,34 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 0;
   font-size: 13px;
   color: var(--dropdown-text);
+}
+
+/* A label + its control, grouped tightly so the label sits close to its
+   toggles while section spacing is handled by the parent group's gap. */
+.popover__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .popover__divider {
   height: 1px;
   background: var(--divider);
   margin: 0;
+}
+
+/* On fractional-DPI screens (e.g. 150% Windows scaling) a 1px divider lands
+   on a half-pixel row and rasterizes 1-2px thick depending on its Y position,
+   so the dividers look uneven. Scaling to 0.5px snaps each to one device
+   pixel, making them uniform. Integer-DPI screens keep the crisp 1px. */
+@media screen and (min-resolution: 1.25dppx) {
+  .popover__divider {
+    transform: scaleY(0.5);
+    transform-origin: top;
+  }
 }
 
 .popover__danger {
@@ -637,6 +712,28 @@
 
 .overlay__actions .btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--modal-btn-bg) 85%, white 15%);
+}
+
+/* Danger tone for destructive confirmations (Clear all progress). */
+.overlay__card--danger {
+  box-shadow: 0 0 0 1px rgba(192, 57, 43, 0.3), var(--shadow-board);
+}
+
+.overlay__actions .btn--danger {
+  background: #c0392b;
+  color: #fff;
+}
+
+.overlay__actions .btn--danger:hover:not(:disabled) {
+  background: #a93226;
+}
+
+:root[data-theme='dark'] .overlay__actions .btn--danger {
+  background: #d9453a;
+}
+
+:root[data-theme='dark'] .overlay__actions .btn--danger:hover:not(:disabled) {
+  background: #c0392b;
 }
 
 .overlay__score {

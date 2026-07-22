@@ -52,6 +52,7 @@ export class App {
   private lastBadgeMode: string | null = null;
   private autoTimer: ReturnType<typeof setTimeout> | null = null;
   private currentOverlay: HTMLElement | null = null;
+  private wasOver = false;
 
   // DOM refs
   private scoreVal!: HTMLElement;
@@ -64,6 +65,7 @@ export class App {
   private newGameBtn!: HTMLElement;
   private themeBtn!: HTMLElement;
   private modeBadge!: HTMLElement;
+  private gameOverBar!: HTMLElement;
 
   constructor() {
     this.data = load();
@@ -180,7 +182,23 @@ export class App {
     powerups.append(this.undoBtn, this.swapBtn, this.deleteBtn);
     this.powerupsRow = powerups;
 
-    stage.append(hintEl, powerups);
+    const gameOverBar = document.createElement('div');
+    gameOverBar.className = 'game-over-bar';
+    const goIcon = document.createElement('span');
+    goIcon.className = 'game-over-bar__icon';
+    goIcon.innerHTML = Icons.snow;
+    const goText = document.createElement('span');
+    goText.className = 'game-over-bar__text';
+    goText.textContent = 'Game over · No moves left';
+    const goBtn = document.createElement('button');
+    goBtn.type = 'button';
+    goBtn.className = 'btn btn--primary game-over-bar__action';
+    goBtn.textContent = 'New Game';
+    goBtn.addEventListener('click', () => this.confirmNewGame());
+    gameOverBar.append(goIcon, goText, goBtn);
+    this.gameOverBar = gameOverBar;
+
+    stage.append(hintEl, powerups, gameOverBar);
 
     shell.append(stage);
     app.append(topbar, shell);
@@ -252,6 +270,7 @@ export class App {
     this.board.setSize(size);
     this.board.fullRender(this.session.state.grid, !saved);
     this.updateUI();
+    this.wasOver = this.session.state.over;
     this.handleWinOver();
   }
 
@@ -305,6 +324,7 @@ export class App {
     const prevOver = this.session.state.over;
     const best = this.session.state.best;
     this.session = GameSession.newGame(this.size, this.mode, best);
+    this.wasOver = false;
     // Safety net: if the previous game was still in progress, don't overwrite
     // the saved game until the first move - so Resume can bring it back.
     this.pendingNew = !prevOver;
@@ -323,6 +343,7 @@ export class App {
     }
     this.session = restoreSession(saved);
     this.pendingNew = false;
+    this.wasOver = false;
     this.board.fullRender(this.session.state.grid);
     this.updateUI();
   }
@@ -422,6 +443,8 @@ export class App {
 
     const isStandard = this.mode === 'standard';
     this.powerupsRow.style.display = isStandard ? '' : 'none';
+
+    this.setFrozen(s.over);
 
     const setPower = (btn: HTMLElement, count: number, enabled: boolean) => {
       btn.querySelector('.powerup-btn__count')!.textContent = String(count);
@@ -547,15 +570,20 @@ export class App {
   private handleWinOver(): void {
     const s = this.session.state;
     if (s.over) {
-      this.showOverlay({
-        title: 'Game over!',
-        message: 'No moves left.',
-        score: s.score,
-        actions: [
-          { label: 'Keep board', onClick: () => this.closeOverlay() },
-          { label: 'New Game', primary: true, onClick: () => this.newGame() },
-        ],
-      });
+      // Show the modal only at the instant the game ends (false -> over).
+      // Loading or switching into an already-finished game leaves the frozen
+      // indicator below the board instead of re-prompting every time.
+      if (!this.wasOver) {
+        this.showOverlay({
+          title: 'Game over!',
+          message: 'No moves left.',
+          score: s.score,
+          actions: [
+            { label: 'Keep board', onClick: () => this.closeOverlay() },
+            { label: 'New Game', primary: true, onClick: () => this.newGame() },
+          ],
+        });
+      }
       this.stopAuto();
     } else if (s.won && !s.wonAcknowledged) {
       if (this.autoOn) {
@@ -573,6 +601,7 @@ export class App {
         });
       }
     }
+    this.wasOver = s.over;
   }
 
   private acknowledgeWin(): void {
@@ -581,19 +610,26 @@ export class App {
     this.closeOverlay();
   }
 
+  /** Toggle the frozen-board look + below-board game-over indicator. */
+  private setFrozen(frozen: boolean): void {
+    this.board.el.classList.toggle('is-frozen', frozen);
+    this.gameOverBar.classList.toggle('is-visible', frozen);
+  }
+
   // ---------- Overlays ----------
   private showOverlay(opts: {
     title: string;
     titleClass?: string;
     message?: string;
     score?: number;
+    danger?: boolean;
     actions: OverlayAction[];
   }): void {
     this.closeOverlay();
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     const card = document.createElement('div');
-    card.className = 'overlay__card';
+    card.className = 'overlay__card' + (opts.danger ? ' overlay__card--danger' : '');
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'overlay__close';
@@ -622,7 +658,9 @@ export class App {
     for (const a of opts.actions) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'btn' + (a.primary ? ' btn--primary' : ' btn--ghost');
+      b.className =
+        'btn' +
+        (a.primary ? (opts.danger ? ' btn--danger' : ' btn--primary') : ' btn--ghost');
       b.textContent = a.label;
       b.addEventListener('click', () => a.onClick());
       actWrap.appendChild(b);
@@ -779,6 +817,7 @@ export class App {
     this.popover.close();
     this.showOverlay({
       title: 'Clear all progress?',
+      danger: true,
       message: 'Every saved game and best score, across all sizes and modes, will be erased.',
       actions: [
         { label: 'Cancel', onClick: () => this.closeOverlay() },

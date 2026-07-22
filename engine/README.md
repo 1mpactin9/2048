@@ -18,24 +18,36 @@ moves.
 
 The expectimax AI is exposed to the web frontend through a small `wasm-bindgen`
 shim. The browser keeps full ownership of game state (grid, score, powerups,
-animations) and only asks the AI which direction to play next.
+animations) and asks the AI for the next action - a direction, or a power-up
+when the board is congested and power-ups are enabled.
 
 Build the package (run from the repo root, requires
 [`wasm-pack`](https://rustwasm.github.io/wasm-pack/) and the
-`wasm32-unknown-unknown` target):
+`wasm32-unknown-unknown` target; both are one-time installs):
 
 ```bash
+cargo install wasm-pack    # one-time
 rustup target add wasm32-unknown-unknown
-npm run build:wasm      # = wasm-pack build --target web --release engine
+npm run build:wasm         # = wasm-pack build --target web --release engine
 ```
 
 This writes `engine/pkg/` (`engine2048.js` + `engine2048_bg.wasm`). The JS
-glue's default export is an `init()` that loads the `.wasm`; after it resolves,
-`suggest_move(flat, size)` is available, where `flat` is a row-major
-`Uint32Array` of tile values (`0` = empty) and `size` is the board edge. It
-returns `0 = up, 1 = down, 2 = left, 3 = right`, or a value `> 3` (`u32::MAX`)
-when no legal move exists. Search depth auto-adapts to `size`, so it matches
-every supported board size (3, 4, 5, 6, 8) without configuration.
+glue's default export is an `init()` that loads the `.wasm`; after it resolves
+two functions are available, each taking a row-major `Uint32Array` of tile
+values (`0` = empty) and the board edge `size`:
+
+- `suggest_move(flat, size, depth)` - direction only. Returns `0 = up`,
+  `1 = down`, `2 = left`, `3 = right`, or a value `> 3` (`u32::MAX`) when no
+  legal move exists.
+- `suggest_action(flat, size, swaps_left, deletes_left, depth)` - direction or
+  power-up. Returns a flat array: `[0, dir]` move, `[1, r, c]` delete,
+  `[2, r1, c1, r2, c2]` swap, `[3]` none. Power-ups are only considered when
+  their charge is `> 0` and the board is congested or stuck, so they're saved
+  for when they matter (and spent to escape game over).
+
+`depth = 0` uses the engine's adaptive default (deeper on small boards,
+shallower on large ones), so it matches every supported board size (3, 4, 5, 6,
+8) without configuration; a non-zero value overrides it.
 
 The frontend wires this up in `src/core/wasm-engine.ts` and uses it from the
 auto-play loop in `src/ui/app.ts`. Re-run `npm run build:wasm` after any change

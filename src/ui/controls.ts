@@ -90,6 +90,7 @@ export class SettingsPopover {
   private popover: HTMLElement;
   private autoSwitch!: HTMLElement;
   private powerupSwitch!: HTMLElement;
+  private powerupRow!: HTMLElement;
   private themeSeg!: { el: HTMLElement; setActive: (v: string) => void; layout: () => void };
   private modeSeg!: { el: HTMLElement; setActive: (v: string) => void; layout: () => void };
   private sizeSeg!: { el: HTMLElement; setActive: (v: string) => void; layout: () => void };
@@ -188,10 +189,16 @@ export class SettingsPopover {
     const dividerThemeAuto = document.createElement('div');
     dividerThemeAuto.className = 'popover__divider';
 
+    // Engine section: auto-play toggle plus AI search depth, move delay, and
+    // whether the AI may spend power-ups. Each writes straight to the settings
+    // the loop reads, so changes take effect on the next tick (no restart).
+    const engineGroup = document.createElement('div');
+    engineGroup.className = 'popover__group';
+
     const autoRow = document.createElement('div');
     autoRow.className = 'popover__row';
     const autoLabel = document.createElement('span');
-    autoLabel.textContent = 'Auto-play';
+    autoLabel.textContent = 'Engine';
     autoLabel.style.fontWeight = '600';
     autoLabel.style.fontSize = '13px';
     const autoSwitch = document.createElement('button');
@@ -203,15 +210,9 @@ export class SettingsPopover {
     this.autoSwitch = autoSwitch;
     autoRow.append(autoLabel, autoSwitch);
 
-    // Auto-play tuning: AI search depth, move delay, and whether the AI may
-    // spend power-ups. Each writes straight to the settings the loop reads, so
-    // changes take effect on the next tick (no restart needed).
-    const autoOptsGroup = document.createElement('div');
-    autoOptsGroup.className = 'popover__group';
-
     const depthLabel = document.createElement('div');
     depthLabel.className = 'popover__label';
-    depthLabel.textContent = 'AI Depth';
+    depthLabel.textContent = 'DEPTH';
     this.depthSeg = createSegmented(
       [
         { label: 'Auto', value: '0' },
@@ -224,9 +225,13 @@ export class SettingsPopover {
       (v) => this.opts.onAutoDepth(Number(v)),
     );
 
+    const depthField = document.createElement('div');
+    depthField.className = 'popover__field';
+    depthField.append(depthLabel, this.depthSeg.el);
+
     const delayLabel = document.createElement('div');
     delayLabel.className = 'popover__label';
-    delayLabel.textContent = 'Move Delay';
+    delayLabel.textContent = 'DELAY';
     this.delaySeg = createSegmented(
       [
         { label: 'Fast', value: '80' },
@@ -237,10 +242,14 @@ export class SettingsPopover {
       (v) => this.opts.onAutoSpeed(Number(v)),
     );
 
+    const delayField = document.createElement('div');
+    delayField.className = 'popover__field';
+    delayField.append(delayLabel, this.delaySeg.el);
+
     const powerupRow = document.createElement('div');
     powerupRow.className = 'popover__row';
     const powerupLabel = document.createElement('span');
-    powerupLabel.textContent = 'Use power-ups';
+    powerupLabel.textContent = 'Power-ups';
     powerupLabel.style.fontWeight = '600';
     powerupLabel.style.fontSize = '13px';
     const powerupSwitch = document.createElement('button');
@@ -250,9 +259,11 @@ export class SettingsPopover {
     powerupSwitch.setAttribute('aria-pressed', String(this.opts.autoPowerups));
     powerupSwitch.addEventListener('click', () => this.opts.onAutoPowerups(!this.opts.autoPowerups));
     this.powerupSwitch = powerupSwitch;
+    this.powerupRow = powerupRow;
     powerupRow.append(powerupLabel, powerupSwitch);
 
-    autoOptsGroup.append(depthLabel, this.depthSeg.el, delayLabel, this.delaySeg.el, powerupRow);
+    engineGroup.append(autoRow, depthField, delayField, powerupRow);
+    this.applyPowerupVisibility();
 
     const divider2 = document.createElement('div');
     divider2.className = 'popover__divider';
@@ -270,8 +281,7 @@ export class SettingsPopover {
       divider1,
       themeGroup,
       dividerThemeAuto,
-      autoRow,
-      autoOptsGroup,
+      engineGroup,
       divider2,
       danger,
     );
@@ -300,10 +310,18 @@ export class SettingsPopover {
     this.popover.hidden = true;
   }
 
+  /** Power-ups only exist in Standard mode; hide the toggle in Classic. */
+  private applyPowerupVisibility(): void {
+    this.powerupRow.style.display = this.opts.mode === 'classic' ? 'none' : '';
+  }
+
   update(opts: Partial<PopoverOpts>): void {
     Object.assign(this.opts, opts);
     if (opts.theme !== undefined) this.themeSeg.setActive(opts.theme);
-    if (opts.mode !== undefined) this.modeSeg.setActive(opts.mode);
+    if (opts.mode !== undefined) {
+      this.modeSeg.setActive(opts.mode);
+      this.applyPowerupVisibility();
+    }
     if (opts.size !== undefined) this.sizeSeg.setActive(String(opts.size));
     if (opts.autoOn !== undefined) {
       this.autoSwitch.classList.toggle('is-on', opts.autoOn);
