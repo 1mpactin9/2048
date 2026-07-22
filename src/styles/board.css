@@ -59,8 +59,8 @@
   justify-content: center;
   border-radius: calc(var(--gap, 10px) * 0.7);
   font-family: 'Rubik', Arial, system-ui, sans-serif;
-  font-weight: 600;
-  font-size: calc(var(--cell, 40px) * var(--ff, 0.46));
+  font-weight: 510;
+  font-size: calc(var(--cell, 20px) * var(--ff, 0.46));
   box-shadow: var(--shadow-tile);
   background: var(--tile-bg, #eee4da);
   color: var(--tile-fg, #776e65);
@@ -68,12 +68,12 @@
 }
 
 /* digit-count font scaling */
-.tile__face--d1 { --ff: 0.47; }
-.tile__face--d2 { --ff: 0.43; }
-.tile__face--d3 { --ff: 0.35; }
-.tile__face--d4 { --ff: 0.27; }
-.tile__face--d5 { --ff: 0.22; }
-.tile__face--d6 { --ff: 0.18; }
+.tile__face--d1 { --ff: 0.45; }
+.tile__face--d2 { --ff: 0.42; }
+.tile__face--d3 { --ff: 0.34; }
+.tile__face--d4 { --ff: 0.25; }
+.tile__face--d5 { --ff: 0.20; }
+.tile__face--d6 { --ff: 0.16; }
 
 .tile__face.is-spawn {
   animation: tile-spawn 0.14s ease-out;

@@ -495,34 +495,24 @@ export class App {
     }, 420);
   }
 
-  // ---------- Mode badge slide ----------
+  // ---------- Mode badge crossfade ----------
   private animateModeBadge(newMode: string): void {
     const badge = this.modeBadge;
     const oldText = badge.textContent ?? '';
     if (oldText === newMode) return;
-    const oldWidth = badge.offsetWidth;
-    badge.textContent = '';
-    const reel = document.createElement('span');
-    reel.className = 'mode-reel';
-    const a = document.createElement('span');
-    a.textContent = oldText;
-    const b = document.createElement('span');
-    b.textContent = newMode;
-    reel.append(a, b);
-    badge.appendChild(reel);
-    const aWidth = a.offsetWidth;
-    const bWidth = b.offsetWidth;
-    const padX = oldWidth - aWidth; // horizontal padding of the badge
-    badge.style.width = `${oldWidth}px`;
-    reel.style.transform = 'translateX(0)';
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        badge.style.width = `${padX + bWidth}px`;
-        reel.style.transform = `translateX(-${aWidth}px)`;
-      }),
-    );
-    window.setTimeout(() => {
+
+    // Fade out → swap text → fade back in. Width transitions naturally
+    // because the element stays in the DOM — no inline style overrides.
+    badge.classList.add('mode-badge--fading');
+    void badge.offsetWidth; // force reflow so the fade-out actually plays
+
+    setTimeout(() => {
       badge.textContent = newMode;
+      badge.classList.remove('mode-badge--fading');
+    }, 120);
+
+    // Clean up any leftover inline width from previous runs
+    setTimeout(() => {
       badge.style.width = '';
     }, 240);
   }

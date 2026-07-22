@@ -188,9 +188,18 @@ button:disabled {
   --shadow-board: 0 6px 16px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
 
   /* warmer, less-bright low tiles in dark mode */
-  --tile-2-bg: #ddd0b8;
-  --tile-4-bg: #d3c4a8;
-  --tile-8-bg: #f0a868;
+  --tile-2-bg: #443a30; --tile-2-fg: #d9cdbd;
+  --tile-4-bg: #5a4c3e; --tile-4-fg: #f1e6d8;
+  --tile-8-bg: #e09050; --tile-8-fg: #f5efe6;
+  --tile-16-bg: #c47040; --tile-16-fg: #f5efe6;
+  --tile-32-bg: #c45535; --tile-32-fg: #f5efe6;
+  --tile-64-bg: #b84528; --tile-64-fg: #f5efe6;
+  --tile-128-bg: #c4a530; --tile-128-fg: #f5efe6;
+  --tile-256-bg: #bfa028; --tile-256-fg: #f5efe6;
+  --tile-512-bg: #9a8870; --tile-512-fg: #f5efe6;
+  --tile-1024-bg: #7a6a58; --tile-1024-fg: #f5efe6;
+  --tile-2048-bg: #5a4d3e; --tile-2048-fg: #f5efe6;
+  --tile-super-bg: #3c3a32; --tile-super-fg: #f5efe6;
 
   color-scheme: dark;
 }
