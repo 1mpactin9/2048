@@ -53,7 +53,6 @@ export class App {
   private deleteBtn!: HTMLElement;
   private hintEl!: HTMLElement;
   private resumeBtn!: HTMLElement;
-  private autoBtn!: HTMLElement;
   private themeBtn!: HTMLElement;
   private modeBadge!: HTMLElement;
 
@@ -116,16 +115,9 @@ export class App {
     this.bestVal = bestBox.value;
     scores.append(scoreBox.box, bestBox.box);
 
-    const autoBtn = document.createElement('button');
-    autoBtn.type = 'button';
-    autoBtn.className = 'icon-btn';
-    autoBtn.setAttribute('aria-label', 'Auto-play');
-    autoBtn.innerHTML = Icons.play;
-    autoBtn.addEventListener('click', () => this.toggleAuto());
-
     const themeBtn = document.createElement('button');
     themeBtn.type = 'button';
-    themeBtn.className = 'icon-btn';
+    themeBtn.className = 'icon-btn icon-btn--theme';
     themeBtn.setAttribute('aria-label', 'Toggle theme');
     themeBtn.innerHTML = currentResolved() === 'dark' ? Icons.sun : Icons.moon;
     themeBtn.addEventListener('click', () => this.onThemeToggle());
@@ -143,7 +135,7 @@ export class App {
     newGameBtn.textContent = 'New Game';
     newGameBtn.addEventListener('click', () => this.confirmNewGame());
 
-    actions.append(scores, autoBtn, themeBtn, resumeBtn, newGameBtn);
+    actions.append(scores, themeBtn, resumeBtn, newGameBtn);
     topbar.append(left, actions);
 
     const shell = document.createElement('main');
@@ -197,7 +189,6 @@ export class App {
     app.append(topbar, shell);
 
     this.resumeBtn = resumeBtn;
-    this.autoBtn = autoBtn;
     this.themeBtn = themeBtn;
 
     this.input = new Input(this.board.el, {
@@ -211,7 +202,7 @@ export class App {
 
   private makeScoreBox(label: string): { box: HTMLElement; value: HTMLElement } {
     const box = document.createElement('div');
-    box.className = 'score-box';
+    box.className = 'score-box' + (label === 'Best' ? ' score-box--best' : '');
     const lab = document.createElement('div');
     lab.className = 'score-box__label';
     lab.textContent = label;
@@ -226,14 +217,17 @@ export class App {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'powerup-btn';
+    btn.setAttribute('aria-label', label);
     const iconSpan = document.createElement('span');
+    iconSpan.className = 'powerup-btn__icon';
     iconSpan.innerHTML = icon;
-    const labelSpan = document.createElement('span');
-    labelSpan.textContent = label;
+    const tooltip = document.createElement('span');
+    tooltip.className = 'powerup-btn__tooltip';
+    tooltip.textContent = label;
     const count = document.createElement('span');
     count.className = 'powerup-btn__count';
     count.textContent = '0';
-    btn.append(iconSpan, labelSpan, count);
+    btn.append(iconSpan, count, tooltip);
     btn.addEventListener('click', () => {
       if (kind === 'undo') this.powerupUndo();
       else if (kind === 'swap') this.powerupSwap();
@@ -429,9 +423,6 @@ export class App {
       text.textContent =
         this.armed === 'swap' ? 'Select two tiles to swap.' : 'Select a tile to delete.';
     }
-
-    this.autoBtn.classList.toggle('is-active', this.autoOn);
-    this.autoBtn.innerHTML = this.autoOn ? Icons.spark : Icons.play;
   }
 
   private bumpScore(): void {
@@ -490,6 +481,13 @@ export class App {
     overlay.className = 'overlay';
     const card = document.createElement('div');
     card.className = 'overlay__card';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'overlay__close';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = Icons.close;
+    closeBtn.addEventListener('click', () => this.closeOverlay());
+    card.appendChild(closeBtn);
     const title = document.createElement('div');
     title.className = 'overlay__title' + (opts.titleClass ? ` ${opts.titleClass}` : '');
     title.textContent = opts.title;

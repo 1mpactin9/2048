@@ -23,8 +23,8 @@ export const MAX_HISTORY = 16;
  * Values above 2048 fall back to SUPER_TILE.
  */
 export const TILE_COLORS: Record<number, { bg: string; fg: string }> = {
-  2:    { bg: '#eee4da', fg: '#776e65' },
-  4:    { bg: '#ede0c8', fg: '#776e65' },
+  2:    { bg: '#eee4da', fg: '#756452' },
+  4:    { bg: '#ede0c8', fg: '#756452' },
   8:    { bg: '#f2b179', fg: '#f9f6f2' },
   16:   { bg: '#f59563', fg: '#f9f6f2' },
   32:   { bg: '#f67c5f', fg: '#f9f6f2' },
