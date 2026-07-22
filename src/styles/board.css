@@ -1,0 +1,147 @@
+/* ---------- Board ---------- */
+.board {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  background: var(--board-bg);
+  border-radius: calc(var(--gap, 10px) * 1.6);
+  padding: var(--gap, 10px);
+  box-shadow: var(--shadow);
+  touch-action: none; /* capture swipes on the board */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.board__grid {
+  position: absolute;
+  inset: var(--gap, 10px);
+  display: grid;
+  grid-template-columns: repeat(var(--n, 4), 1fr);
+  grid-template-rows: repeat(var(--n, 4), 1fr);
+  gap: var(--gap, 10px);
+}
+
+.cell {
+  background: var(--cell-bg);
+  border-radius: calc(var(--gap, 10px) * 0.7);
+}
+
+.board__tiles {
+  position: absolute;
+  inset: var(--gap, 10px);
+  pointer-events: none; /* let clicks fall through to the board unless a tile arms selection */
+}
+
+.board.is-selecting .board__tiles {
+  pointer-events: auto;
+}
+
+/* ---------- Tiles ---------- */
+.tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--cell, 0px);
+  height: var(--cell, 0px);
+  transform: translate(var(--tx, 0px), var(--ty, 0px));
+  transition: transform 0.12s ease;
+  will-change: transform;
+}
+
+.tile__face {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(var(--gap, 10px) * 0.7);
+  font-weight: 800;
+  font-size: calc(var(--cell, 40px) * var(--ff, 0.46));
+  box-shadow: var(--shadow-tile);
+  background: var(--tile-bg, #eee4da);
+  color: var(--tile-fg, #776e65);
+  line-height: 1;
+}
+
+/* digit-count font scaling */
+.tile__face--d1 { --ff: 0.5; }
+.tile__face--d2 { --ff: 0.46; }
+.tile__face--d3 { --ff: 0.38; }
+.tile__face--d4 { --ff: 0.3; }
+.tile__face--d5 { --ff: 0.24; }
+.tile__face--d6 { --ff: 0.2; }
+
+.tile__face.is-spawn {
+  animation: tile-spawn 0.18s ease 0.08s backwards;
+}
+
+.tile__face.is-merge {
+  animation: tile-pop 0.16s ease 0.1s;
+}
+
+@keyframes tile-spawn {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes tile-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* highlight a tile while choosing swap/delete targets */
+.tile.is-targetable .tile__face {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  cursor: pointer;
+}
+
+.tile.is-selected .tile__face {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* score bump animation */
+.score-box__value.is-bump {
+  animation: score-bump 0.3s ease;
+}
+
+@keyframes score-bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+    color: var(--accent);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    transition: none;
+  }
+  .tile__face.is-spawn,
+  .tile__face.is-merge,
+  .score-box__value.is-bump {
+    animation: none;
+  }
+}
