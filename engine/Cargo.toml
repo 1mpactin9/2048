@@ -1,0 +1,34 @@
+[package]
+name = "engine2048"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.8"
+
+# WebAssembly target only: `wasm-bindgen` provides the JS bridge, and
+# `getrandom`'s `js` feature lets `rand::thread_rng()` (used by `Engine::new`)
+# compile for `wasm32-unknown-unknown`. The AI path (`suggest_move_for`) is
+# pure and needs neither, but the rest of the crate still references `rand`,
+# so the feature is required for the crate to build for the browser.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+getrandom = { version = "0.2", features = ["js"] }
+
+# `cdylib` is what `wasm-pack` compiles into the `.wasm` artifact; `rlib` keeps
+# the crate linkable by the `demo` binary, tests, and the benchmark.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Skip the `wasm-opt` (binaryen) post-processing pass. It only shrinks/speeds
+# up the wasm and requires downloading the binaryen tool, which isn't available
+# in every build environment. The AI runs in microseconds, so an unoptimized
+# wasm is fine and keeps `npm run build:wasm` self-contained.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[[bin]]
+name = "demo"
+path = "src/main.rs"

@@ -1,4 +1,4 @@
-import type { Direction, GameMode, GameState } from '../core/types';
+import type { AutoAction, Direction, EngineContext, GameMode, GameState } from '../core/types';
 import { DEFAULT_MODE, DEFAULT_SIZE } from '../core/constants';
 import {
   type StoredData,
@@ -9,7 +9,7 @@ import {
   save,
 } from '../core/storage';
 import { GameSession, restoreSession } from '../core/session';
-import { PlaceholderEngine } from '../core/engine';
+import { WasmEngine } from '../core/wasm-engine';
 import { BoardRenderer } from './board';
 import { Input } from './input';
 import { SettingsPopover } from './controls';
@@ -93,10 +93,16 @@ export class App {
     this.popover = new SettingsPopover({
       theme: this.data.settings.theme,
       autoOn: this.data.settings.autoOn,
+      autoSpeed: this.data.settings.autoSpeed,
+      autoDepth: this.data.settings.autoDepth,
+      autoPowerups: this.data.settings.autoPowerups,
       mode: this.mode,
       size: this.size,
       onTheme: (p) => this.onThemePref(p),
       onAuto: (on) => this.toggleAuto(on),
+      onAutoSpeed: (ms) => this.onAutoSpeed(ms),
+      onAutoDepth: (d) => this.onAutoDepth(d),
+      onAutoPowerups: (on) => this.onAutoPowerups(on),
       onMode: (m) => this.switchTo(this.size, m),
       onSize: (s) => this.switchTo(s, this.mode),
       onClearAll: () => this.confirmClearAll(),
@@ -673,15 +679,81 @@ export class App {
         this.stopAuto();
         return;
       }
-      const dir = await PlaceholderEngine.chooseMove(this.session.toContext());
+      const ctx: EngineContext = {
+        ...this.session.toContext(),
+        depth: this.data.settings.autoDepth,
+        usePowerups: this.data.settings.autoPowerups,
+      };
+      const action = await WasmEngine.chooseAction(ctx);
       if (!this.autoOn) return;
-      if (!dir) {
-        this.stopAuto();
-        return;
-      }
-      this.doMove(dir);
+      this.applyAutoAction(action);
       if (this.autoOn && !this.session.state.over) this.autoTick();
     }, this.data.settings.autoSpeed);
+  }
+
+  /** Apply one AI action (move, swap, delete, or stop) during auto-play. */
+  private applyAutoAction(action: AutoAction): void {
+    switch (action.kind) {
+      case 'move':
+        this.doMove(action.dir);
+        break;
+      case 'delete': {
+        if (!this.session.canDelete) {
+          this.stopAuto();
+          return;
+        }
+        this.clearPendingNew();
+        this.session.deleteTile(action.row, action.col);
+        this.saveCurrent();
+        this.board.fullRender(this.session.state.grid);
+        this.updateUI();
+        this.handleWinOver();
+        break;
+      }
+      case 'swap': {
+        if (!this.session.canSwap) {
+          this.stopAuto();
+          return;
+        }
+        this.clearPendingNew();
+        const g = this.session.state.grid;
+        const a = g[action.r1]?.[action.c1];
+        const b = g[action.r2]?.[action.c2];
+        if (!a || !b) {
+          this.stopAuto();
+          return;
+        }
+        this.session.swap(action.r1, action.c1, action.r2, action.c2);
+        this.saveCurrent();
+        this.board.animateSwap(a.id, b.id);
+        this.updateUI();
+        this.handleWinOver();
+        break;
+      }
+      case 'stop':
+        this.stopAuto();
+        this.handleWinOver();
+        break;
+    }
+  }
+
+  // ---------- Auto-play settings ----------
+  private onAutoSpeed(ms: number): void {
+    this.data.settings.autoSpeed = ms;
+    this.persist();
+    this.popover.update({ autoSpeed: ms });
+  }
+
+  private onAutoDepth(depth: number): void {
+    this.data.settings.autoDepth = depth;
+    this.persist();
+    this.popover.update({ autoDepth: depth });
+  }
+
+  private onAutoPowerups(on: boolean): void {
+    this.data.settings.autoPowerups = on;
+    this.persist();
+    this.popover.update({ autoPowerups: on });
   }
 
   // ---------- Theme & settings ----------

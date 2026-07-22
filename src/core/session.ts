@@ -176,7 +176,12 @@ export class GameSession {
 
   /** A read-only view for engines. */
   toContext() {
-    return { grid: this.state.grid, size: this.state.size, score: this.state.score };
+    return {
+      grid: this.state.grid,
+      size: this.state.size,
+      score: this.state.score,
+      powerups: this.state.powerups,
+    };
   }
 }
 

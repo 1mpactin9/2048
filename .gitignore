@@ -3,3 +3,5 @@ node_modules/
 play2048.co/
 .claude/
 .codegraph/
+# wasm-pack output (built from engine/ via `npm run build:wasm`).
+engine/pkg/

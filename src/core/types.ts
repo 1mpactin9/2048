@@ -85,14 +85,30 @@ export interface EngineContext {
   grid: Grid;
   size: number;
   score: number;
+  /** Remaining power-up charges the AI may spend (when `usePowerups`). */
+  powerups: Powerups;
+  /** Search depth override (0 = engine's adaptive default per board size). */
+  depth: number;
+  /** Whether the AI may spend power-up charges to avoid game over. */
+  usePowerups: boolean;
 }
 
 /**
- * An auto-play engine. chooseMove may be sync or async (return a Promise) so a
- * Web-Worker-backed engine can be dropped in later without changing the loop.
- * Return null to hand control back to the player / stop auto-play.
+ * An action the auto-play engine can take: a directional move, a power-up, or
+ * a signal to stop (no action available). The app applies it to the session.
+ */
+export type AutoAction =
+  | { kind: 'move'; dir: Direction }
+  | { kind: 'swap'; r1: number; c1: number; r2: number; c2: number }
+  | { kind: 'delete'; row: number; col: number }
+  | { kind: 'stop' };
+
+/**
+ * An auto-play engine. chooseAction may be sync or async (return a Promise) so
+ * a Web-Worker- or WASM-backed engine can be dropped in without changing the
+ * loop. Return a `stop` action to hand control back to the player.
  */
 export interface Engine {
   name: string;
-  chooseMove(ctx: EngineContext): Direction | null | Promise<Direction | null>;
+  chooseAction(ctx: EngineContext): AutoAction | Promise<AutoAction>;
 }

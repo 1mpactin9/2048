@@ -10,6 +10,10 @@ export interface Settings {
   lastMode: GameMode;
   autoOn: boolean;
   autoSpeed: number; // ms between auto moves
+  /** AI search depth override (0 = engine's adaptive default per board size). */
+  autoDepth: number;
+  /** Whether auto-play may spend swap/delete charges to avoid game over. */
+  autoPowerups: boolean;
 }
 
 export interface StoredData {
@@ -28,6 +32,8 @@ export const DEFAULT_SETTINGS: Settings = {
   lastMode: DEFAULT_MODE,
   autoOn: false,
   autoSpeed: 180,
+  autoDepth: 0,
+  autoPowerups: true,
 };
 
 export function load(): StoredData {
