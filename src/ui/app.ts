@@ -1,5 +1,5 @@
 import type { Direction, GameMode, GameState } from '../core/types';
-import { DEFAULT_MODE, DEFAULT_SIZE, SIZES } from '../core/constants';
+import { DEFAULT_MODE, DEFAULT_SIZE } from '../core/constants';
 import {
   type StoredData,
   clearGames,
@@ -12,7 +12,7 @@ import { GameSession, restoreSession } from '../core/session';
 import { PlaceholderEngine } from '../core/engine';
 import { BoardRenderer } from './board';
 import { Input } from './input';
-import { createSegmented, SettingsPopover } from './controls';
+import { SettingsPopover } from './controls';
 import { Icons } from './icons';
 import {
   currentResolved,
@@ -55,8 +55,6 @@ export class App {
   private resumeBtn!: HTMLElement;
   private autoBtn!: HTMLElement;
   private themeBtn!: HTMLElement;
-  private modeSeg!: { el: HTMLElement; setActive: (v: string) => void };
-  private sizeSeg!: { el: HTMLElement; setActive: (v: string) => void };
 
   constructor() {
     this.data = load();
@@ -113,8 +111,12 @@ export class App {
     this.popover = new SettingsPopover({
       theme: this.data.settings.theme,
       autoOn: this.data.settings.autoOn,
+      mode: this.mode,
+      size: this.size,
       onTheme: (p) => this.onThemePref(p),
       onAuto: (on) => this.toggleAuto(on),
+      onMode: (m) => this.switchTo(this.size, m),
+      onSize: (s) => this.switchTo(s, this.mode),
       onClearAll: () => this.confirmClearAll(),
     });
 
@@ -123,24 +125,6 @@ export class App {
 
     const shell = document.createElement('main');
     shell.className = 'app';
-
-    // controls row
-    const controls = document.createElement('div');
-    controls.className = 'controls';
-    this.modeSeg = createSegmented(
-      [
-        { label: 'Standard', value: 'standard' },
-        { label: 'Classic', value: 'classic' },
-      ],
-      this.mode,
-      (v) => this.switchTo(this.size, v as GameMode),
-    );
-    this.sizeSeg = createSegmented(
-      SIZES.map((s) => ({ label: `${s}×${s}`, value: String(s) })),
-      String(this.size),
-      (v) => this.switchTo(Number(v), this.mode),
-    );
-    controls.append(this.modeSeg.el, this.sizeSeg.el);
 
     // title + scores
     const titleRow = document.createElement('div');
@@ -193,7 +177,7 @@ export class App {
     foot.className = 'foot';
     foot.textContent = 'A clean 2048 rewrite. Progress saves to your browser.';
 
-    shell.append(controls, titleRow, stage, foot);
+    shell.append(titleRow, stage, foot);
     app.append(topbar, shell);
 
     this.resumeBtn = resumeBtn;
@@ -405,8 +389,6 @@ export class App {
     const s = this.session.state;
     this.scoreVal.textContent = String(s.score);
     this.bestVal.textContent = String(s.best);
-    this.modeSeg.setActive(this.mode);
-    this.sizeSeg.setActive(String(this.size));
 
     const isStandard = this.mode === 'standard';
     this.powerupsRow.style.display = isStandard ? '' : 'none';

@@ -1,4 +1,5 @@
 import type { ThemePref } from '../core/storage';
+import { SIZES } from '../core/constants';
 import { Icons } from './icons';
 
 export interface SegOption {
@@ -39,8 +40,12 @@ export function createSegmented(
 export interface PopoverOpts {
   theme: ThemePref;
   autoOn: boolean;
+  mode: 'standard' | 'classic';
+  size: number;
   onTheme: (pref: ThemePref) => void;
   onAuto: (on: boolean) => void;
+  onMode: (mode: 'standard' | 'classic') => void;
+  onSize: (size: number) => void;
   onClearAll: () => void;
 }
 
@@ -50,6 +55,8 @@ export class SettingsPopover {
   private popover: HTMLElement;
   private autoSwitch!: HTMLElement;
   private themeSeg!: { el: HTMLElement; setActive: (v: string) => void };
+  private modeSeg!: { el: HTMLElement; setActive: (v: string) => void };
+  private sizeSeg!: { el: HTMLElement; setActive: (v: string) => void };
   private open = false;
   private opts: PopoverOpts;
 
@@ -84,6 +91,46 @@ export class SettingsPopover {
   private buildContent(): void {
     this.popover.innerHTML = '';
 
+    // Game section: mode + size
+    const gameGroup = document.createElement('div');
+    gameGroup.className = 'popover__group';
+
+    const modeLabel = document.createElement('div');
+    modeLabel.className = 'popover__label';
+    modeLabel.textContent = 'Game';
+
+    const modeRow = document.createElement('div');
+    modeRow.className = 'popover__row';
+    this.modeSeg = createSegmented(
+      [
+        { label: 'Standard', value: 'standard' },
+        { label: 'Classic', value: 'classic' },
+      ],
+      this.opts.mode,
+      (v) => this.opts.onMode(v as 'standard' | 'classic'),
+    );
+    modeRow.append(this.modeSeg.el);
+
+    const sizeLabel = document.createElement('div');
+    sizeLabel.className = 'popover__label';
+    sizeLabel.style.marginTop = '8px';
+    sizeLabel.textContent = 'Board Size';
+
+    const sizeRow = document.createElement('div');
+    sizeRow.className = 'popover__row';
+    this.sizeSeg = createSegmented(
+      SIZES.map((s) => ({ label: `${s}×${s}`, value: String(s) })),
+      String(this.opts.size),
+      (v) => this.opts.onSize(Number(v)),
+    );
+    sizeRow.append(this.sizeSeg.el);
+
+    gameGroup.append(modeLabel, modeRow, sizeLabel, sizeRow);
+
+    const divider1 = document.createElement('div');
+    divider1.className = 'popover__divider';
+
+    // Theme section
     const themeGroup = document.createElement('div');
     themeGroup.className = 'popover__group';
     const themeLabel = document.createElement('div');
@@ -115,8 +162,8 @@ export class SettingsPopover {
     this.autoSwitch = autoSwitch;
     autoRow.append(autoLabel, autoSwitch);
 
-    const divider = document.createElement('div');
-    divider.className = 'popover__divider';
+    const divider2 = document.createElement('div');
+    divider2.className = 'popover__divider';
 
     const danger = document.createElement('button');
     danger.type = 'button';
@@ -124,7 +171,7 @@ export class SettingsPopover {
     danger.textContent = 'Clear all progress';
     danger.addEventListener('click', () => this.opts.onClearAll());
 
-    this.popover.append(themeGroup, autoRow, divider, danger);
+    this.popover.append(gameGroup, divider1, themeGroup, autoRow, divider2, danger);
   }
 
   toggle(): void {
@@ -144,6 +191,8 @@ export class SettingsPopover {
   update(opts: Partial<PopoverOpts>): void {
     Object.assign(this.opts, opts);
     if (opts.theme !== undefined) this.themeSeg.setActive(opts.theme);
+    if (opts.mode !== undefined) this.modeSeg.setActive(opts.mode);
+    if (opts.size !== undefined) this.sizeSeg.setActive(String(opts.size));
     if (opts.autoOn !== undefined) {
       this.autoSwitch.classList.toggle('is-on', opts.autoOn);
       this.autoSwitch.setAttribute('aria-pressed', String(opts.autoOn));

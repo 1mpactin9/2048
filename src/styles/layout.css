@@ -29,12 +29,12 @@
   width: 52px;
   height: 52px;
   border-radius: 12px;
-  background: linear-gradient(160deg, #fcdb69 0%, #ffd33c 33%, #ffba0a 66%, #eec450 100%);
-  color: #fff;
+  background: #bbada0;
+  color: #f9f6f2;
   font-weight: 800;
   font-size: 18px;
   letter-spacing: -0.5px;
-  box-shadow: 0 4px 12px rgba(237, 194, 46, 0.4), inset 0 -2px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(187, 173, 160, 0.4);
   user-select: none;
 }
 
