@@ -55,6 +55,7 @@ export class App {
   private resumeBtn!: HTMLElement;
   private autoBtn!: HTMLElement;
   private themeBtn!: HTMLElement;
+  private modeBadge!: HTMLElement;
 
   constructor() {
     this.data = load();
@@ -75,24 +76,45 @@ export class App {
 
     const topbar = document.createElement('header');
     topbar.className = 'topbar';
+
+    const left = document.createElement('div');
+    left.className = 'topbar__left';
+
+    this.popover = new SettingsPopover({
+      theme: this.data.settings.theme,
+      autoOn: this.data.settings.autoOn,
+      mode: this.mode,
+      size: this.size,
+      onTheme: (p) => this.onThemePref(p),
+      onAuto: (on) => this.toggleAuto(on),
+      onMode: (m) => this.switchTo(this.size, m),
+      onSize: (s) => this.switchTo(s, this.mode),
+      onClearAll: () => this.confirmClearAll(),
+    });
+
+    const logoBlock = document.createElement('div');
+    logoBlock.className = 'logo-block';
     const logo = document.createElement('div');
     logo.className = 'logo';
     logo.textContent = '2048';
+    const modeBadge = document.createElement('div');
+    modeBadge.className = 'mode-badge';
+    modeBadge.textContent = this.mode;
+    logoBlock.append(logo, modeBadge);
+    this.modeBadge = modeBadge;
+
+    left.append(this.popover.el, logoBlock);
+
     const actions = document.createElement('div');
     actions.className = 'topbar__actions';
 
-    const newGameBtn = document.createElement('button');
-    newGameBtn.type = 'button';
-    newGameBtn.className = 'btn btn--primary';
-    newGameBtn.textContent = 'New Game';
-    newGameBtn.addEventListener('click', () => this.confirmNewGame());
-
-    const resumeBtn = document.createElement('button');
-    resumeBtn.type = 'button';
-    resumeBtn.className = 'btn btn--ghost';
-    resumeBtn.textContent = 'Resume';
-    resumeBtn.style.display = 'none';
-    resumeBtn.addEventListener('click', () => this.resumeGame());
+    const scores = document.createElement('div');
+    scores.className = 'scores';
+    const scoreBox = this.makeScoreBox('Score');
+    const bestBox = this.makeScoreBox('Best');
+    this.scoreVal = scoreBox.value;
+    this.bestVal = bestBox.value;
+    scores.append(scoreBox.box, bestBox.box);
 
     const autoBtn = document.createElement('button');
     autoBtn.type = 'button';
@@ -108,25 +130,26 @@ export class App {
     themeBtn.innerHTML = currentResolved() === 'dark' ? Icons.sun : Icons.moon;
     themeBtn.addEventListener('click', () => this.onThemeToggle());
 
-    this.popover = new SettingsPopover({
-      theme: this.data.settings.theme,
-      autoOn: this.data.settings.autoOn,
-      mode: this.mode,
-      size: this.size,
-      onTheme: (p) => this.onThemePref(p),
-      onAuto: (on) => this.toggleAuto(on),
-      onMode: (m) => this.switchTo(this.size, m),
-      onSize: (s) => this.switchTo(s, this.mode),
-      onClearAll: () => this.confirmClearAll(),
-    });
+    const resumeBtn = document.createElement('button');
+    resumeBtn.type = 'button';
+    resumeBtn.className = 'btn btn--ghost';
+    resumeBtn.textContent = 'Resume';
+    resumeBtn.style.display = 'none';
+    resumeBtn.addEventListener('click', () => this.resumeGame());
 
-    actions.append(newGameBtn, resumeBtn, autoBtn, themeBtn, this.popover.el);
-    topbar.append(logo, actions);
+    const newGameBtn = document.createElement('button');
+    newGameBtn.type = 'button';
+    newGameBtn.className = 'btn btn--primary';
+    newGameBtn.textContent = 'New Game';
+    newGameBtn.addEventListener('click', () => this.confirmNewGame());
+
+    actions.append(scores, autoBtn, themeBtn, resumeBtn, newGameBtn);
+    topbar.append(left, actions);
 
     const shell = document.createElement('main');
     shell.className = 'app';
 
-    // title + scores
+    // tagline
     const titleRow = document.createElement('div');
     titleRow.className = 'title-row';
     const titleText = document.createElement('div');
@@ -136,14 +159,7 @@ export class App {
     const p = document.createElement('p');
     p.textContent = 'Arrow keys, WASD, or swipe to move.';
     titleText.append(h1, p);
-    const scores = document.createElement('div');
-    scores.className = 'scores';
-    const scoreBox = this.makeScoreBox('Score');
-    const bestBox = this.makeScoreBox('Best');
-    this.scoreVal = scoreBox.value;
-    this.bestVal = bestBox.value;
-    scores.append(scoreBox.box, bestBox.box);
-    titleRow.append(titleText, scores);
+    titleRow.append(titleText);
 
     // stage: board + hint + powerups
     const stage = document.createElement('div');
@@ -389,6 +405,7 @@ export class App {
     const s = this.session.state;
     this.scoreVal.textContent = String(s.score);
     this.bestVal.textContent = String(s.best);
+    this.modeBadge.textContent = this.mode;
 
     const isStandard = this.mode === 'standard';
     this.powerupsRow.style.display = isStandard ? '' : 'none';

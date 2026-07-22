@@ -74,28 +74,25 @@
 .tile__face--d6 { --ff: 0.2; }
 
 .tile__face.is-spawn {
-  animation: tile-spawn 0.18s ease 0.08s backwards;
+  animation: tile-spawn 0.14s ease-out;
 }
 
 .tile__face.is-merge {
-  animation: tile-pop 0.12s ease 0.08s;
+  animation: tile-pop 0.14s ease-out;
 }
 
 @keyframes tile-spawn {
   0% {
-    transform: scale(0);
+    opacity: 0;
   }
   100% {
-    transform: scale(1);
+    opacity: 1;
   }
 }
 
 @keyframes tile-pop {
   0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.06);
+    transform: scale(1.03);
   }
   100% {
     transform: scale(1);
@@ -116,16 +113,12 @@
 
 /* score bump animation */
 .score-box__value.is-bump {
-  animation: score-bump 0.3s ease;
+  animation: score-bump 0.18s ease-out;
 }
 
 @keyframes score-bump {
   0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.18);
-    color: var(--accent);
+    transform: scale(1.1);
   }
   100% {
     transform: scale(1);

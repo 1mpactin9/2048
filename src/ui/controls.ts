@@ -68,8 +68,8 @@ export class SettingsPopover {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'icon-btn';
-    btn.setAttribute('aria-label', 'Settings');
-    btn.innerHTML = Icons.settings;
+    btn.setAttribute('aria-label', 'Menu');
+    btn.innerHTML = Icons.menu;
 
     this.popover = document.createElement('div');
     this.popover.className = 'popover';
