@@ -440,20 +440,36 @@ impl Engine {
         Self::best_move(grid, search_depth).0
     }
 
+    /// Flatten a `size x size` nested grid into a single row-major `Vec<u32>`.
+    /// The AI search operates on this flat form internally: one contiguous
+    /// allocation per board state instead of one allocation per row, which
+    /// matters once the same shape gets cloned at every node of an
+    /// expectimax tree that can span millions of nodes at deeper search.
+    fn flatten(grid: &Vec<Vec<u32>>) -> Vec<u32> {
+        let n = grid.len();
+        let mut out = Vec::with_capacity(n * n);
+        for row in grid {
+            out.extend_from_slice(row);
+        }
+        out
+    }
+
     /// Best directional move for `grid` and its expectimax value. The value is
     /// a heavy negative sentinel when no move is possible (game over), so it
     /// compares cleanly against power-up outcomes in `suggest_action_for`.
     fn best_move(grid: &Vec<Vec<u32>>, depth: usize) -> (Option<Direction>, f64) {
         let depth = Self::dynamic_depth(depth, grid);
+        let n = grid.len();
+        let board = Self::flatten(grid);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
         for &dir in Direction::ALL.iter() {
-            let (new_grid, gained) = Self::slide_grid(grid, dir);
-            if new_grid == *grid {
+            let (mut new_board, gained) = Self::slide_flat(&board, n, dir);
+            if new_board == board {
                 continue; // illegal move, skip
             }
-            let value =
-                gained as f64 + Self::expectimax_chance(&new_grid, depth.saturating_sub(1));
+            let value = gained as f64
+                + Self::expectimax_chance_flat(&mut new_board, n, depth.saturating_sub(1));
             if value > best_val {
                 best_val = value;
                 best_dir = Some(dir);
@@ -568,9 +584,14 @@ impl Engine {
     fn default_depth(size: usize) -> usize {
         // Larger boards have a much higher branching factor per ply, so search
         // shallower to keep runtime reasonable; smaller boards can go deeper.
+        // (Bumped from 5 to 6 for 3x3/4x4 now that the AI search runs on a
+        // flat Vec<u32> board with in-place chance-node mutation instead of
+        // cloning a nested Vec<Vec<u32>> at every node - see `flatten`,
+        // `slide_flat`, and `expectimax_chance_flat` - which makes each node
+        // meaningfully cheaper and buys back room for one more ply.)
         match size {
-            0..=3 => 5,
-            4 => 5,
+            0..=3 => 6,
+            4 => 6,
             5 => 3,
             6 => 2,
             _ => 1,
@@ -587,7 +608,9 @@ impl Engine {
         let empty = grid.iter().flatten().filter(|&&v| v == 0).count();
         let n = grid.len();
         let area = n * n;
-        let bonus = if empty <= (area / 16).max(1) {
+        let bonus = if empty <= (area / 24).max(1) {
+            4
+        } else if empty <= (area / 16).max(1) {
             3
         } else if empty <= (area / 8).max(2) {
             2
@@ -599,20 +622,72 @@ impl Engine {
         base + bonus
     }
 
+    /// Flat-board equivalent of `slide_grid` (see `flatten`), used internally
+    /// by the AI search: one contiguous allocation per board state instead of
+    /// `n` separate row allocations. Logic is identical to `slide_grid`,
+    /// just re-indexed as `r * n + c` - kept in lockstep by the
+    /// `slide_flat_matches_slide_grid` test below.
+    fn slide_flat(board: &[u32], n: usize, dir: Direction) -> (Vec<u32>, u64) {
+        let mut result = vec![0u32; n * n];
+        let mut gained: u64 = 0;
+
+        let lines: Vec<Vec<usize>> = match dir {
+            Direction::Left => (0..n).map(|r| (0..n).map(|c| r * n + c).collect()).collect(),
+            Direction::Right => (0..n)
+                .map(|r| (0..n).rev().map(|c| r * n + c).collect())
+                .collect(),
+            Direction::Up => (0..n).map(|c| (0..n).map(|r| r * n + c).collect()).collect(),
+            Direction::Down => (0..n)
+                .map(|c| (0..n).rev().map(|r| r * n + c).collect())
+                .collect(),
+        };
+
+        for line in lines {
+            let values: Vec<u32> = line
+                .iter()
+                .map(|&idx| board[idx])
+                .filter(|&v| v != 0)
+                .collect();
+
+            let mut merged: Vec<u32> = Vec::with_capacity(values.len());
+            let mut i = 0;
+            while i < values.len() {
+                if i + 1 < values.len() && values[i] == values[i + 1] {
+                    let m = values[i] * 2;
+                    merged.push(m);
+                    gained += m as u64;
+                    i += 2;
+                } else {
+                    merged.push(values[i]);
+                    i += 1;
+                }
+            }
+            while merged.len() < n {
+                merged.push(0);
+            }
+
+            for (k, &idx) in line.iter().enumerate() {
+                result[idx] = merged[k];
+            }
+        }
+
+        (result, gained)
+    }
+
     // Max node: player picks the best of the (up to 4) resulting states.
-    fn expectimax_max(grid: &Vec<Vec<u32>>, depth: usize) -> f64 {
+    fn expectimax_max_flat(board: &[u32], n: usize, depth: usize) -> f64 {
         if depth == 0 {
-            return Self::heuristic(grid);
+            return Self::heuristic_flat(board, n);
         }
         let mut best = f64::NEG_INFINITY;
         let mut any_move = false;
         for &dir in Direction::ALL.iter() {
-            let (new_grid, gained) = Self::slide_grid(grid, dir);
-            if new_grid == *grid {
+            let (mut new_board, gained) = Self::slide_flat(board, n, dir);
+            if new_board.as_slice() == board {
                 continue;
             }
             any_move = true;
-            let v = gained as f64 + Self::expectimax_chance(&new_grid, depth - 1);
+            let v = gained as f64 + Self::expectimax_chance_flat(&mut new_board, n, depth - 1);
             if v > best {
                 best = v;
             }
@@ -625,24 +700,28 @@ impl Engine {
 
     // Chance node: environment spawns a 2 (90%) or 4 (10%) in a random empty cell.
     // For performance on large boards we cap how many empty cells we expand over.
-    fn expectimax_chance(grid: &Vec<Vec<u32>>, depth: usize) -> f64 {
-        let n = grid.len();
-        let mut empties: Vec<(usize, usize)> = Vec::new();
-        for r in 0..n {
-            for c in 0..n {
-                if grid[r][c] == 0 {
-                    empties.push((r, c));
-                }
+    //
+    // `board` is mutated in place for each candidate cell/value and restored
+    // to empty afterward, rather than cloned. This is safe because `board` is
+    // always a freshly-built buffer from `slide_flat` that belongs solely to
+    // this call chain - nothing else reads it concurrently - so skipping the
+    // clone removes what used to be the single biggest allocation cost in the
+    // whole search (up to `MAX_CELLS * 2` clones per node, at every node).
+    fn expectimax_chance_flat(board: &mut Vec<u32>, n: usize, depth: usize) -> f64 {
+        let mut empties: Vec<usize> = Vec::new();
+        for (idx, &v) in board.iter().enumerate() {
+            if v == 0 {
+                empties.push(idx);
             }
         }
         if empties.is_empty() || depth == 0 {
-            return Self::heuristic(grid);
+            return Self::heuristic_flat(&*board, n);
         }
 
         // Cap branching: sample at most MAX_CELLS empty cells (evenly strided)
         // to bound the tree size on big boards.
         const MAX_CELLS: usize = 6;
-        let sampled: Vec<(usize, usize)> = if empties.len() <= MAX_CELLS {
+        let sampled: Vec<usize> = if empties.len() <= MAX_CELLS {
             empties.clone()
         } else {
             let stride = empties.len() as f64 / MAX_CELLS as f64;
@@ -653,14 +732,12 @@ impl Engine {
 
         let mut total = 0.0;
         let weight_each = 1.0 / sampled.len() as f64;
-        for &(r, c) in &sampled {
-            let mut g2 = grid.clone();
-            g2[r][c] = 2;
-            let v2 = Self::expectimax_max(&g2, depth - 1);
-
-            let mut g4 = grid.clone();
-            g4[r][c] = 4;
-            let v4 = Self::expectimax_max(&g4, depth - 1);
+        for &idx in &sampled {
+            board[idx] = 2;
+            let v2 = Self::expectimax_max_flat(&*board, n, depth - 1);
+            board[idx] = 4;
+            let v4 = Self::expectimax_max_flat(&*board, n, depth - 1);
+            board[idx] = 0;
 
             total += weight_each * (0.9 * v2 + 0.1 * v4);
         }
@@ -669,10 +746,10 @@ impl Engine {
 
     /// Heuristic board evaluation: rewards empty space, monotonic rows/columns,
     /// smoothness (small differences between neighbours), and keeping the
-    /// largest tile anchored in a corner.
-    fn heuristic(grid: &Vec<Vec<u32>>) -> f64 {
-        let n = grid.len();
-        let empty = grid.iter().flatten().filter(|&&v| v == 0).count() as f64;
+    /// largest tile anchored in a corner. Flat-board equivalent of the
+    /// original nested-Vec `heuristic`; logic is unchanged.
+    fn heuristic_flat(board: &[u32], n: usize) -> f64 {
+        let empty = board.iter().filter(|&&v| v == 0).count() as f64;
 
         let log = |v: u32| -> f64 {
             if v == 0 {
@@ -685,15 +762,16 @@ impl Engine {
         let mut smoothness = 0.0;
         for r in 0..n {
             for c in 0..n {
-                if grid[r][c] == 0 {
+                let v_raw = board[r * n + c];
+                if v_raw == 0 {
                     continue;
                 }
-                let v = log(grid[r][c]);
-                if c + 1 < n && grid[r][c + 1] != 0 {
-                    smoothness -= (v - log(grid[r][c + 1])).abs();
+                let v = log(v_raw);
+                if c + 1 < n && board[r * n + c + 1] != 0 {
+                    smoothness -= (v - log(board[r * n + c + 1])).abs();
                 }
-                if r + 1 < n && grid[r + 1][c] != 0 {
-                    smoothness -= (v - log(grid[r + 1][c])).abs();
+                if r + 1 < n && board[(r + 1) * n + c] != 0 {
+                    smoothness -= (v - log(board[(r + 1) * n + c])).abs();
                 }
             }
         }
@@ -703,8 +781,8 @@ impl Engine {
             let mut inc = 0.0;
             let mut dec = 0.0;
             for c in 0..n - 1 {
-                let a = log(grid[r][c]);
-                let b = log(grid[r][c + 1]);
+                let a = log(board[r * n + c]);
+                let b = log(board[r * n + c + 1]);
                 if a > b {
                     dec += a - b;
                 } else {
@@ -717,8 +795,8 @@ impl Engine {
             let mut inc = 0.0;
             let mut dec = 0.0;
             for r in 0..n - 1 {
-                let a = log(grid[r][c]);
-                let b = log(grid[r + 1][c]);
+                let a = log(board[r * n + c]);
+                let b = log(board[(r + 1) * n + c]);
                 if a > b {
                     dec += a - b;
                 } else {
@@ -728,26 +806,6 @@ impl Engine {
             mono -= inc.min(dec);
         }
 
-        let max_val = grid.iter().flatten().copied().max().unwrap_or(0);
-        let corners = [
-            grid[0][0],
-            grid[0][n - 1],
-            grid[n - 1][0],
-            grid[n - 1][n - 1],
-        ];
-        let corner_bonus = if corners.contains(&max_val) {
-            log(max_val)
-        } else {
-            0.0
-        };
-
-        // `corner_bonus` is intentionally unused now that `snake_score` already
-        // rewards a corner-anchored monotonic chain more coherently (it picks
-        // one consistent orientation instead of scoring "is the max tile in a
-        // corner" independently of the row/col monotonicity terms, which could
-        // pull the AI in conflicting directions).
-        let _ = corner_bonus;
-
         const W_EMPTY: f64 = 270.0;
         const W_MONO: f64 = 25.0;
         const W_SMOOTH: f64 = 11.0;
@@ -756,7 +814,7 @@ impl Engine {
         W_EMPTY * (empty + 1.0).log2()
             + W_MONO * mono
             + W_SMOOTH * smoothness
-            + W_SNAKE * Self::snake_score(grid)
+            + W_SNAKE * Self::snake_score_flat(board, n)
     }
 
     /// Corner-anchored "snake" gradient score. Lays a boustrophedon path of
@@ -768,8 +826,9 @@ impl Engine {
     /// single biggest driver of high scores in strong 2048 bots. The weight
     /// grid is tried in all 4 rotations (so any corner may anchor the chain)
     /// and the best-fitting orientation for the current board wins.
-    fn snake_score(grid: &Vec<Vec<u32>>) -> f64 {
-        let n = grid.len();
+    /// Flat-board equivalent of the original nested-Vec `snake_score`; logic
+    /// is unchanged.
+    fn snake_score_flat(board: &[u32], n: usize) -> f64 {
         if n == 0 {
             return 0.0;
         }
@@ -784,7 +843,7 @@ impl Engine {
         // Boustrophedon (snake) traversal order starting at (0,0): left-to-right
         // on even rows, right-to-left on odd rows.
         const RATIO: f64 = 0.5;
-        let mut weight = vec![vec![0.0f64; n]; n];
+        let mut weight = vec![0.0f64; n * n];
         let mut w = 1.0f64;
         for r in 0..n {
             let cols: Box<dyn Iterator<Item = usize>> = if r % 2 == 0 {
@@ -793,25 +852,25 @@ impl Engine {
                 Box::new((0..n).rev())
             };
             for c in cols {
-                weight[r][c] = w;
+                weight[r * n + c] = w;
                 w *= RATIO;
             }
         }
 
-        let dot = |wgt: &Vec<Vec<f64>>| -> f64 {
+        let dot = |wgt: &Vec<f64>| -> f64 {
             let mut s = 0.0;
             for r in 0..n {
                 for c in 0..n {
-                    s += log(grid[r][c]) * wgt[r][c];
+                    s += log(board[r * n + c]) * wgt[r * n + c];
                 }
             }
             s
         };
-        let rotate = |wgt: &Vec<Vec<f64>>| -> Vec<Vec<f64>> {
-            let mut out = vec![vec![0.0f64; n]; n];
+        let rotate = |wgt: &Vec<f64>| -> Vec<f64> {
+            let mut out = vec![0.0f64; n * n];
             for r in 0..n {
                 for c in 0..n {
-                    out[c][n - 1 - r] = wgt[r][c];
+                    out[c * n + (n - 1 - r)] = wgt[r * n + c];
                 }
             }
             out
@@ -924,6 +983,53 @@ mod tests {
         engine.delete_tile(occupied[0]).unwrap();
         assert_eq!(engine.deletes_left(), 0);
         assert_eq!(engine.empty_cells().len(), empties_before + 1);
+    }
+
+    #[test]
+    fn slide_flat_matches_slide_grid() {
+        // Cross-checks the new flat-board AI internals against the existing,
+        // proven `slide_grid` used by real gameplay, on several representative
+        // boards (including a full deadlocked board) and all 4 directions.
+        let grids: Vec<Vec<Vec<u32>>> = vec![
+            vec![
+                vec![2, 2, 4, 0],
+                vec![0, 4, 4, 0],
+                vec![0, 0, 2, 2],
+                vec![8, 0, 0, 8],
+            ],
+            vec![
+                vec![2, 4, 2, 4],
+                vec![4, 2, 4, 2],
+                vec![2, 4, 2, 4],
+                vec![4, 2, 4, 2],
+            ],
+            vec![
+                vec![0, 0, 0, 0],
+                vec![0, 2, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 4],
+            ],
+            vec![vec![2, 0, 2], vec![0, 4, 0], vec![4, 0, 4]],
+        ];
+        for grid in grids {
+            let n = grid.len();
+            let board = Engine::flatten(&grid);
+            for &dir in Direction::ALL.iter() {
+                let (expected_grid, expected_gain) = Engine::slide_grid(&grid, dir);
+                let (flat_result, flat_gain) = Engine::slide_flat(&board, n, dir);
+                let expected_flat = Engine::flatten(&expected_grid);
+                assert_eq!(
+                    flat_result, expected_flat,
+                    "slide_flat mismatch for dir {:?} on {:?}",
+                    dir, grid
+                );
+                assert_eq!(
+                    flat_gain, expected_gain,
+                    "slide_flat gain mismatch for dir {:?} on {:?}",
+                    dir, grid
+                );
+            }
+        }
     }
 
     #[test]

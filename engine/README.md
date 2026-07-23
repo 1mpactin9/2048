@@ -137,10 +137,16 @@ fn main() {
   sample of empty cells (not all of them) to keep large boards (6x6, 8x8)
   fast. This is an approximation, not exact expectimax, but it's what makes
   8x8 tractable in real time.
-- Benchmarked results (release build, AI playing full games): reaches
-  2048–4096 reliably on 4x4, and reaches much higher tiles (16384+) on
-  larger boards, where there's simply more room to maneuver. See
-  `examples/bench.rs` to reproduce on your machine.
+- The search internally works on a single flat `Vec<u32>` board rather than a
+  nested `Vec<Vec<u32>>`, and mutates that board in place (with restore)
+  when trying the two chance-node outcomes (a 2 or a 4 in a given empty
+  cell) instead of cloning it. Both remove allocation overhead that used to
+  dominate the cost of deeper searches, which is what buys back the extra
+  ply used in the default depth for 3x3/4x4 boards.
+- Run `cargo run --release --bin bench -- 20` (from `engine/`) to play N
+  full standard 4x4 games (no power-ups) with the AI and print min/median/
+  average/max score plus how many games clear 100k and 200k. Always use
+  `--release` — debug builds are much slower and not representative.
 
 ## Tests
 
