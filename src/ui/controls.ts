@@ -234,9 +234,9 @@ export class SettingsPopover {
     delayLabel.textContent = 'DELAY';
     this.delaySeg = createSegmented(
       [
-        { label: 'Fast', value: '80' },
-        { label: 'Normal', value: '180' },
-        { label: 'Slow', value: '350' },
+        { label: 'Fast', value: '40' },
+        { label: 'Normal', value: '160' },
+        { label: 'Slow', value: '240' },
       ],
       String(this.opts.autoSpeed),
       (v) => this.opts.onAutoSpeed(Number(v)),
