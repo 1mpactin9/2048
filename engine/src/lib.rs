@@ -444,6 +444,7 @@ impl Engine {
     /// a heavy negative sentinel when no move is possible (game over), so it
     /// compares cleanly against power-up outcomes in `suggest_action_for`.
     fn best_move(grid: &Vec<Vec<u32>>, depth: usize) -> (Option<Direction>, f64) {
+        let depth = Self::dynamic_depth(depth, grid);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
         for &dir in Direction::ALL.iter() {
@@ -569,11 +570,33 @@ impl Engine {
         // shallower to keep runtime reasonable; smaller boards can go deeper.
         match size {
             0..=3 => 5,
-            4 => 4,
+            4 => 5,
             5 => 3,
             6 => 2,
             _ => 1,
         }
+    }
+
+    /// Boost search depth when the board is getting congested. Danger (running
+    /// out of empty cells) is exactly when a deeper look-ahead matters most -
+    /// a shallow search can walk straight into an unrecoverable position - while
+    /// the branching factor there is also naturally smaller (fewer empty cells
+    /// to spawn into), so the extra depth is comparatively cheap. Depth is left
+    /// untouched in the comfortable midgame to keep the AI responsive.
+    fn dynamic_depth(base: usize, grid: &Vec<Vec<u32>>) -> usize {
+        let empty = grid.iter().flatten().filter(|&&v| v == 0).count();
+        let n = grid.len();
+        let area = n * n;
+        let bonus = if empty <= (area / 16).max(1) {
+            3
+        } else if empty <= (area / 8).max(2) {
+            2
+        } else if empty <= (area / 5).max(3) {
+            1
+        } else {
+            0
+        };
+        base + bonus
     }
 
     // Max node: player picks the best of the (up to 4) resulting states.
@@ -718,15 +741,90 @@ impl Engine {
             0.0
         };
 
+        // `corner_bonus` is intentionally unused now that `snake_score` already
+        // rewards a corner-anchored monotonic chain more coherently (it picks
+        // one consistent orientation instead of scoring "is the max tile in a
+        // corner" independently of the row/col monotonicity terms, which could
+        // pull the AI in conflicting directions).
+        let _ = corner_bonus;
+
         const W_EMPTY: f64 = 270.0;
-        const W_MONO: f64 = 47.0;
+        const W_MONO: f64 = 25.0;
         const W_SMOOTH: f64 = 11.0;
-        const W_CORNER: f64 = 40.0;
+        const W_SNAKE: f64 = 46.0;
 
         W_EMPTY * (empty + 1.0).log2()
             + W_MONO * mono
             + W_SMOOTH * smoothness
-            + W_CORNER * corner_bonus
+            + W_SNAKE * Self::snake_score(grid)
+    }
+
+    /// Corner-anchored "snake" gradient score. Lays a boustrophedon path of
+    /// geometrically decreasing weights across the board (heaviest cell in a
+    /// corner, decreasing back and forth from there) and dot-products it with
+    /// `log2(tile)` values. This rewards keeping tiles arranged along one
+    /// continuous descending chain from a corner - the arrangement that lets
+    /// large tiles keep merging instead of getting stranded - which is the
+    /// single biggest driver of high scores in strong 2048 bots. The weight
+    /// grid is tried in all 4 rotations (so any corner may anchor the chain)
+    /// and the best-fitting orientation for the current board wins.
+    fn snake_score(grid: &Vec<Vec<u32>>) -> f64 {
+        let n = grid.len();
+        if n == 0 {
+            return 0.0;
+        }
+        let log = |v: u32| -> f64 {
+            if v == 0 {
+                0.0
+            } else {
+                (v as f64).log2()
+            }
+        };
+
+        // Boustrophedon (snake) traversal order starting at (0,0): left-to-right
+        // on even rows, right-to-left on odd rows.
+        const RATIO: f64 = 0.5;
+        let mut weight = vec![vec![0.0f64; n]; n];
+        let mut w = 1.0f64;
+        for r in 0..n {
+            let cols: Box<dyn Iterator<Item = usize>> = if r % 2 == 0 {
+                Box::new(0..n)
+            } else {
+                Box::new((0..n).rev())
+            };
+            for c in cols {
+                weight[r][c] = w;
+                w *= RATIO;
+            }
+        }
+
+        let dot = |wgt: &Vec<Vec<f64>>| -> f64 {
+            let mut s = 0.0;
+            for r in 0..n {
+                for c in 0..n {
+                    s += log(grid[r][c]) * wgt[r][c];
+                }
+            }
+            s
+        };
+        let rotate = |wgt: &Vec<Vec<f64>>| -> Vec<Vec<f64>> {
+            let mut out = vec![vec![0.0f64; n]; n];
+            for r in 0..n {
+                for c in 0..n {
+                    out[c][n - 1 - r] = wgt[r][c];
+                }
+            }
+            out
+        };
+
+        let w0 = weight;
+        let w90 = rotate(&w0);
+        let w180 = rotate(&w90);
+        let w270 = rotate(&w180);
+
+        [dot(&w0), dot(&w90), dot(&w180), dot(&w270)]
+            .into_iter()
+            .fold(f64::NEG_INFINITY, f64::max)
     }
 }
 
