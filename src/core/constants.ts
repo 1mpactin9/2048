@@ -24,17 +24,26 @@ export const MAX_HISTORY = 16;
  * fall back to SUPER_TILE.
  */
 export const TILE_COLORS: Record<number, { bg: string; fg: string }> = {
-  2:    { bg: 'var(--tile-2-bg)', fg: 'var(--tile-2-fg)' },
-  4:    { bg: 'var(--tile-4-bg)', fg: 'var(--tile-4-fg)' },
-  8:    { bg: 'var(--tile-8-bg)', fg: 'var(--tile-8-fg)' },
-  16:   { bg: 'var(--tile-16-bg)', fg: 'var(--tile-16-fg)' },
-  32:   { bg: 'var(--tile-32-bg)', fg: 'var(--tile-32-fg)' },
-  64:   { bg: 'var(--tile-64-bg)', fg: 'var(--tile-64-fg)' },
-  128:  { bg: 'var(--tile-128-bg)', fg: 'var(--tile-128-fg)' },
-  256:  { bg: 'var(--tile-256-bg)', fg: 'var(--tile-256-fg)' },
-  512:  { bg: 'var(--tile-512-bg)', fg: 'var(--tile-512-fg)' },
-  1024: { bg: 'var(--tile-1024-bg)', fg: 'var(--tile-1024-fg)' },
-  2048: { bg: 'var(--tile-2048-bg)', fg: 'var(--tile-2048-fg)' },
+  2:         { bg: 'var(--tile-2-bg)', fg: 'var(--tile-2-fg)' },
+  4:         { bg: 'var(--tile-4-bg)', fg: 'var(--tile-4-fg)' },
+  8:         { bg: 'var(--tile-8-bg)', fg: 'var(--tile-8-fg)' },
+  16:        { bg: 'var(--tile-16-bg)', fg: 'var(--tile-16-fg)' },
+  32:        { bg: 'var(--tile-32-bg)', fg: 'var(--tile-32-fg)' },
+  64:        { bg: 'var(--tile-64-bg)', fg: 'var(--tile-64-fg)' },
+  128:       { bg: 'var(--tile-128-bg)', fg: 'var(--tile-128-fg)' },
+  256:       { bg: 'var(--tile-256-bg)', fg: 'var(--tile-256-fg)' },
+  512:       { bg: 'var(--tile-512-bg)', fg: 'var(--tile-512-fg)' },
+  1024:      { bg: 'var(--tile-1024-bg)', fg: 'var(--tile-1024-fg)' },
+  2048:      { bg: 'var(--tile-2048-bg)', fg: 'var(--tile-2048-fg)' },
+  4096:      { bg: 'var(--tile-4096-bg)', fg: 'var(--tile-4096-fg)' },
+  8192:      { bg: 'var(--tile-8192-bg)', fg: 'var(--tile-8192-fg)' },
+  16384:     { bg: 'var(--tile-16384-bg)', fg: 'var(--tile-16384-fg)' },
+  32768:     { bg: 'var(--tile-32768-bg)', fg: 'var(--tile-32768-fg)' },
+  65536:     { bg: 'var(--tile-65536-bg)', fg: 'var(--tile-65536-fg)' },
+  131072:    { bg: 'var(--tile-131072-bg)', fg: 'var(--tile-131072-fg)' },
+  262144:    { bg: 'var(--tile-262144-bg)', fg: 'var(--tile-262144-fg)' },
+  524288:    { bg: 'var(--tile-524288-bg)', fg: 'var(--tile-524288-fg)' },
+  1048576:   { bg: 'var(--tile-1048576-bg)', fg: 'var(--tile-1048576-fg)' },
 };
 
 export const SUPER_TILE = { bg: 'var(--tile-super-bg)', fg: 'var(--tile-super-fg)' };

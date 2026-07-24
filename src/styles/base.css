@@ -118,7 +118,6 @@ button:disabled {
   --tile-256-bg: #edcc61; --tile-256-fg: #f9f6f2;
   --tile-512-bg: #baac9a; --tile-512-fg: #f9f6f2;
   --tile-1024-bg: #988776; --tile-1024-fg: #f9f6f2;
-  --tile-1024-bg: #988776; --tile-1024-fg: #f9f6f2;
   --tile-2048-bg: #756452; --tile-2048-fg: #f9f6f2;
 
   --tile-4096-bg: #5f7868; --tile-4096-fg: #f9f6f2;   /* sage */
