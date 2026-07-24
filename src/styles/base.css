@@ -66,6 +66,8 @@ button:disabled {
   --btn-bg: #988a7a;
   --btn-bg-hover: #a5988a;
   --btn-text: #ffffff;
+  --btn-gobg: #988776; /* game-over bar primary (slightly darker than topbar) */
+  --btn-gobg-hover: #a5988a;
 
   /* score indicators */
   --score-bg: #e9e6d8;
@@ -156,6 +158,8 @@ button:disabled {
   --btn-bg: #6f5d4a;
   --btn-bg-hover: #7d6b58;
   --btn-text: #ffffff;
+  --btn-gobg: #5a4a3a; /* game-over bar primary (dark mode, slightly darker than topbar) */
+  --btn-gobg-hover: #6f5d4a;
 
   /* score indicators */
   --score-bg: #2c2820;

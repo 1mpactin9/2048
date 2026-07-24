@@ -486,7 +486,7 @@
   padding: 9px 14px;
   height: 3rem;
   color: var(--btn-text);
-  background: linear-gradient(to bottom, #998c7e, #988776);
+  background: linear-gradient(to bottom, var(--btn-gobg), color-mix(in srgb, var(--btn-gobg) 85%, black));
   box-shadow:
     0 5px 15px 0 rgba(140, 100, 60, 0.12),
     0 2px 3px 0 rgba(140, 100, 60, 0.09),
@@ -496,7 +496,7 @@
 }
 
 .game-over-bar__action:hover:not(:disabled) {
-  background: linear-gradient(to bottom, #a5988a, #a5988a);
+  background: linear-gradient(to bottom, var(--btn-gobg-hover), color-mix(in srgb, var(--btn-gobg-hover) 85%, black));
 }
 
 .game-over-bar__action:active:not(:disabled) {

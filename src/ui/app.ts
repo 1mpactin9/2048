@@ -9,6 +9,10 @@ import {
   save,
 } from '../core/storage';
 import { GameSession, restoreSession } from '../core/session';
+import { hasMoves } from '../core/grid';
+import { move } from '../core/move';
+import { SecureRng } from '../core/rng';
+import { SPAWN_PROB_4 } from '../core/constants';
 import { WasmEngine } from '../core/wasm-engine';
 import { BoardRenderer } from './board';
 import { Input } from './input';
@@ -974,4 +978,295 @@ export class App {
     this.input.destroy();
     this.board.destroy();
   }
+
+  // ---------- Developer console helpers ----------
+
+  /** Bypass-powerup undo: reverts up to `steps` past moves.
+   * Default 1 step. Negative values instead enable the auto-engine
+   * and run it for `Math.abs(steps)` moves. */
+  __undo(steps?: number): void {
+    const n = steps ?? 1;
+    if (n < 0) {
+      // Enable engine for |n| moves using current engine settings
+      const count = Math.abs(n);
+      this.data.settings.autoOn = true;
+      let done = 0;
+      const tick = () => {
+        if (done >= count || this.session.state.over || !this.data.settings.autoOn) return;
+        const ctx: EngineContext = {
+          ...this.session.toContext(),
+          depth: this.data.settings.autoDepth,
+          usePowerups: this.data.settings.autoPowerups,
+        };
+        (async () => {
+          const raw = await WasmEngine.chooseAction(ctx);
+          const action: AutoAction = raw instanceof Promise ? await raw : raw;
+          if (action.kind === 'stop' || this.session.state.over) {
+            this.data.settings.autoOn = false;
+            return;
+          }
+          this.applyAutoAction(action);
+          done++;
+          setTimeout(tick, this.data.settings.autoSpeed);
+        })();
+      };
+      tick();
+      console.log(`[dev] __undo → engine enabled for ${count} moves`);
+      return;
+    }
+    for (let i = 0; i < n; i++) {
+      if (!this.session.state.history.length) break;
+      const snap = this.session.state.history.pop()!;
+      this.session.state.grid = snap.grid;
+      this.session.state.score = snap.score;
+      this.session.state.won = snap.won;
+      this.session.state.wonAcknowledged = snap.wonAcknowledged;
+      this.session.state.moveCount = snap.moveCount;
+      this.session.state.powerups = { ...snap.powerups };
+    }
+    this.recomputeOver();
+    this.saveCurrent();
+    this.board.fullRender(this.session.state.grid);
+    this.updateUI();
+    this.handleWinOver();
+    console.log('[dev] __undo →', n, 'step(s), score', this.session.state.score);
+  }
+
+  /** Delete the tile at grid position [row, col]. */
+  __delete(row: number, col: number): void {
+    const g = this.session.state.grid;
+    if (row < 0 || row >= g.length || col < 0 || col >= g[row].length) {
+      console.warn(`[dev] __delete → out of bounds (${row},${col})`);
+      return;
+    }
+    if (!g[row][col]) { console.warn('[dev] __delete:', row, col, 'is empty'); return; }
+    this.clearPendingNew();
+    g[row][col] = null;
+    this.saveCurrent();
+    this.board.fullRender(g);
+    this.updateUI();
+    console.log('[dev] __delete → removed tile at', row, col);
+  }
+
+  /** Swap the tiles at [r1,c1] and [r2,c2]. Both must be occupied. */
+  __swap(r1: number, c1: number, r2: number, c2: number): void {
+    const g = this.session.state.grid;
+    if (r1 === r2 && c1 === c2) return;
+    const a = g[r1]?.[c1];
+    const b = g[r2]?.[c2];
+    if (!a || !b) { console.warn('[dev] __swap:', r1, c1, r2, c2, 'must both be occupied'); return; }
+    this.clearPendingNew();
+    g[r1][c1] = b;
+    g[r2][c2] = a;
+    this.saveCurrent();
+    this.board.animateSwap(a.id, b.id);
+    this.updateUI();
+    console.log('[dev] __swap →', r1, c1, '<->', r2, c2);
+  }
+
+  /** Add n free tiles (value 2) at random empty cells. */
+  __addTiles(n = 1): void {
+    const g = this.session.state.grid;
+    const empties: { r: number; c: number }[] = [];
+    for (let r = 0; r < g.length; r++)
+      for (let c = 0; c < g[r].length; c++)
+        if (!g[r][c]) empties.push({ r, c });
+    const count = Math.min(n, empties.length);
+    // Fisher-Yates partial shuffle to pick `count` distinct spots
+    for (let i = 0; i < count; i++) {
+      const idx = i + Math.floor(Math.random() * (empties.length - i));
+      [empties[idx], empties[i]] = [empties[i], empties[idx]];
+    }
+    for (let i = 0; i < count; i++) {
+      const spot = empties[i];
+      g[spot.r][spot.c] = { id: freshDevId(), value: 2 };
+    }
+    this.saveCurrent();
+    this.board.fullRender(g);
+    this.updateUI();
+    console.log(`[dev] __addTiles → spawned ${count} tiles`);
+  }
+
+  /** Clear every tile from the board. */
+  __clear(): void {
+    const g = this.session.state.grid;
+    for (let r = 0; r < g.length; r++)
+      for (let c = 0; c < g[r].length; c++) g[r][c] = null;
+    this.saveCurrent();
+    this.board.fullRender(g);
+    this.updateUI();
+    console.log('[dev] __clear → board emptied');
+  }
+
+  /** Fill the board with tiles of value `val` (default 2), one per cell. */
+  __fill(val = 2): void {
+    const g = this.session.state.grid;
+    let id = 1;
+    for (let r = 0; r < g.length; r++)
+      for (let c = 0; c < g[r].length; c++)
+        g[r][c] = { id: id++, value: val };
+    this.saveCurrent();
+    this.board.fullRender(g);
+    this.updateUI();
+    console.log(`[dev] __fill → ${val} everywhere`);
+  }
+
+  /** Set the score to `n`. */
+  __score(n: number): void {
+    this.session.state.score = n;
+    this.session.state.best = Math.max(this.session.state.best, n);
+    this.saveCurrent();
+    this.updateUI();
+    console.log(`[dev] __score → set to ${n}`);
+  }
+
+  /** Place a single tile of value `val` at [row, col]. Overwrites if occupied. */
+  __max(row: number, col: number, val = 2048): void {
+    const g = this.session.state.grid;
+    if (row < 0 || row >= g.length || col < 0 || col >= g[row].length) {
+      console.warn(`[dev] __max → out of bounds (${row},${col})`);
+      return;
+    }
+    g[row][col] = { id: freshDevId(), value: val };
+    this.saveCurrent();
+    this.board.fullRender(g);
+    this.updateUI();
+    console.log(`[dev] __max → placed ${val} at ${row},${col}`);
+  }
+
+  /** Set move count to `n`. */
+  __moves(n: number): void {
+    this.session.state.moveCount = n;
+    this.saveCurrent();
+    console.log(`[dev] __moves → set to ${n}`);
+  }
+
+  /** Apply a directional move WITHOUT spawning a tile (free experiment). */
+  __cheat(dir: Direction): void {
+    const { grid: next, transcript } = move(this.session.state.grid, dir);
+    if (!transcript.moved) { console.warn('[dev] __cheat:', dir, 'had no effect'); return; }
+    this.clearPendingNew();
+    this.session.state.grid = next;
+    this.session.state.score += transcript.gained;
+    this.saveCurrent();
+    this.board.animateMove(transcript);
+    this.updateUI();
+    console.log(`[dev] __cheat → ${dir}, gained ${transcript.gained}`);
+  }
+
+  /** Max out all powerup charges. */
+  __fillPowerups(): void {
+    this.session.state.powerups = { undo: 99, swap: 99, delete: 99 };
+    this.saveCurrent();
+    this.updateUI();
+    console.log('[dev] __fillPowerups → 99 each');
+  }
+
+  /** Instantly win: place a 2048 tile on a random empty cell. */
+  __win(): void {
+    const g = this.session.state.grid;
+    const empties: { r: number; c: number }[] = [];
+    for (let r = 0; r < g.length; r++)
+      for (let c = 0; c < g[r].length; c++)
+        if (!g[r][c]) empties.push({ r, c });
+    if (empties.length === 0) { console.warn('[dev] __win → board is full'); return; }
+    const spot = empties[Math.floor(Math.random() * empties.length)];
+    g[spot.r][spot.c] = { id: freshDevId(), value: 2048 };
+    this.session.state.won = true;
+    this.session.state.wonAcknowledged = false;
+    this.saveCurrent();
+    this.board.fullRender(g);
+    this.updateUI();
+    console.log(`[dev] __win → placed 2048 at ${spot.r},${spot.c}`);
+  }
+
+  /**
+   * Peek the next spawn value from the CSPRNG stream.
+   * Returns 2 or 4 (10% chance of 4), without advancing game state.
+   */
+  __nextNumber(): number {
+    const seed = this.session.state.rngSeed;
+    const calls = this.session.state.rngCalls ?? 0;
+    if (!seed || seed.length < 8) {
+      console.warn('[dev] __nextNumber → no RNG seed available');
+      return -1;
+    }
+    // Clone the RNG to peek without consuming
+    const gen = new SecureRng(seed, calls);
+    // Advance past all spawns that have already happened:
+    // Each move triggers exactly 1 spawn call. The session started with 2 spawns.
+    const totalSpawns = 2 + this.session.state.moveCount;
+    for (let i = 0; i < totalSpawns; i++) gen.next();
+    const roll = gen.next();
+    const val = roll < SPAWN_PROB_4 ? 4 : 2;
+    console.log(`[dev] __nextNumber → ${val} (rng=${roll.toFixed(4)}, p(4)=${SPAWN_PROB_4})`);
+    return val;
+  }
+
+  /**
+   * Peek the next spawn location from the CSPRNG stream.
+   * Returns { row, col } of the cell the next tile will appear in,
+   * without advancing game state.
+   */
+  __nextLocation(): { row: number; col: number } {
+    const g = this.session.state.grid;
+    const empties: { row: number; col: number }[] = [];
+    for (let r = 0; r < g.length; r++)
+      for (let c = 0; c < g[r].length; c++)
+        if (!g[r][c]) empties.push({ row: r, col: c });
+    if (empties.length === 0) { console.warn('[dev] __nextLocation → board is full'); return { row: -1, col: -1 }; }
+
+    const seed = this.session.state.rngSeed;
+    const calls = this.session.state.rngCalls ?? 0;
+    if (!seed || seed.length < 8) {
+      console.warn('[dev] __nextLocation → no RNG seed available');
+      return { row: -1, col: -1 };
+    }
+
+    const gen = new SecureRng(seed, calls);
+    const totalSpawns = 2 + this.session.state.moveCount;
+    for (let i = 0; i < totalSpawns; i++) {
+      gen.next(); // advance past value roll
+      gen.next(); // advance past position roll
+    }
+    const posRoll = gen.next();
+    const spot = empties[Math.floor(posRoll * empties.length)];
+    console.log(`[dev] __nextLocation → ${spot.row},${spot.col} (rng=${posRoll.toFixed(4)}, empties=${empties.length})`);
+    return spot;
+  }
+
+  /** Print usage info for the developer console. */
+  __help(): void {
+    const lines = [
+      '%c2048 Developer Console%c',
+      'font-weight:bold;font-size:14px;',
+      '',
+      '__undo()                  Undo last move (no powerup cost)',
+      '__undo(n)                 Undo n steps at once',
+      '__undo(-n)                Enable engine for n moves',
+      '__delete(row, col)        Remove tile at grid position',
+      '__swap(r1, c1, r2, c2)   Swap two tiles',
+      '__addTiles(n)             Spawn n free tiles (value 2)',
+      '__clear()                 Clear entire board',
+      '__fill(val)               Fill board with tiles of value',
+      '__score(n)                Set score to n',
+      '__max(row, col, val)      Place tile of value at position',
+      '__moves(n)                Set move count',
+      '__cheat(dir)              Move without spawning (free experiment)',
+      '__fillPowerups()          Max out all powerups',
+      '__win()                   Instantly win (place 2048)',
+      '__nextNumber()            Peek next spawn value (2 or 4)',
+      '__nextLocation()          Peek next spawn position',
+      '__help()                  Show this message',
+    ];
+    console.log(...lines);
+  }
+
+  private recomputeOver(): void {
+    this.session.state.over = !hasMoves(this.session.state.grid);
+  }
 }
+
+/** Monotonic id counter for dev-console tile placement (avoids collisions). */
+let _devId = 1;
+function freshDevId(): number { return _devId++; }
