@@ -235,7 +235,7 @@ export class SettingsPopover {
 
     const depthLabel = document.createElement('div');
     depthLabel.className = 'popover__label';
-    depthLabel.textContent = 'DIFFICULTY';
+    depthLabel.textContent = 'DEPTH';
     this.depthSeg = createSegmented(
       [
         { label: 'Auto', value: '0' },

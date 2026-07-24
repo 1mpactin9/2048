@@ -4,6 +4,7 @@ import './styles/main.css';
 declare global {
   interface Window {
     __app?: App;
+    __runAutoLoop: (score: number) => void;
   }
 }
 
@@ -17,6 +18,11 @@ function boot(): App {
 }
 
 let app = boot();
+
+window.__runAutoLoop = (score: number) => {
+  if (!window.__app) { console.warn('[2048] App not ready yet'); return; }
+  window.__app.runAutoLoop(score);
+};
 
 // Dispose the old instance on hot reload so its timers/listeners don't linger.
 if (import.meta.hot) {

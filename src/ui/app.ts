@@ -47,12 +47,14 @@ export class App {
   private pendingNew = false;
   private armed: Armed = 'none';
   private autoOn = false;
+  private autoLoopTarget: number | null = null;
   private lastScore = 0;
   private lastBest = 0;
   private lastSize: number;
   private lastMode: GameMode;
   private lastBadgeMode: string | null = null;
   private autoTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoLoopStart: number | null = null;
   private currentOverlay: HTMLElement | null = null;
   private wasOver = false;
 
@@ -189,18 +191,12 @@ export class App {
 
     const gameOverBar = document.createElement('div');
     gameOverBar.className = 'game-over-bar';
-    const goIcon = document.createElement('span');
-    goIcon.className = 'game-over-bar__icon';
-    goIcon.innerHTML = Icons.snow;
-    const goText = document.createElement('span');
-    goText.className = 'game-over-bar__text';
-    goText.textContent = 'Game over · No moves left';
     const goBtn = document.createElement('button');
     goBtn.type = 'button';
-    goBtn.className = 'btn btn--primary game-over-bar__action';
-    goBtn.textContent = 'New Game';
+    goBtn.className = 'game-over-bar__action btn btn--primary';
+    goBtn.textContent = 'Play Again';
     goBtn.addEventListener('click', () => this.confirmNewGame());
-    gameOverBar.append(goIcon, goText, goBtn);
+    gameOverBar.append(goBtn);
     this.gameOverBar = gameOverBar;
 
     stage.append(hintEl, powerups, gameOverBar);
@@ -595,7 +591,8 @@ export class App {
           ],
         });
       }
-      this.stopAuto();
+      // During auto-loop, let autoTick decide whether to restart or stop.
+      if (!this.autoLoopTarget) this.stopAuto();
     } else if (s.won && !s.wonAcknowledged) {
       if (this.autoOn) {
         this.session.acknowledgeWin();
@@ -623,7 +620,9 @@ export class App {
 
   /** Toggle the frozen-board look + below-board game-over indicator. */
   private setFrozen(frozen: boolean): void {
-    this.board.el.classList.toggle('is-frozen', frozen);
+    // Strip all effects from the board itself; only the below-board panel
+    // communicates game over state. No icy overlay, no saturation shift.
+    this.board.el.classList.remove('is-frozen');
     this.gameOverBar.classList.toggle('is-visible', frozen);
   }
 
@@ -714,6 +713,8 @@ export class App {
 
   private stopAuto(): void {
     this.autoOn = false;
+    this.autoLoopTarget = null;
+    this.autoLoopStart = null;
     if (this.autoTimer) {
       clearTimeout(this.autoTimer);
       this.autoTimer = null;
@@ -724,12 +725,47 @@ export class App {
     this.updateUI();
   }
 
+  /**
+   * Start the engine looping until the score reaches `targetScore`.
+   * Reuses the existing auto-play loop; stops and turns off the engine
+   * toggle when the target is hit (or at game-over / engine stop).
+   *
+   * Exposed on `window` for dev-console usage:
+   *   __runAutoLoop(5000)  // plays until score >= 5000
+   */
+  runAutoLoop(targetScore: number): void {
+    if (this.session.state.over) return;
+    if (this.autoOn) this.stopAuto();
+    this.autoLoopTarget = targetScore;
+    this.autoLoopStart = Date.now();
+    this.startAuto();
+    this.notify(`Engine looping to ${targetScore}`, Icons.engine);
+  }
+
   private autoTick(): void {
     this.autoTimer = setTimeout(async () => {
       this.autoTimer = null;
       if (!this.autoOn) return;
       const s = this.session.state;
-      if (s.over || this.board.isSelecting || this.currentOverlay) {
+      if (this.board.isSelecting || this.currentOverlay) {
+        // User is interacting — pause the loop.
+        this.stopAuto();
+        return;
+      }
+      if (s.over) {
+        // Auto-loop: restart the game when stuck so the engine keeps playing.
+        if (this.autoLoopTarget !== null) {
+          if (this.session.state.score >= this.autoLoopTarget) {
+            this.notify(`Engine completed ${this.session.state.score} in ${(Date.now() - this.autoLoopStart!) / 1000 | 0}s`, Icons.engine);
+            this.stopAuto();
+            return;
+          }
+          this.newGame();
+          if (this.autoOn && !this.session.state.over) {
+            this.autoTick();
+          }
+          return;
+        }
         this.stopAuto();
         return;
       }
@@ -751,7 +787,18 @@ export class App {
         return;
       }
       this.applyAutoAction(action);
-      if (this.autoOn && !this.session.state.over) this.autoTick();
+      // Auto-loop: when the engine hits game over mid-action, restart or stop.
+      if (this.autoOn && this.session.state.over && this.autoLoopTarget !== null) {
+        if (this.session.state.score >= this.autoLoopTarget) {
+          this.notify(`Engine reached ${this.autoLoopTarget}`, Icons.engine);
+          this.stopAuto();
+        } else {
+          this.newGame();
+          if (this.autoOn) this.autoTick();
+        }
+      } else if (this.autoOn && !this.session.state.over) {
+        this.autoTick();
+      }
     }, this.data.settings.autoSpeed);
   }
 
@@ -814,10 +861,25 @@ export class App {
         this.handleWinOver();
         break;
       }
-      case 'stop':
+      case 'stop': {
+        // Engine returned stop = no legal moves. Force game-over state so the
+        // auto-loop can properly decide whether to restart or stop.
+        this.session.state.over = true;
         this.handleWinOver();
-        this.stopAuto();
+        if (this.autoLoopTarget !== null) {
+          if (this.session.state.score >= this.autoLoopTarget) {
+            this.notify(`Engine completed ${this.session.state.score} in ${(Date.now() - this.autoLoopStart!) / 1000 | 0}s`, Icons.engine);
+            this.stopAuto();
+          } else {
+            // Auto-loop: always restart, regardless of current best score.
+            this.newGame();
+            if (this.autoOn) this.autoTick();
+          }
+        } else {
+          this.stopAuto();
+        }
         break;
+      }
     }
   }
 
