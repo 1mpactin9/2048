@@ -214,8 +214,10 @@ export class SettingsPopover {
     this.autoSwitch = autoSwitch;
     autoRow.append(autoLabel, autoSwitch);
 
-    // RNG Manipulation toggle. Sits directly under the Engine toggle. Persists
-    // its state only - not yet wired into spawn behavior.
+    // RNG Manipulation toggle. Sits directly under the Engine toggle. Wired
+    // into every spawn (including a new game's opening tiles) via
+    // GameSession's `manipulate` flag - see grid.ts/spawnTile and
+    // session.ts/setRngManipulation.
     const rngRow = document.createElement('div');
     rngRow.className = 'popover__row';
     const rngLabel = document.createElement('span');
@@ -237,13 +239,18 @@ export class SettingsPopover {
     this.depthSeg = createSegmented(
       [
         { label: 'Auto', value: '0' },
-        { label: 'Basic', value: '2' },
+        { label: 'Low', value: '2' },
         { label: 'Medium', value: '4' },
-        { label: 'Advanced', value: '6' },
+        { label: 'High', value: '6' },
       ],
       String(this.opts.autoDepth),
       (v) => this.opts.onAutoDepth(Number(v)),
     );
+    // All four labels are now short single words (previously "Advanced" was
+    // the long pole), so the segmented control no longer needs the full
+    // popover width - narrow it to fit its content instead of stretching edge
+    // to edge.
+    this.depthSeg.el.classList.add('segmented--compact');
 
     const depthField = document.createElement('div');
     depthField.className = 'popover__field';
@@ -254,9 +261,9 @@ export class SettingsPopover {
     delayLabel.textContent = 'DELAY';
     this.delaySeg = createSegmented(
       [
-        { label: 'Fast', value: '40' },
-        { label: 'Normal', value: '160' },
-        { label: 'Slow', value: '240' },
+        { label: 'Fast', value: '5' },
+        { label: 'Normal', value: '120' },
+        { label: 'Slow', value: '200' },
       ],
       String(this.opts.autoSpeed),
       (v) => this.opts.onAutoSpeed(Number(v)),

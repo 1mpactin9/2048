@@ -267,7 +267,7 @@ export class App {
       state = saved;
       this.session = restoreSession(state);
     } else {
-      this.session = GameSession.newGame(size, mode, 0);
+      this.session = GameSession.newGame(size, mode, 0, undefined, this.data.settings.rngManip);
       putGame(this.data, this.session.state);
       this.persist();
     }
@@ -329,7 +329,7 @@ export class App {
     this.cancelPowerup();
     const prevOver = this.session.state.over;
     const best = this.session.state.best;
-    this.session = GameSession.newGame(this.size, this.mode, best);
+    this.session = GameSession.newGame(this.size, this.mode, best, undefined, this.data.settings.rngManip);
     this.session.setRngManipulation(this.data.settings.rngManip);
     this.wasOver = false;
     // Safety net: if the previous game was still in progress, don't overwrite

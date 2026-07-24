@@ -71,6 +71,7 @@ export class GameSession {
     mode: GameMode = DEFAULT_MODE,
     best = 0,
     rng?: () => number,
+    manipulate = false,
   ): GameSession {
     const grid = createGrid(size);
     // Fresh game starts from a clean id space.
@@ -94,6 +95,14 @@ export class GameSession {
       rngCalls: 0,
     };
     const session = new GameSession(state, rng);
+    // Bug fix: this used to read `session.manipulate` here, which is always
+    // false at construction time - callers only apply the real setting via
+    // `setRngManipulation()` *after* `newGame()` returns, which was already
+    // too late for these two spawns. Every new game's opening tiles silently
+    // ignored the RNG Manipulation toggle. Accepting `manipulate` as a param
+    // and applying it before these spawns fixes that: the very first tiles
+    // now respect the setting exactly like every spawn after them.
+    session.manipulate = manipulate;
     // Spawn the two starting tiles through the session's rng so the CSPRNG
     // stream position advances in lockstep with the board.
     spawnTile(grid, { rng: session.rng, manipulate: session.manipulate });
