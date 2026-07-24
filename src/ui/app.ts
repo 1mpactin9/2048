@@ -1048,6 +1048,27 @@ export class App {
     console.log('[dev] __delete → removed tile at', row, col);
   }
 
+  /** Delete all tiles with value `n` from the board. */
+  __deleteValue(n: number): void {
+    const g = this.session.state.grid;
+    let count = 0;
+    for (let r = 0; r < g.length; r++) {
+      for (let c = 0; c < g[r].length; c++) {
+        const cell = g[r][c];
+        if (cell && cell.value === n) {
+          g[r][c] = null;
+          count++;
+        }
+      }
+    }
+    if (count === 0) { console.warn(`[dev] __deleteValue → no ${n}-tiles found`); return; }
+    this.clearPendingNew();
+    this.saveCurrent();
+    this.board.fullRender(g);
+    this.updateUI();
+    console.log(`[dev] __deleteValue → removed ${count} tile(s) of value ${n}`);
+  }
+
   /** Swap the tiles at [r1,c1] and [r2,c2]. Both must be occupied. */
   __swap(r1: number, c1: number, r2: number, c2: number): void {
     const g = this.session.state.grid;
@@ -1245,6 +1266,7 @@ export class App {
       '__undo(n)                 Undo n steps at once',
       '__undo(-n)                Enable engine for n moves',
       '__delete(row, col)        Remove tile at grid position',
+      '__deleteValue(n)          Remove all tiles of value n',
       '__swap(r1, c1, r2, c2)   Swap two tiles',
       '__addTiles(n)             Spawn n free tiles (value 2)',
       '__clear()                 Clear entire board',

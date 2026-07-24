@@ -10,6 +10,7 @@ declare global {
     __dev: {
       undo(steps?: number): void;
       delete(row: number, col: number): void;
+      deleteValue(n: number): void;
       swap(r1: number, c1: number, r2: number, c2: number): void;
       addTiles(n?: number): void;
       clear(): void;
@@ -47,6 +48,7 @@ window.__runAutoLoop = (score: number) => {
 window.__dev = {
   undo: (steps?: number) => window.__app?.__undo(steps),
   delete: (r: number, c: number) => window.__app?.__delete(r, c),
+  deleteValue: (n: number) => window.__app?.__deleteValue(n),
   swap: (r1: number, c1: number, r2: number, c2: number) => window.__app?.__swap(r1, c1, r2, c2),
   addTiles: (n = 1) => window.__app?.__addTiles(n),
   clear: () => window.__app?.__clear(),

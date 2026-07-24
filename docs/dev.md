@@ -537,6 +537,12 @@ Every method logs its result to the console with a `[dev]` prefix. Methods that 
 
 ### Console API Reference
 
+try adding dev. at the start if it doesn't work
+
+```javascript
+__dev.undo()
+```
+
 #### `__undo(steps?)` — Undo moves without powerup cost
 
 Reverts game state without consuming a powerup charge.
@@ -566,6 +572,19 @@ Deletes the tile at the given grid position. No powerup cost.
 **Example:**
 ```javascript
 __delete(2, 3)  // Remove tile at row 2, column 3
+```
+
+#### `__deleteValue(char)` — Remove a tile
+
+Deletes the tile at the given grid number. No powerup cost.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `char` | number | any existing numbers |
+
+**Example:**
+```javascript
+__deleteValue(2)  // Remove tile of value 2
 ```
 
 #### `__swap(r1, c1, r2, c2)` — Swap two tiles
