@@ -17,6 +17,7 @@ import {
   spawnTile,
 } from './grid';
 import { move } from './move';
+import { SecureRng, createRngSeed } from './rng';
 
 function emptyPowerups(): Powerups {
   return { undo: 0, swap: 0, delete: 0 };
@@ -30,23 +31,50 @@ function emptyPowerups(): Powerups {
 export class GameSession {
   state: GameState;
   private rng: () => number;
+  /**
+   * RNG Manipulation toggle (see `spawnTile` in grid.ts). Off by default and
+   * only ever applied when explicitly turned on via `setRngManipulation` -
+   * it never affects spawns while the setting is off, in manual play or
+   * during auto-play alike.
+   */
+  private manipulate = false;
 
-  constructor(state: GameState, rng: () => number = Math.random) {
+  constructor(state: GameState, rng?: () => number) {
     this.state = state;
-    this.rng = rng;
+    if (rng) {
+      // Explicit RNG (used by tests for deterministic spawns). Not persisted;
+      // tests don't round-trip state, so no CSPRNG state is needed.
+      this.rng = rng;
+    } else {
+      // Default: ChaCha20 CSPRNG keyed by the per-game seed. Tolerate saves
+      // made before the CSPRNG existed by deriving a seed on demand.
+      if (!state.rngSeed || state.rngSeed.length !== 8) state.rngSeed = createRngSeed();
+      if (typeof state.rngCalls !== 'number') state.rngCalls = 0;
+      const gen = new SecureRng(state.rngSeed, state.rngCalls);
+      // Mirror the stream position back into state on every draw so a save at
+      // any point captures the exact position and the stream resumes cleanly.
+      this.rng = () => {
+        const v = gen.next();
+        this.state.rngCalls = gen.calls;
+        return v;
+      };
+    }
+  }
+
+  /** Turn RNG Manipulation on/off for all subsequent spawns in this session. */
+  setRngManipulation(on: boolean): void {
+    this.manipulate = on;
   }
 
   static newGame(
     size: number,
     mode: GameMode = DEFAULT_MODE,
     best = 0,
-    rng: () => number = Math.random,
+    rng?: () => number,
   ): GameSession {
     const grid = createGrid(size);
     // Fresh game starts from a clean id space.
     setNextId(1);
-    spawnTile(grid, { rng });
-    spawnTile(grid, { rng });
     const powerups: Powerups = mode === 'standard' ? { ...POWERUP_QUOTA } : emptyPowerups();
     const state: GameState = {
       size,
@@ -60,8 +88,17 @@ export class GameSession {
       over: false,
       history: [],
       moveCount: 0,
+      // Seed the CSPRNG for production games. The injected-RNG (test) path
+      // leaves these unset; it never persists and ignores them.
+      rngSeed: rng ? undefined : createRngSeed(),
+      rngCalls: 0,
     };
-    return new GameSession(state, rng);
+    const session = new GameSession(state, rng);
+    // Spawn the two starting tiles through the session's rng so the CSPRNG
+    // stream position advances in lockstep with the board.
+    spawnTile(grid, { rng: session.rng, manipulate: session.manipulate });
+    spawnTile(grid, { rng: session.rng, manipulate: session.manipulate });
+    return session;
   }
 
   private snapshot(): GameSnapshot {
@@ -100,7 +137,8 @@ export class GameSession {
     this.state.grid = next;
     this.state.score += transcript.gained;
     this.state.best = Math.max(this.state.best, this.state.score);
-    transcript.spawned = spawnTile(next, { rng: this.rng }) ?? undefined;
+    transcript.spawned =
+      spawnTile(next, { rng: this.rng, manipulate: this.manipulate }) ?? undefined;
     this.state.moveCount++;
     if (!this.state.won && hasTile(next, WIN_VALUE)) this.state.won = true;
     this.recomputeOver();
@@ -186,7 +224,7 @@ export class GameSession {
 }
 
 /** Restore a session from a persisted GameState (e.g. localStorage). */
-export function restoreSession(state: GameState, rng: () => number = Math.random): GameSession {
+export function restoreSession(state: GameState, rng?: () => number): GameSession {
   // Ensure the id counter is above any persisted tile id to avoid collisions.
   let maxId = 0;
   for (const row of state.grid) {

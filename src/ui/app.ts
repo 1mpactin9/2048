@@ -13,6 +13,7 @@ import { WasmEngine } from '../core/wasm-engine';
 import { BoardRenderer } from './board';
 import { Input } from './input';
 import { SettingsPopover } from './controls';
+import { NotificationCenter } from './notify';
 import { Icons } from './icons';
 import {
   currentResolved,
@@ -39,6 +40,7 @@ export class App {
   private board!: BoardRenderer;
   private input!: Input;
   private popover!: SettingsPopover;
+  private notifications!: NotificationCenter;
 
   private size: number;
   private mode: GameMode;
@@ -85,6 +87,7 @@ export class App {
   // ---------- DOM ----------
   private buildDOM(): void {
     const app = document.getElementById('app')!;
+    this.notifications = new NotificationCenter(app);
 
     const topbar = document.createElement('header');
     topbar.className = 'topbar';
@@ -98,6 +101,7 @@ export class App {
       autoSpeed: this.data.settings.autoSpeed,
       autoDepth: this.data.settings.autoDepth,
       autoPowerups: this.data.settings.autoPowerups,
+      rngManip: this.data.settings.rngManip,
       mode: this.mode,
       size: this.size,
       onTheme: (p) => this.onThemePref(p),
@@ -105,6 +109,7 @@ export class App {
       onAutoSpeed: (ms) => this.onAutoSpeed(ms),
       onAutoDepth: (d) => this.onAutoDepth(d),
       onAutoPowerups: (on) => this.onAutoPowerups(on),
+      onRngManip: (on) => this.onRngManip(on),
       onMode: (m) => this.switchTo(this.size, m),
       onSize: (s) => this.switchTo(s, this.mode),
       onClearAll: () => this.confirmClearAll(),
@@ -266,6 +271,7 @@ export class App {
       putGame(this.data, this.session.state);
       this.persist();
     }
+    this.session.setRngManipulation(this.data.settings.rngManip);
     this.pendingNew = false;
     this.board.setSize(size);
     this.board.fullRender(this.session.state.grid, !saved);
@@ -324,6 +330,7 @@ export class App {
     const prevOver = this.session.state.over;
     const best = this.session.state.best;
     this.session = GameSession.newGame(this.size, this.mode, best);
+    this.session.setRngManipulation(this.data.settings.rngManip);
     this.wasOver = false;
     // Safety net: if the previous game was still in progress, don't overwrite
     // the saved game until the first move - so Resume can bring it back.
@@ -342,6 +349,7 @@ export class App {
       return;
     }
     this.session = restoreSession(saved);
+    this.session.setRngManipulation(this.data.settings.rngManip);
     this.pendingNew = false;
     this.wasOver = false;
     this.board.fullRender(this.session.state.grid);
@@ -570,10 +578,13 @@ export class App {
   private handleWinOver(): void {
     const s = this.session.state;
     if (s.over) {
-      // Show the modal only at the instant the game ends (false -> over).
-      // Loading or switching into an already-finished game leaves the frozen
-      // indicator below the board instead of re-prompting every time.
-      if (!this.wasOver) {
+      // Show the modal only at the instant the game ends (false -> over),
+      // and only for human-driven play. When the engine is auto-playing, a
+      // blocking "you lost" popup reads as the game accusing the player of
+      // losing something they weren't even steering - so we skip it and
+      // just leave the below-board frozen indicator (setFrozen, called from
+      // updateUI) to communicate the same thing without interrupting.
+      if (!this.wasOver && !this.autoOn) {
         this.showOverlay({
           title: 'Game over!',
           message: 'No moves left.',
@@ -678,6 +689,11 @@ export class App {
     }
   }
 
+  /** Small top-right auto-hiding toast (see notify.ts). */
+  private notify(message: string, icon?: string): void {
+    this.notifications.show(message, { icon, duration: 3000 });
+  }
+
   // ---------- Auto-play ----------
   private toggleAuto(force?: boolean): void {
     this.clearPendingNew();
@@ -745,6 +761,7 @@ export class App {
         this.saveCurrent();
         this.board.fullRender(this.session.state.grid);
         this.updateUI();
+        this.notify('Engine used Delete', Icons.delete);
         this.handleWinOver();
         break;
       }
@@ -765,12 +782,13 @@ export class App {
         this.saveCurrent();
         this.board.animateSwap(a.id, b.id);
         this.updateUI();
+        this.notify('Engine used Swap', Icons.swap);
         this.handleWinOver();
         break;
       }
       case 'stop':
-        this.stopAuto();
         this.handleWinOver();
+        this.stopAuto();
         break;
     }
   }
@@ -792,6 +810,17 @@ export class App {
     this.data.settings.autoPowerups = on;
     this.persist();
     this.popover.update({ autoPowerups: on });
+  }
+
+  // RNG Manipulation toggle: biases tile spawns (via the same ChaCha20
+  // stream - see grid.ts) toward the player's favor. Takes effect
+  // immediately on the live session, no new game required.
+  private onRngManip(on: boolean): void {
+    this.data.settings.rngManip = on;
+    this.session.setRngManipulation(on);
+    this.persist();
+    this.popover.update({ rngManip: on });
+    this.notify(on ? 'RNG Manipulation enabled' : 'RNG Manipulation disabled', Icons.dice);
   }
 
   // ---------- Theme & settings ----------

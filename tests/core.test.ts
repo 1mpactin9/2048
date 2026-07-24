@@ -286,7 +286,7 @@ describe('storage', () => {
     s.applyMove('left');
     const data: StoredData = {
       version: 1,
-      settings: { theme: 'dark', lastSize: 4, lastMode: 'standard', autoOn: false, autoSpeed: 180, autoDepth: 0, autoPowerups: true },
+      settings: { theme: 'dark', lastSize: 4, lastMode: 'standard', autoOn: false, autoSpeed: 180, autoDepth: 0, autoPowerups: true, rngManip: false },
       games: {},
       nextId: 100,
     };
@@ -305,7 +305,7 @@ describe('storage', () => {
     const s = makeSession(row0([2, 0, 2, 0]));
     const data: StoredData = {
       version: 1,
-      settings: { theme: 'light', lastSize: 4, lastMode: 'standard', autoOn: false, autoSpeed: 180, autoDepth: 0, autoPowerups: true },
+      settings: { theme: 'light', lastSize: 4, lastMode: 'standard', autoOn: false, autoSpeed: 180, autoDepth: 0, autoPowerups: true, rngManip: false },
       games: {},
       nextId: 1,
     };

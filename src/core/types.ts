@@ -78,6 +78,18 @@ export interface GameState {
   over: boolean;
   history: GameSnapshot[];
   moveCount: number;
+  /**
+   * 32-byte CSPRNG seed (8 uint32, little-endian) for tile spawns. Generated
+   * per game and persisted so each game differs. Optional only to tolerate
+   * saves made before the CSPRNG existed; `GameSession` derives one if absent.
+   */
+  rngSeed?: number[];
+  /**
+   * CSPRNG stream position (uint32 values consumed so far). Persisted so a
+   * reloaded game resumes the exact stream instead of restarting it, keeping
+   * spawns reproducible from the seed. Optional for the same legacy reason.
+   */
+  rngCalls?: number;
 }
 
 /** Read-only view handed to an auto-play engine. */

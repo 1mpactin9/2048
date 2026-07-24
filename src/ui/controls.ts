@@ -72,6 +72,8 @@ export interface PopoverOpts {
   autoSpeed: number;
   autoDepth: number;
   autoPowerups: boolean;
+  /** RNG Manipulation: biases tile spawns toward the player via the same CSPRNG stream. */
+  rngManip: boolean;
   mode: 'standard' | 'classic';
   size: number;
   onTheme: (pref: ThemePref) => void;
@@ -79,6 +81,7 @@ export interface PopoverOpts {
   onAutoSpeed: (ms: number) => void;
   onAutoDepth: (depth: number) => void;
   onAutoPowerups: (on: boolean) => void;
+  onRngManip: (on: boolean) => void;
   onMode: (mode: 'standard' | 'classic') => void;
   onSize: (size: number) => void;
   onClearAll: () => void;
@@ -89,6 +92,7 @@ export class SettingsPopover {
   readonly el: HTMLElement;
   private popover: HTMLElement;
   private autoSwitch!: HTMLElement;
+  private rngSwitch!: HTMLElement;
   private powerupSwitch!: HTMLElement;
   private powerupRow!: HTMLElement;
   private themeSeg!: { el: HTMLElement; setActive: (v: string) => void; layout: () => void };
@@ -210,16 +214,32 @@ export class SettingsPopover {
     this.autoSwitch = autoSwitch;
     autoRow.append(autoLabel, autoSwitch);
 
+    // RNG Manipulation toggle. Sits directly under the Engine toggle. Persists
+    // its state only - not yet wired into spawn behavior.
+    const rngRow = document.createElement('div');
+    rngRow.className = 'popover__row';
+    const rngLabel = document.createElement('span');
+    rngLabel.textContent = 'RNG Manipulation';
+    rngLabel.style.fontWeight = '600';
+    rngLabel.style.fontSize = '13px';
+    const rngSwitch = document.createElement('button');
+    rngSwitch.type = 'button';
+    rngSwitch.className = 'switch' + (this.opts.rngManip ? ' is-on' : '');
+    rngSwitch.setAttribute('aria-label', 'Toggle RNG manipulation');
+    rngSwitch.setAttribute('aria-pressed', String(this.opts.rngManip));
+    rngSwitch.addEventListener('click', () => this.opts.onRngManip(!this.opts.rngManip));
+    this.rngSwitch = rngSwitch;
+    rngRow.append(rngLabel, rngSwitch);
+
     const depthLabel = document.createElement('div');
     depthLabel.className = 'popover__label';
-    depthLabel.textContent = 'DEPTH';
+    depthLabel.textContent = 'DIFFICULTY';
     this.depthSeg = createSegmented(
       [
         { label: 'Auto', value: '0' },
-        { label: '2', value: '2' },
-        { label: '3', value: '3' },
-        { label: '4', value: '4' },
-        { label: '5', value: '5' },
+        { label: 'Basic', value: '2' },
+        { label: 'Medium', value: '4' },
+        { label: 'Advanced', value: '6' },
       ],
       String(this.opts.autoDepth),
       (v) => this.opts.onAutoDepth(Number(v)),
@@ -262,7 +282,7 @@ export class SettingsPopover {
     this.powerupRow = powerupRow;
     powerupRow.append(powerupLabel, powerupSwitch);
 
-    engineGroup.append(autoRow, depthField, delayField, powerupRow);
+    engineGroup.append(autoRow, rngRow, depthField, delayField, powerupRow);
     this.applyPowerupVisibility();
 
     const divider2 = document.createElement('div');
@@ -332,6 +352,10 @@ export class SettingsPopover {
     if (opts.autoPowerups !== undefined) {
       this.powerupSwitch.classList.toggle('is-on', opts.autoPowerups);
       this.powerupSwitch.setAttribute('aria-pressed', String(opts.autoPowerups));
+    }
+    if (opts.rngManip !== undefined) {
+      this.rngSwitch.classList.toggle('is-on', opts.rngManip);
+      this.rngSwitch.setAttribute('aria-pressed', String(opts.rngManip));
     }
   }
 }

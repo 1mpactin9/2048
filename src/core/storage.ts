@@ -14,6 +14,12 @@ export interface Settings {
   autoDepth: number;
   /** Whether auto-play may spend swap/delete charges to avoid game over. */
   autoPowerups: boolean;
+  /**
+   * RNG Manipulation: when on, tile spawns are chosen from several genuine
+   * draws of the same ChaCha20 stream (see grid.ts/spawnTile), keeping
+   * whichever leaves the board in the strongest position. Off by default.
+   */
+  rngManip: boolean;
 }
 
 export interface StoredData {
@@ -34,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoSpeed: 180,
   autoDepth: 0,
   autoPowerups: true,
+  rngManip: false,
 };
 
 export function load(): StoredData {

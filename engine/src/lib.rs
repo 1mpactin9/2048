@@ -7,6 +7,17 @@
 use rand::Rng;
 use std::fmt;
 
+/// Hard cap on search nodes expanded per AI decision. The expectimax search and
+/// every power-up candidate evaluation share one budget; once it runs out,
+/// remaining branches fall back to the static heuristic. This bounds the
+/// worst-case cost of a single `suggest_*` call so the synchronous WASM search
+/// can never stall the UI thread for long - even on large, congested boards
+/// where `auto_depth` would otherwise push the tree toward hundreds of
+/// millions of nodes, and even on dangerous boards where the power-up path
+/// evaluates dozens of candidate positions. Normal-play moves typically use far
+/// fewer nodes, so this only bites on the pathological cases that caused lag.
+const SEARCH_NODE_BUDGET: u64 = 150_000;
+
 // WebAssembly bridge (compiled only for the wasm32 target). Exposes the
 // expectimax AI to the browser via wasm-bindgen; see `src/wasm.rs`.
 #[cfg(target_arch = "wasm32")]
@@ -436,8 +447,14 @@ impl Engine {
     /// bridge exposes this so a browser can query the AI without constructing
     /// an engine (which would require an entropy source for `Engine::new`).
     pub fn suggest_move_for(grid: &Vec<Vec<u32>>, depth: Option<usize>) -> Option<Direction> {
-        let search_depth = depth.unwrap_or_else(|| Self::default_depth(grid.len()));
-        Self::best_move(grid, search_depth).0
+        // Resolve once per decision: an explicit depth (Basic/Medium/Advanced)
+        // is followed exactly; `None` (Auto) is resolved from the current
+        // board via `auto_depth` and then treated as a fixed depth for the
+        // rest of this call, so the budget and every candidate branch agree
+        // on the same depth.
+        let search_depth = depth.unwrap_or_else(|| Self::auto_depth(grid));
+        let mut budget = Self::budget_for_depth(search_depth);
+        Self::best_move(grid, search_depth, &mut budget).0
     }
 
     /// Flatten a `size x size` nested grid into a single row-major `Vec<u32>`.
@@ -457,8 +474,12 @@ impl Engine {
     /// Best directional move for `grid` and its expectimax value. The value is
     /// a heavy negative sentinel when no move is possible (game over), so it
     /// compares cleanly against power-up outcomes in `suggest_action_for`.
-    fn best_move(grid: &Vec<Vec<u32>>, depth: usize) -> (Option<Direction>, f64) {
-        let depth = Self::dynamic_depth(depth, grid);
+    fn best_move(grid: &Vec<Vec<u32>>, depth: usize, budget: &mut u64) -> (Option<Direction>, f64) {
+        // `depth` is already fully resolved by the caller (either an explicit
+        // override followed exactly, or the auto-ramp value for this board) -
+        // it is used as-is here so every branch of a single decision (the
+        // move itself, plus any power-up candidates) searches at the same
+        // depth instead of being silently re-boosted per call.
         let n = grid.len();
         let board = Self::flatten(grid);
         let mut best_dir = None;
@@ -469,7 +490,7 @@ impl Engine {
                 continue; // illegal move, skip
             }
             let value = gained as f64
-                + Self::expectimax_chance_flat(&mut new_board, n, depth.saturating_sub(1));
+                + Self::expectimax_chance_flat(&mut new_board, n, depth.saturating_sub(1), budget);
             if value > best_val {
                 best_val = value;
                 best_dir = Some(dir);
@@ -494,9 +515,17 @@ impl Engine {
         depth: Option<usize>,
     ) -> Action {
         let size = grid.len();
-        let d = depth.unwrap_or_else(|| Self::default_depth(size));
+        let d = depth.unwrap_or_else(|| Self::auto_depth(grid));
+        // One shared node budget spans the main move and every power-up
+        // candidate, so the whole decision is hard-bounded (see
+        // `budget_for_depth`). Power-ups are only evaluated on dangerous
+        // boards, which is exactly when the unbounded search used to stall
+        // the UI. The budget scales with the resolved depth so shallow
+        // (fast/early-game) decisions stay cheap and only deep (dangerous)
+        // decisions spend the larger budget.
+        let mut budget = Self::budget_for_depth(d);
 
-        let (best_dir, move_val) = Self::best_move(grid, d);
+        let (best_dir, move_val) = Self::best_move(grid, d, &mut budget);
 
         // Skip power-up evaluation entirely while the board is comfortable.
         let stuck = best_dir.is_none();
@@ -504,7 +533,11 @@ impl Engine {
             return best_dir.map(Action::Move).unwrap_or(Action::None);
         }
 
-        const POWERUP_MARGIN: f64 = 150.0;
+        // Lowered from 150 to 90: on a dangerous board a power-up that helps
+        // even a modest amount is usually worth spending, since the
+        // alternative is risking a dead board. Still high enough that
+        // charges aren't burned for trivial gains.
+        const POWERUP_MARGIN: f64 = 90.0;
 
         // Deletes: O(n^2) - try every occupied cell.
         let mut best_delete: Option<(usize, usize)> = None;
@@ -517,7 +550,7 @@ impl Engine {
                     }
                     let mut g = grid.clone();
                     g[r][c] = 0;
-                    let v = Self::best_move(&g, d).1;
+                    let v = Self::best_move(&g, d, &mut budget).1;
                     if v > best_delete_val {
                         best_delete_val = v;
                         best_delete = Some((r, c));
@@ -539,7 +572,7 @@ impl Engine {
                 let tmp = g[a.0][a.1];
                 g[a.0][a.1] = g[b.0][b.1];
                 g[b.0][b.1] = tmp;
-                let v = Self::best_move(&g, d).1;
+                let v = Self::best_move(&g, d, &mut budget).1;
                 if v > best_swap_val {
                     best_swap_val = v;
                     best_swap = Some((a, b));
@@ -569,7 +602,12 @@ impl Engine {
     fn is_dangerous(grid: &Vec<Vec<u32>>) -> bool {
         let n = grid.len();
         let empties = grid.iter().flatten().filter(|&&v| v == 0).count();
-        let threshold = (n * n / 8).max(2);
+        // Widened from area/8 to area/6: flags danger a little earlier so a
+        // power-up (when enabled) is available with more empty cells still on
+        // the board to work with, instead of only once things are nearly
+        // full - this materially improves how often a run survives the
+        // danger zone and keeps climbing.
+        let threshold = (n * n / 6).max(2);
         empties <= threshold
     }
 
@@ -581,14 +619,11 @@ impl Engine {
         self.suggest_move(depth).map(|dir| self.make_move(dir))
     }
 
+    /// Base search depth for a board size at "typical" congestion (the anchor
+    /// point `auto_depth`'s ramp scales around). Larger boards have a much
+    /// higher branching factor per ply, so search shallower to keep runtime
+    /// reasonable; smaller boards can go deeper.
     fn default_depth(size: usize) -> usize {
-        // Larger boards have a much higher branching factor per ply, so search
-        // shallower to keep runtime reasonable; smaller boards can go deeper.
-        // (Bumped from 5 to 6 for 3x3/4x4 now that the AI search runs on a
-        // flat Vec<u32> board with in-place chance-node mutation instead of
-        // cloning a nested Vec<Vec<u32>> at every node - see `flatten`,
-        // `slide_flat`, and `expectimax_chance_flat` - which makes each node
-        // meaningfully cheaper and buys back room for one more ply.)
         match size {
             0..=3 => 6,
             4 => 6,
@@ -598,28 +633,58 @@ impl Engine {
         }
     }
 
-    /// Boost search depth when the board is getting congested. Danger (running
-    /// out of empty cells) is exactly when a deeper look-ahead matters most -
-    /// a shallow search can walk straight into an unrecoverable position - while
-    /// the branching factor there is also naturally smaller (fewer empty cells
-    /// to spawn into), so the extra depth is comparatively cheap. Depth is left
-    /// untouched in the comfortable midgame to keep the AI responsive.
-    fn dynamic_depth(base: usize, grid: &Vec<Vec<u32>>) -> usize {
-        let empty = grid.iter().flatten().filter(|&&v| v == 0).count();
+    /// Adaptive depth used only when the caller passes `depth: None` (Auto).
+    /// Fixes the "extreme lag when turning the engine on" / "so slow at the
+    /// start" complaints: auto-play used to run a fixed, fairly deep search
+    /// (`default_depth`) on every move including the very first ones - right
+    /// when the board is emptiest and the expectimax tree is at its widest,
+    /// so early moves were by far the most expensive. Instead depth ramps
+    /// against how full the board is: shallow (fast) while mostly empty and
+    /// there's little danger, deepening as empty cells run out - which is
+    /// also when the search tree is naturally smaller, so the extra depth
+    /// stays cheap. The late-game boost is larger than before (up to +5) so
+    /// the AI looks far enough ahead to reliably survive the danger zone -
+    /// the single biggest lever for consistently reaching high scores.
+    fn auto_depth(grid: &Vec<Vec<u32>>) -> usize {
         let n = grid.len();
-        let area = n * n;
-        let bonus = if empty <= (area / 24).max(1) {
-            4
-        } else if empty <= (area / 16).max(1) {
-            3
-        } else if empty <= (area / 8).max(2) {
-            2
-        } else if empty <= (area / 5).max(3) {
-            1
+        let base = Self::default_depth(n);
+        let empty = grid.iter().flatten().filter(|&&v| v == 0).count();
+        let area = (n * n).max(1);
+        let ratio = empty as f64 / area as f64;
+
+        let depth = if ratio > 0.55 {
+            base.saturating_sub(3) // opening: board nearly empty, play fast
+        } else if ratio > 0.35 {
+            base.saturating_sub(2)
+        } else if ratio > 0.22 {
+            base.saturating_sub(1)
+        } else if ratio > 0.12 {
+            base // comfortable midgame: the tuned baseline
+        } else if ratio > 0.07 {
+            base + 1
+        } else if ratio > 0.035 {
+            base + 3 // getting dangerous: look much further ahead
         } else {
-            0
+            base + 5 // critical: board almost full, spend whatever it takes
         };
-        base + bonus
+        depth.max(2)
+    }
+
+    /// Node budget scaled to the resolved depth. Shallow (opening / Basic)
+    /// decisions get a small budget so they resolve near-instantly; deep
+    /// (danger-zone / Advanced) decisions get a much larger budget since
+    /// that's when the extra search actually changes the outcome. Replaces
+    /// the old flat `SEARCH_NODE_BUDGET`, which made every decision -
+    /// including cheap opening ones - pay the same worst-case cost.
+    fn budget_for_depth(depth: usize) -> u64 {
+        match depth {
+            0..=2 => 15_000,
+            3 => 40_000,
+            4 => 90_000,
+            5..=6 => SEARCH_NODE_BUDGET,
+            7..=8 => 220_000,
+            _ => 320_000,
+        }
     }
 
     /// Flat-board equivalent of `slide_grid` (see `flatten`), used internally
@@ -675,10 +740,11 @@ impl Engine {
     }
 
     // Max node: player picks the best of the (up to 4) resulting states.
-    fn expectimax_max_flat(board: &[u32], n: usize, depth: usize) -> f64 {
-        if depth == 0 {
+    fn expectimax_max_flat(board: &[u32], n: usize, depth: usize, budget: &mut u64) -> f64 {
+        if depth == 0 || *budget == 0 {
             return Self::heuristic_flat(board, n);
         }
+        *budget -= 1;
         let mut best = f64::NEG_INFINITY;
         let mut any_move = false;
         for &dir in Direction::ALL.iter() {
@@ -687,7 +753,8 @@ impl Engine {
                 continue;
             }
             any_move = true;
-            let v = gained as f64 + Self::expectimax_chance_flat(&mut new_board, n, depth - 1);
+            let v = gained as f64
+                + Self::expectimax_chance_flat(&mut new_board, n, depth - 1, budget);
             if v > best {
                 best = v;
             }
@@ -707,7 +774,10 @@ impl Engine {
     // this call chain - nothing else reads it concurrently - so skipping the
     // clone removes what used to be the single biggest allocation cost in the
     // whole search (up to `MAX_CELLS * 2` clones per node, at every node).
-    fn expectimax_chance_flat(board: &mut Vec<u32>, n: usize, depth: usize) -> f64 {
+    fn expectimax_chance_flat(board: &mut Vec<u32>, n: usize, depth: usize, budget: &mut u64) -> f64 {
+        if *budget == 0 {
+            return Self::heuristic_flat(&*board, n);
+        }
         let mut empties: Vec<usize> = Vec::new();
         for (idx, &v) in board.iter().enumerate() {
             if v == 0 {
@@ -717,6 +787,7 @@ impl Engine {
         if empties.is_empty() || depth == 0 {
             return Self::heuristic_flat(&*board, n);
         }
+        *budget -= 1;
 
         // Cap branching: sample at most MAX_CELLS empty cells (evenly strided)
         // to bound the tree size on big boards.
@@ -734,9 +805,9 @@ impl Engine {
         let weight_each = 1.0 / sampled.len() as f64;
         for &idx in &sampled {
             board[idx] = 2;
-            let v2 = Self::expectimax_max_flat(&*board, n, depth - 1);
+            let v2 = Self::expectimax_max_flat(&*board, n, depth - 1, budget);
             board[idx] = 4;
-            let v4 = Self::expectimax_max_flat(&*board, n, depth - 1);
+            let v4 = Self::expectimax_max_flat(&*board, n, depth - 1, budget);
             board[idx] = 0;
 
             total += weight_each * (0.9 * v2 + 0.1 * v4);

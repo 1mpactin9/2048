@@ -64,14 +64,87 @@ export interface SpawnOptions {
   at?: { row: number; col: number };
   /** Injectable RNG for deterministic tests. */
   rng?: () => number;
+  /**
+   * RNG Manipulation. When true, instead of taking the very next draw from
+   * the ChaCha20 stream verbatim, we draw several *genuine* candidate spawns
+   * in a row from that same stream and keep whichever one leaves the board in
+   * the strongest position. Nothing about the source of randomness changes -
+   * every candidate is a real, unpredictable draw from the CSPRNG - this only
+   * changes which of those draws gets used, biasing outcomes in the player's
+   * favor without ever inventing a spawn the stream didn't produce.
+   */
+  manipulate?: boolean;
+}
+
+/** How many genuine candidate draws to sample per spawn when manipulating. */
+const MANIPULATION_CANDIDATES = 5;
+
+/**
+ * Lightweight positional score for a candidate post-spawn board: rewards
+ * empty space and smooth neighbours (small differences between adjacent
+ * tiles), penalizes a spawn that wedges a tile awkwardly next to a much
+ * larger one. Intentionally a cheap approximation of the Rust AI's
+ * heuristic - this runs synchronously on every spawn, so it stays a simple
+ * local score rather than a full search.
+ */
+function scoreSpawnCandidate(grid: Grid): number {
+  const n = grid.length;
+  let empty = 0;
+  let smoothness = 0;
+  const log2 = (v: number) => (v > 0 ? Math.log2(v) : 0);
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const cell = grid[r][c];
+      if (!cell) {
+        empty++;
+        continue;
+      }
+      const v = log2(cell.value);
+      const right = grid[r][c + 1];
+      if (right) smoothness -= Math.abs(v - log2(right.value));
+      const down = grid[r + 1]?.[c];
+      if (down) smoothness -= Math.abs(v - log2(down.value));
+    }
+  }
+  return empty * 4 + smoothness;
 }
 
 export function spawnTile(grid: Grid, opts: SpawnOptions = {}): SpawnedTile | null {
   const empties = emptyCells(grid);
   if (empties.length === 0) return null;
   const rng = opts.rng ?? Math.random;
-  const spot = opts.at ?? empties[Math.floor(rng() * empties.length)];
-  const value = opts.value ?? (rng() < SPAWN_PROB_4 ? 4 : 2);
+
+  let spot: { row: number; col: number };
+  let value: number;
+
+  if (opts.at) {
+    spot = opts.at;
+    value = opts.value ?? (rng() < SPAWN_PROB_4 ? 4 : 2);
+  } else if (opts.manipulate && empties.length > 1) {
+    const rounds = Math.min(MANIPULATION_CANDIDATES, empties.length);
+    let bestSpot = empties[0];
+    let bestValue: number = opts.value ?? 2;
+    let bestScore = -Infinity;
+    for (let i = 0; i < rounds; i++) {
+      const candSpot = empties[Math.floor(rng() * empties.length)];
+      const candValue = opts.value ?? (rng() < SPAWN_PROB_4 ? 4 : 2);
+      // Probe: temporarily place the candidate, score the board, undo.
+      grid[candSpot.row][candSpot.col] = { id: -1, value: candValue };
+      const score = scoreSpawnCandidate(grid);
+      grid[candSpot.row][candSpot.col] = null;
+      if (score > bestScore) {
+        bestScore = score;
+        bestSpot = candSpot;
+        bestValue = candValue;
+      }
+    }
+    spot = bestSpot;
+    value = bestValue;
+  } else {
+    spot = empties[Math.floor(rng() * empties.length)];
+    value = opts.value ?? (rng() < SPAWN_PROB_4 ? 4 : 2);
+  }
+
   const id = freshId();
   grid[spot.row][spot.col] = { id, value };
   return { id, value, row: spot.row, col: spot.col };
