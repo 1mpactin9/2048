@@ -756,7 +756,8 @@ export class App {
         // Auto-loop: restart the game when stuck so the engine keeps playing.
         if (this.autoLoopTarget !== null) {
           if (this.session.state.score >= this.autoLoopTarget) {
-            this.notify(`Engine completed ${this.session.state.score} in ${(Date.now() - this.autoLoopStart!) / 1000 | 0}s`, Icons.engine);
+            const elapsed = this.autoLoopStart ? ((Date.now() - this.autoLoopStart) / 1000 | 0) : 0;
+            this.notify(`Engine completed ${this.session.state.score}` + (elapsed > 0 ? ` in ${elapsed}s` : ''), Icons.engine);
             this.stopAuto();
             return;
           }
@@ -790,7 +791,8 @@ export class App {
       // Auto-loop: when the engine hits game over mid-action, restart or stop.
       if (this.autoOn && this.session.state.over && this.autoLoopTarget !== null) {
         if (this.session.state.score >= this.autoLoopTarget) {
-          this.notify(`Engine reached ${this.autoLoopTarget}`, Icons.engine);
+          const elapsed = this.autoLoopStart ? ((Date.now() - this.autoLoopStart) / 1000 | 0) : 0;
+          this.notify(`Engine completed ${this.session.state.score} in ${elapsed}s`, Icons.engine);
           this.stopAuto();
         } else {
           this.newGame();
@@ -868,7 +870,8 @@ export class App {
         this.handleWinOver();
         if (this.autoLoopTarget !== null) {
           if (this.session.state.score >= this.autoLoopTarget) {
-            this.notify(`Engine completed ${this.session.state.score} in ${(Date.now() - this.autoLoopStart!) / 1000 | 0}s`, Icons.engine);
+            const elapsed = this.autoLoopStart ? ((Date.now() - this.autoLoopStart) / 1000 | 0) : 0;
+            this.notify(`Engine completed ${this.session.state.score}` + (elapsed > 0 ? ` in ${elapsed}s` : ''), Icons.engine);
             this.stopAuto();
           } else {
             // Auto-loop: always restart, regardless of current best score.
