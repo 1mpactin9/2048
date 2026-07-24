@@ -956,6 +956,310 @@ impl Engine {
             .into_iter()
             .fold(f64::NEG_INFINITY, f64::max)
     }
+
+    // ---------- predictive ("cheat") search ----------
+    //
+    // When RNG Manipulation is on, the spawn stream is a deterministic function
+    // of (seed, calls) - reproducible from the source. Instead of modelling
+    // spawns as random (the expectimax chance nodes above average over sampled
+    // empties x {2,4}), the predictive search *peeks* the exact next spawn from
+    // the ChaCha20 stream at every chance node and searches the single
+    // deterministic outcome. That collapses each chance node from up to 12
+    // branches to 1, so the same node budget reaches far deeper plies (faster
+    // *and* sharper) and - because the real game draws from the same stream -
+    // it optimizes for the board's actual future instead of a probability
+    // average. The spawn predictor (`predict_spawn_flat`) and DRBG are ported
+    // bit-for-bit from src/core/grid.ts and src/core/rng.ts, so the predicted
+    // spawn matches what the real game will produce.
+
+    /// Derive the 256-bit ChaCha20 key from a per-game seed by XOR-ing with the
+    /// source-embedded `KEY_MATERIAL` (see `deriveKey` in rng.ts). Public so the
+    /// wasm bridge can build it once per request and hand it to the search.
+    pub fn derive_key(seed: &[u32]) -> [u32; 8] {
+        let mut seed_bytes = [0u8; 32];
+        for i in 0..8 {
+            let v = seed.get(i).copied().unwrap_or(0);
+            seed_bytes[i * 4..i * 4 + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        let mut key_bytes = [0u8; 32];
+        for i in 0..32 {
+            key_bytes[i] = seed_bytes[i] ^ KEY_MATERIAL[i];
+        }
+        let mut key = [0u32; 8];
+        for i in 0..8 {
+            key[i] = u32::from_le_bytes([
+                key_bytes[i * 4],
+                key_bytes[i * 4 + 1],
+                key_bytes[i * 4 + 2],
+                key_bytes[i * 4 + 3],
+            ]);
+        }
+        key
+    }
+
+    /// Predict the single tile the real game will spawn next on `board` (flat,
+    /// `0` = empty), given the ChaCha20 stream at position `calls`. Returns
+    /// `(cell_index, value, draws_consumed)`. `draws_consumed` advances the
+    /// stream for the next ply: 2 for a plain spawn, `2 * min(5, empties)` for a
+    /// manipulated (best-of-5) spawn. `None` only when the board is full. The
+    /// board is probed in place (candidate placed, scored, removed) but restored
+    /// to its original state on return.
+    pub fn predict_spawn_flat(
+        board: &mut [u32],
+        n: usize,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+    ) -> Option<(usize, u32, u64)> {
+        let mut empties: Vec<usize> = Vec::new();
+        for (idx, &v) in board.iter().enumerate() {
+            if v == 0 {
+                empties.push(idx);
+            }
+        }
+        if empties.is_empty() {
+            return None;
+        }
+        let mut rng = ChaChaGen::new(key, calls);
+        const PROB_4: f64 = 0.1;
+        let (spot, value) = if manipulate && empties.len() > 1 {
+            let rounds = 5_usize.min(empties.len());
+            let mut best_spot = empties[0];
+            let mut best_value: u32 = 2;
+            let mut best_score = f64::NEG_INFINITY;
+            for _ in 0..rounds {
+                let cand_spot = empties[(rng.next() * empties.len() as f64) as usize];
+                let cand_value: u32 = if rng.next() < PROB_4 { 4 } else { 2 };
+                board[cand_spot] = cand_value;
+                let score = score_spawn_candidate_flat(board, n);
+                board[cand_spot] = 0;
+                if score > best_score {
+                    best_score = score;
+                    best_spot = cand_spot;
+                    best_value = cand_value;
+                }
+            }
+            (best_spot, best_value)
+        } else {
+            let spot = empties[(rng.next() * empties.len() as f64) as usize];
+            let value: u32 = if rng.next() < PROB_4 { 4 } else { 2 };
+            (spot, value)
+        };
+        let draws = rng.calls - calls;
+        Some((spot, value, draws))
+    }
+
+    /// Max node of the predictive search: the player picks the best move; the
+    /// resulting board is then expanded by the deterministic chance node.
+    fn expectimax_max_flat_det(
+        board: &mut Vec<u32>,
+        n: usize,
+        depth: usize,
+        budget: &mut u64,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+    ) -> f64 {
+        if depth == 0 || *budget == 0 {
+            return Self::heuristic_flat(board, n);
+        }
+        *budget -= 1;
+        let mut best = f64::NEG_INFINITY;
+        let mut any_move = false;
+        for &dir in Direction::ALL.iter() {
+            let (mut new_board, gained) = Self::slide_flat(board, n, dir);
+            if new_board.as_slice() == board {
+                continue;
+            }
+            any_move = true;
+            let v = gained as f64
+                + Self::expectimax_chance_flat_det(
+                    &mut new_board,
+                    n,
+                    depth - 1,
+                    budget,
+                    key,
+                    calls,
+                    manipulate,
+                );
+            if v > best {
+                best = v;
+            }
+        }
+        if !any_move {
+            return -200000.0;
+        }
+        best
+    }
+
+    /// Chance node of the predictive search: instead of averaging over many
+    /// possible spawns, peek the *one* spawn the stream will actually produce
+    /// and recurse into the single resulting board. Gates mirror the averaging
+    /// version (budget empty / board full / depth 0 -> heuristic), and the
+    /// stream advances by exactly the draws the spawn consumed.
+    fn expectimax_chance_flat_det(
+        board: &mut Vec<u32>,
+        n: usize,
+        depth: usize,
+        budget: &mut u64,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+    ) -> f64 {
+        if *budget == 0 {
+            return Self::heuristic_flat(&*board, n);
+        }
+        let has_empty = board.iter().any(|&v| v == 0);
+        if !has_empty || depth == 0 {
+            return Self::heuristic_flat(&*board, n);
+        }
+        *budget -= 1;
+        let (idx, value, draws) = Self::predict_spawn_flat(&mut board[..], n, key, calls, manipulate)
+            .expect("non-empty board has a spawn");
+        board[idx] = value;
+        let v = Self::expectimax_max_flat_det(
+            board,
+            n,
+            depth - 1,
+            budget,
+            key,
+            calls + draws,
+            manipulate,
+        );
+        board[idx] = 0;
+        v
+    }
+
+    /// Best move + value for `grid` under the predictive search, threading the
+    /// RNG stream position (`calls`) so every chance node peeks the right spawn.
+    fn best_move_det(
+        grid: &Vec<Vec<u32>>,
+        depth: usize,
+        budget: &mut u64,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+    ) -> (Option<Direction>, f64) {
+        let n = grid.len();
+        let board = Self::flatten(grid);
+        let mut best_dir = None;
+        let mut best_val = f64::NEG_INFINITY;
+        for &dir in Direction::ALL.iter() {
+            let (mut new_board, gained) = Self::slide_flat(&board, n, dir);
+            if new_board == board {
+                continue;
+            }
+            let value = gained as f64
+                + Self::expectimax_chance_flat_det(
+                    &mut new_board,
+                    n,
+                    depth.saturating_sub(1),
+                    budget,
+                    key,
+                    calls,
+                    manipulate,
+                );
+            if value > best_val {
+                best_val = value;
+                best_dir = Some(dir);
+            }
+        }
+        let val = if best_dir.is_none() { -200_000.0 } else { best_val };
+        (best_dir, val)
+    }
+
+    /// Predictive counterpart of `suggest_move_for`. Used when RNG Manipulation
+    /// is on: the search peeks the deterministic spawn stream instead of
+    /// averaging over random spawns.
+    pub fn suggest_move_det_for(
+        grid: &Vec<Vec<u32>>,
+        depth: Option<usize>,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+    ) -> Option<Direction> {
+        let search_depth = depth.unwrap_or_else(|| Self::auto_depth(grid));
+        let mut budget = Self::budget_for_depth(search_depth);
+        Self::best_move_det(grid, search_depth, &mut budget, key, calls, manipulate).0
+    }
+
+    /// Predictive counterpart of `suggest_action_for`. Power-up candidates are
+    /// evaluated with the same deterministic search; a power-up doesn't spawn,
+    /// so its evaluation starts at the same `calls` as the plain move.
+    pub fn suggest_action_det_for(
+        grid: &Vec<Vec<u32>>,
+        swaps_left: u32,
+        deletes_left: u32,
+        depth: Option<usize>,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+    ) -> Action {
+        let size = grid.len();
+        let d = depth.unwrap_or_else(|| Self::auto_depth(grid));
+        let mut budget = Self::budget_for_depth(d);
+
+        let (best_dir, move_val) = Self::best_move_det(grid, d, &mut budget, key, calls, manipulate);
+
+        let stuck = best_dir.is_none();
+        if !stuck && !Self::is_dangerous(grid) {
+            return best_dir.map(Action::Move).unwrap_or(Action::None);
+        }
+
+        const POWERUP_MARGIN: f64 = 90.0;
+
+        let mut best_delete: Option<(usize, usize)> = None;
+        let mut best_delete_val = f64::NEG_INFINITY;
+        if deletes_left > 0 {
+            for r in 0..size {
+                for c in 0..size {
+                    if grid[r][c] == 0 {
+                        continue;
+                    }
+                    let mut g = grid.clone();
+                    g[r][c] = 0;
+                    let v = Self::best_move_det(&g, d, &mut budget, key, calls, manipulate).1;
+                    if v > best_delete_val {
+                        best_delete_val = v;
+                        best_delete = Some((r, c));
+                    }
+                }
+            }
+        }
+
+        let mut best_swap: Option<((usize, usize), (usize, usize))> = None;
+        let mut best_swap_val = f64::NEG_INFINITY;
+        if swaps_left > 0 {
+            let occupied: Vec<(usize, usize)> = (0..size)
+                .flat_map(|r| (0..size).map(move |c| (r, c)))
+                .filter(|&(r, c)| grid[r][c] != 0)
+                .collect();
+            for (a, b) in sampled_pairs(&occupied, 48) {
+                let mut g = grid.clone();
+                let tmp = g[a.0][a.1];
+                g[a.0][a.1] = g[b.0][b.1];
+                g[b.0][b.1] = tmp;
+                let v = Self::best_move_det(&g, d, &mut budget, key, calls, manipulate).1;
+                if v > best_swap_val {
+                    best_swap_val = v;
+                    best_swap = Some((a, b));
+                }
+            }
+        }
+
+        let mut chosen = best_dir.map(Action::Move).unwrap_or(Action::None);
+        let mut chosen_val = move_val;
+        if best_delete_val >= move_val + POWERUP_MARGIN && best_delete_val > chosen_val {
+            let (r, c) = best_delete.unwrap();
+            chosen = Action::Delete(r, c);
+            chosen_val = best_delete_val;
+        }
+        if best_swap_val >= move_val + POWERUP_MARGIN && best_swap_val > chosen_val {
+            let (a, b) = best_swap.unwrap();
+            chosen = Action::Swap(a, b);
+        }
+        chosen
+    }
 }
 
 /// Deterministic strided sample of up to `max` unordered pairs from `occ`, so
@@ -979,6 +1283,146 @@ fn sampled_pairs(occ: &[(usize, usize)], max: usize) -> Vec<((usize, usize), (us
         }
     }
     out
+}
+
+// ---------- ChaCha20 DRBG + spawn prediction (predictive AI) ----------
+//
+// Bit-for-bit port of `SecureRng` (src/core/rng.ts) so the predictive search
+// peeks the exact same spawn stream the real game draws from. The key is the
+// per-game seed XOR-ed with `KEY_MATERIAL`; `KEY_MATERIAL` MUST stay identical
+// to the constant in rng.ts or the two streams diverge. The spawn logic
+// (plain draw / best-of-5 under manipulation) is ported from `spawnTile` in
+// src/core/grid.ts; `score_spawn_candidate_flat` mirrors `scoreSpawnCandidate`.
+//
+// Correctness hinge: 2048 tile values are always powers of two, so `log2(v)` is
+// an exact integer. `score_spawn_candidate_flat` therefore uses
+// `trailing_zeros()` in place of `Math.log2` - both yield the same exact
+// integer for powers of two, so the candidate scores (and thus the argmax pick)
+// are bit-identical to the JS version, with no float rounding to drift the pick.
+const KEY_MATERIAL: [u8; 32] = [
+    0x9e, 0x37, 0x79, 0xb9, 0x8f, 0x1c, 0x4d, 0xa2, 0x55, 0x71, 0x03, 0x96, 0xc4, 0x6e, 0x20, 0xf1,
+    0x4a, 0xd8, 0x7b, 0xe5, 0x19, 0xa0, 0x66, 0x3c, 0xf2, 0x4b, 0x88, 0x0d, 0xe6, 0x11, 0xc7, 0x5a,
+];
+const CHACHA_SIGMA: [u32; 4] = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574];
+const CHACHA_NONCE: [u32; 2] = [0, 0];
+const VALUES_PER_BLOCK: u64 = 16;
+
+fn rotl32(x: u32, n: u32) -> u32 {
+    x.rotate_left(n)
+}
+
+fn chacha_quarter_round(x: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize) {
+    x[a] = x[a].wrapping_add(x[b]);
+    x[d] = rotl32(x[d] ^ x[a], 16);
+    x[c] = x[c].wrapping_add(x[d]);
+    x[b] = rotl32(x[b] ^ x[c], 12);
+    x[a] = x[a].wrapping_add(x[b]);
+    x[d] = rotl32(x[d] ^ x[a], 8);
+    x[c] = x[c].wrapping_add(x[d]);
+    x[b] = rotl32(x[b] ^ x[c], 7);
+}
+
+/// Generate one 64-byte ChaCha20 keystream block (16 uint32 words) for the
+/// given 32-bit block `counter`. Mirrors `chacha20BlockInto` in rng.ts.
+fn chacha20_block(key: &[u32; 8], counter: u32, nonce: &[u32; 2], out: &mut [u32; 16]) {
+    let mut s = [0u32; 16];
+    s[0..4].copy_from_slice(&CHACHA_SIGMA);
+    s[4..12].copy_from_slice(key);
+    s[12] = counter;
+    s[13] = 0;
+    s[14] = nonce[0];
+    s[15] = nonce[1];
+    let mut x = s;
+    for _ in 0..10 {
+        chacha_quarter_round(&mut x, 0, 4, 8, 12);
+        chacha_quarter_round(&mut x, 1, 5, 9, 13);
+        chacha_quarter_round(&mut x, 2, 6, 10, 14);
+        chacha_quarter_round(&mut x, 3, 7, 11, 15);
+        chacha_quarter_round(&mut x, 0, 5, 10, 15);
+        chacha_quarter_round(&mut x, 1, 6, 11, 12);
+        chacha_quarter_round(&mut x, 2, 7, 8, 13);
+        chacha_quarter_round(&mut x, 3, 4, 9, 14);
+    }
+    for i in 0..16 {
+        out[i] = x[i].wrapping_add(s[i]);
+    }
+}
+
+/// ChaCha20 float generator: `next()` returns the uint32 at stream position
+/// `calls` as `w / 2^32`, advancing `calls` - identical to `SecureRng::next`.
+/// The block holding the current position is cached; a spawn prediction draws a
+/// short contiguous run (<=10 words), so the cache almost always hits and no
+/// per-node state needs threading beyond the `calls` counter.
+struct ChaChaGen<'a> {
+    key: &'a [u32; 8],
+    block: [u32; 16],
+    block_index: u64,
+    calls: u64,
+}
+
+impl<'a> ChaChaGen<'a> {
+    fn new(key: &'a [u32; 8], calls: u64) -> Self {
+        ChaChaGen {
+            key,
+            block: [0; 16],
+            block_index: u64::MAX,
+            calls,
+        }
+    }
+
+    fn ensure_block(&mut self) {
+        let idx = self.calls / VALUES_PER_BLOCK;
+        if idx != self.block_index {
+            chacha20_block(self.key, idx as u32, &CHACHA_NONCE, &mut self.block);
+            self.block_index = idx;
+        }
+    }
+
+    /// Next float in [0, 1) with 32-bit precision - identical to `SecureRng::next`.
+    fn next(&mut self) -> f64 {
+        self.ensure_block();
+        let w = self.block[(self.calls % VALUES_PER_BLOCK) as usize];
+        self.calls += 1;
+        w as f64 / 4_294_967_296.0
+    }
+}
+
+/// Port of `scoreSpawnCandidate` (src/core/grid.ts): rewards empty space and
+/// smooth (small-difference) neighbours. `log2` is `trailing_zeros` here - exact
+/// for power-of-two tile values, matching the JS `Math.log2` integer result.
+fn score_spawn_candidate_flat(board: &[u32], n: usize) -> f64 {
+    let log = |v: u32| -> f64 {
+        if v == 0 {
+            0.0
+        } else {
+            v.trailing_zeros() as f64
+        }
+    };
+    let mut empty = 0.0;
+    let mut smoothness = 0.0;
+    for r in 0..n {
+        for c in 0..n {
+            let v_raw = board[r * n + c];
+            if v_raw == 0 {
+                empty += 1.0;
+                continue;
+            }
+            let v = log(v_raw);
+            if c + 1 < n {
+                let right = board[r * n + c + 1];
+                if right != 0 {
+                    smoothness -= (v - log(right)).abs();
+                }
+            }
+            if r + 1 < n {
+                let down = board[(r + 1) * n + c];
+                if down != 0 {
+                    smoothness -= (v - log(down)).abs();
+                }
+            }
+        }
+    }
+    empty * 4.0 + smoothness
 }
 
 #[cfg(test)]
@@ -1140,6 +1584,124 @@ mod tests {
             matches!(action, Action::Move(_)),
             "expected a move, got {:?}",
             action
+        );
+    }
+
+    #[test]
+    fn score_spawn_candidate_matches_grid_ts() {
+        // [[2,0],[0,4]]: 2 empties, no occupied neighbour pairs -> 2*4 + 0 = 8.
+        assert_eq!(score_spawn_candidate_flat(&[2, 0, 0, 4], 2), 8.0);
+        // [[2,2],[0,4]]: 1 empty; (0,1)=2 vs down (1,1)=4 -> smoothness -= 1 -> 4 - 1 = 3.
+        assert_eq!(score_spawn_candidate_flat(&[2, 2, 0, 4], 2), 3.0);
+        // [[2,4],[0,8]]: 1 empty; (0,0)/(0,1) cost 1 and (0,1)/(1,1) cost 1 -> 4 - 2 = 2.
+        assert_eq!(score_spawn_candidate_flat(&[2, 4, 0, 8], 2), 2.0);
+    }
+
+    #[test]
+    fn predict_spawn_returns_valid_cell_value_and_draws() {
+        let grid = vec![
+            vec![2, 0, 0, 0],
+            vec![0, 0, 0, 0],
+            vec![0, 0, 4, 0],
+            vec![0, 8, 0, 0],
+        ];
+        let n = grid.len();
+        let key = Engine::derive_key(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        for manipulate in [false, true] {
+            let mut board = Engine::flatten(&grid);
+            let (idx, value, draws) =
+                Engine::predict_spawn_flat(&mut board, n, &key, 0, manipulate).unwrap();
+            // Board is restored after probing, so the predicted cell is still empty.
+            assert_eq!(board[idx], 0, "predicted cell must be empty after probe");
+            assert!(value == 2 || value == 4, "value must be 2 or 4, got {}", value);
+            let empties = board.iter().filter(|&&v| v == 0).count();
+            let expected = if manipulate && empties > 1 {
+                2 * 5_usize.min(empties)
+            } else {
+                2
+            };
+            assert_eq!(draws, expected as u64, "draws for manipulate={}", manipulate);
+        }
+    }
+
+    #[test]
+    fn predict_spawn_none_on_full_board() {
+        let grid = vec![vec![2, 4], vec![8, 16]];
+        let key = Engine::derive_key(&[0; 8]);
+        let mut board = Engine::flatten(&grid);
+        assert!(Engine::predict_spawn_flat(&mut board, 2, &key, 0, false).is_none());
+        assert!(Engine::predict_spawn_flat(&mut board, 2, &key, 0, true).is_none());
+    }
+
+    #[test]
+    fn predict_spawn_is_deterministic() {
+        let grid = vec![
+            vec![2, 0, 0, 0],
+            vec![0, 0, 4, 0],
+            vec![0, 0, 0, 0],
+            vec![0, 8, 0, 0],
+        ];
+        let key = Engine::derive_key(&[42; 8]);
+        let mut a = Engine::flatten(&grid);
+        let mut b = Engine::flatten(&grid);
+        let r1 = Engine::predict_spawn_flat(&mut a, 4, &key, 7, true).unwrap();
+        let r2 = Engine::predict_spawn_flat(&mut b, 4, &key, 7, true).unwrap();
+        assert_eq!(r1, r2);
+    }
+
+    #[test]
+    fn predict_spawn_plain_consumes_two_draws_regardless_of_position() {
+        // A plain spawn always draws exactly 2 (cell + value), even with 1 empty.
+        let grid = vec![vec![2, 0], vec![4, 8]]; // one empty
+        let key = Engine::derive_key(&[9; 8]);
+        let mut board = Engine::flatten(&grid);
+        let (_, _, draws) = Engine::predict_spawn_flat(&mut board, 2, &key, 3, false).unwrap();
+        assert_eq!(draws, 2);
+        // manipulate with a single empty falls through to the plain branch too.
+        let (_, _, draws_m) = Engine::predict_spawn_flat(&mut board, 2, &key, 3, true).unwrap();
+        assert_eq!(draws_m, 2);
+    }
+
+    #[test]
+    fn suggest_move_det_returns_legal_move() {
+        let engine = Engine::with_size(4).unwrap();
+        let grid = engine.grid().clone();
+        let key = Engine::derive_key(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        let dir = Engine::suggest_move_det_for(&grid, Some(3), &key, 0, true);
+        assert!(dir.is_some());
+    }
+
+    #[test]
+    fn suggest_action_det_moves_on_comfortable_board() {
+        let engine = Engine::with_size(4).unwrap();
+        let grid = engine.grid().clone();
+        let key = Engine::derive_key(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        let action = Engine::suggest_action_det_for(&grid, 2, 2, None, &key, 0, true);
+        assert!(
+            matches!(action, Action::Move(_)),
+            "expected a move, got {:?}",
+            action
+        );
+    }
+
+    #[test]
+    fn suggest_action_det_uses_delete_to_escape_stuck_board() {
+        let grid = vec![
+            vec![2, 4, 2, 4],
+            vec![4, 2, 4, 2],
+            vec![2, 4, 2, 4],
+            vec![4, 2, 4, 2],
+        ];
+        let key = Engine::derive_key(&[7; 8]);
+        let action = Engine::suggest_action_det_for(&grid, 0, 1, None, &key, 0, true);
+        assert!(
+            matches!(action, Action::Delete(_, _)),
+            "expected a delete to escape, got {:?}",
+            action
+        );
+        assert_eq!(
+            Engine::suggest_action_det_for(&grid, 0, 0, None, &key, 0, true),
+            Action::None
         );
     }
 }

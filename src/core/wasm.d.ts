@@ -30,5 +30,51 @@ declare module '*/engine2048.js' {
     depth: number,
   ): Uint32Array;
 
+  /**
+   * Predictive ("cheat") move suggestion. Same args as `suggest_move` plus the
+   * ChaCha20 `seed` (8 uint32) and stream position `calls`; when `manipulate`
+   * is true the search models best-of-5 manipulated spawns, otherwise plain
+   * single draws. Peeks the exact next spawn from the stream at every chance
+   * node instead of averaging over random spawns. Used when RNG Manipulation
+   * is on.
+   */
+  export function suggest_move_det(
+    flat: Uint32Array,
+    size: number,
+    depth: number,
+    seed: Uint32Array,
+    calls: number,
+    manipulate: boolean,
+  ): number;
+
+  /**
+   * Predictive action suggestion (move or power-up). Same as `suggest_action`
+   * but uses the deterministic spawn stream (see `suggest_move_det`).
+   */
+  export function suggest_action_det(
+    flat: Uint32Array,
+    size: number,
+    swaps_left: number,
+    deletes_left: number,
+    depth: number,
+    seed: Uint32Array,
+    calls: number,
+    manipulate: boolean,
+  ): Uint32Array;
+
+  /**
+   * Diagnostic: predict the next spawn the real game will produce. Returns
+   * `[cell_index, value, draws_consumed]`, or `[4294967295]` when the board is
+   * full. Used by the parity test; `draws_consumed` = 2 (plain) or
+   * `2 * min(5, empties)` (manipulated).
+   */
+  export function predict_spawn(
+    flat: Uint32Array,
+    size: number,
+    seed: Uint32Array,
+    calls: number,
+    manipulate: boolean,
+  ): Uint32Array;
+
   export default init;
 }

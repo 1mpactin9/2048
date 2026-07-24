@@ -738,11 +738,39 @@ export class App {
         depth: this.data.settings.autoDepth,
         usePowerups: this.data.settings.autoPowerups,
       };
+      // The engine now decides off the main thread (see WasmEngine), so a human
+      // move / undo / power-up / new game can change the board while we wait.
+      // Snapshot what we're deciding for; if it changed, the result was
+      // computed for a board that no longer exists, so discard it and re-tick
+      // instead of applying a stale (possibly illegal) action.
+      const signature = this.boardSignature();
       const action = await WasmEngine.chooseAction(ctx);
       if (!this.autoOn) return;
+      if (this.boardSignature() !== signature) {
+        if (this.autoOn && !this.session.state.over) this.autoTick();
+        return;
+      }
       this.applyAutoAction(action);
       if (this.autoOn && !this.session.state.over) this.autoTick();
     }, this.data.settings.autoSpeed);
+  }
+
+  /**
+   * Compact fingerprint of the live board + score + power-up charges. Used only
+   * to detect that *something* gameplay-relevant changed during an async engine
+   * decision - the exact value is irrelevant, only equality is. Cheap (boards
+   * are at most 8x8) and self-contained, so it needs no hooks in every mutation
+   * site.
+   */
+  private boardSignature(): string {
+    const s = this.session.state;
+    const g = s.grid;
+    let out = `${s.size}:${s.score}:${s.powerups.undo}:${s.powerups.swap}:${s.powerups.delete}:`;
+    for (let r = 0; r < g.length; r++) {
+      const row = g[r];
+      for (let c = 0; c < row.length; c++) out += (row[c]?.value ?? 0) + ',';
+    }
+    return out;
   }
 
   /** Apply one AI action (move, swap, delete, or stop) during auto-play. */

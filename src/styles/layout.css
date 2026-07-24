@@ -509,7 +509,7 @@
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  width: 292px;
+  width: 332px;
   background: var(--dropdown-bg);
   color: var(--dropdown-text);
   border: 1px solid var(--border);

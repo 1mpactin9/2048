@@ -118,8 +118,19 @@ button:disabled {
   --tile-256-bg: #edcc61; --tile-256-fg: #f9f6f2;
   --tile-512-bg: #baac9a; --tile-512-fg: #f9f6f2;
   --tile-1024-bg: #988776; --tile-1024-fg: #f9f6f2;
+  --tile-1024-bg: #988776; --tile-1024-fg: #f9f6f2;
   --tile-2048-bg: #756452; --tile-2048-fg: #f9f6f2;
-  --tile-super-bg: #3c3a32; --tile-super-fg: #f9f6f2;
+
+  --tile-4096-bg: #5f7868; --tile-4096-fg: #f9f6f2;   /* sage */
+  --tile-8192-bg: #4c7a87; --tile-8192-fg: #f9f6f2;   /* blue-gray */
+  --tile-16384-bg: #4e6798; --tile-16384-fg: #f9f6f2; /* slate blue */
+  --tile-32768-bg: #66559b; --tile-32768-fg: #f9f6f2; /* violet */
+  --tile-65536-bg: #824f8e; --tile-65536-fg: #f9f6f2; /* purple */
+  --tile-131072-bg: #9d4f74; --tile-131072-fg: #f9f6f2; /* mauve */
+  --tile-262144-bg: #b05b56; --tile-262144-fg: #f9f6f2; /* brick */
+  --tile-524288-bg: #b87848; --tile-524288-fg: #f9f6f2; /* copper */
+  --tile-1048576-bg: #8a8c46; --tile-1048576-fg: #f9f6f2; /* olive */
+  --tile-super-bg: #2f3638; --tile-super-fg: #f9f6f2;
 
   color-scheme: light;
 }
@@ -187,7 +198,6 @@ button:disabled {
   --shadow-tile: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-board: 0 6px 16px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
 
-  /* warmer, less-bright low tiles in dark mode */
   --tile-2-bg: #443a30; --tile-2-fg: #d9cdbd;
   --tile-4-bg: #5a4c3e; --tile-4-fg: #f1e6d8;
   --tile-8-bg: #e09050; --tile-8-fg: #f5efe6;
@@ -199,7 +209,17 @@ button:disabled {
   --tile-512-bg: #9a8870; --tile-512-fg: #f5efe6;
   --tile-1024-bg: #7a6a58; --tile-1024-fg: #f5efe6;
   --tile-2048-bg: #5a4d3e; --tile-2048-fg: #f5efe6;
-  --tile-super-bg: #3c3a32; --tile-super-fg: #f5efe6;
+
+  --tile-4096-bg: #48695a; --tile-4096-fg: #f5efe6;
+  --tile-8192-bg: #3c6874; --tile-8192-fg: #f5efe6;
+  --tile-16384-bg: #43598b; --tile-16384-fg: #f5efe6;
+  --tile-32768-bg: #5b4c8c; --tile-32768-fg: #f5efe6;
+  --tile-65536-bg: #744681; --tile-65536-fg: #f5efe6;
+  --tile-131072-bg: #8d4569; --tile-131072-fg: #f5efe6;
+  --tile-262144-bg: #9c504b; --tile-262144-fg: #f5efe6;
+  --tile-524288-bg: #9f6a3f; --tile-524288-fg: #f5efe6;
+  --tile-1048576-bg: #787a3d; --tile-1048576-fg: #f5efe6;
+  --tile-super-bg: #2a3133; --tile-super-fg: #f5efe6;
 
   color-scheme: dark;
 }

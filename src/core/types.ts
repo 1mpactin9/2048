@@ -103,6 +103,18 @@ export interface EngineContext {
   depth: number;
   /** Whether the AI may spend power-up charges to avoid game over. */
   usePowerups: boolean;
+  /**
+   * RNG Manipulation / predictive "cheat" mode. When true, the AI peeks the
+   * deterministic ChaCha20 spawn stream (see rng.ts) and searches the single
+   * predicted outcome per chance node instead of averaging over random spawns -
+   * faster and sharper, and the real game spawns from the same stream. Off =>
+   * fair (averaging) expectimax. Optional: placeholder engines ignore it.
+   */
+  manipulate?: boolean;
+  /** 32-byte CSPRNG seed (8 uint32) used for spawn prediction (manipulate mode). */
+  rngSeed?: number[];
+  /** CSPRNG stream position (uint32 values consumed) when manipulate is on. */
+  rngCalls?: number;
 }
 
 /**

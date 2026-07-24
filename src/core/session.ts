@@ -219,6 +219,13 @@ export class GameSession {
       size: this.state.size,
       score: this.state.score,
       powerups: this.state.powerups,
+      // Hand the AI the deterministic spawn stream (seed + position) and the
+      // manipulation flag so it can run the predictive "cheat" search when
+      // manipulation is on. The real game spawns from this same stream, so the
+      // AI's predicted spawns match reality.
+      manipulate: this.manipulate,
+      rngSeed: this.state.rngSeed,
+      rngCalls: this.state.rngCalls,
     };
   }
 }
