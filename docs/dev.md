@@ -764,6 +764,49 @@ Peeks into the ChaCha20 CSPRNG stream to predict which empty cell will receive t
 __nextLocation()  // → { row: 2, col: 1 } (rng=0.3412, empties=6)
 ```
 
+#### `__validate()` — Check position validity
+
+Checks whether the displayed score is consistent with the tiles on the board, using the per-tile score window:
+
+- A tile of value `V` (with `n = log2 V`) cost between `(n-2)*V` (all 4-spawns, fewest merges) and `(n-1)*V` (all 2-spawns, most merges) points to build. Values of 2 and 4 clamp to a 0 minimum.
+- The board's total window is the sum of every tile's `[min, max]`. The score is valid iff `totalMin <= score <= totalMax`.
+
+Logs the window and a `VALID` / `BELOW MIN by X` / `ABOVE MAX by X` verdict. Outside the window, the board has been altered.
+
+**Returns:** `{ valid, score, min, max, belowBy, aboveBy, tileCount } | undefined`.
+
+**Example:**
+```javascript
+__validate()  // -> { valid: false, score: 0, min: 425984, max: 458752, ... }  (hacked 32768 on a 0-score board)
+```
+
+#### `__updatePosition()` — Clamp score into the valid window
+
+Adjusts the score so it matches a hacked board: a score below the minimum is raised to it, a score above the maximum is lowered to it, and an in-window score is left untouched. This is the smallest change that makes the position valid. Mutates and persists state.
+
+**Returns:** `{ from, to, min, max, changed } | undefined`.
+
+**Example:**
+```javascript
+__updatePosition()  // -> { from: 0, to: 425984, min: 425984, max: 458752, changed: true }
+```
+
+#### `__bypassValidation()` — Remove minimal tiles to make the position valid
+
+Removes the fewest tiles (then the least total value) so the remaining board is valid for the current score. Fixes hacked-in tiles the score cannot account for — e.g. a 32768 dropped onto a near-zero board has that single "impossible" tile removed while 2s and 4s are always kept. A score above the maximum cannot be fixed by removal (removing tiles only lowers the window) and is reported infeasible. Mutates and persists state.
+
+The optional `valueFirst` boolean flips the priority from (count, then value) to (value, then count). For 2048's power-of-two tiles the two orderings always pick the same tiles, so this is a no-op in practice; it is provided for flexibility.
+
+For boards with up to 20 score-bearing tiles (value >= 8) the solver is exact; larger boards use a greedy heuristic, flagged in the log.
+
+**Returns:** `{ feasible, removed, totalValue, heuristic, valid } | undefined`.
+
+**Example:**
+```javascript
+__bypassValidation()      // count-first (default): fewest tiles removed
+__bypassValidation(true)  // value-first: least total value removed
+```
+
 #### `__help()` — Show usage
 
 Prints this documentation to the console using styled output (`%c` format specifiers).
@@ -784,7 +827,7 @@ The following methods are public members of the `App` class but are primarily in
 |--------|------|-------------|
 | `window.__app` | `App \| undefined` | The live `App` instance. Access any public method: `__app.__undo()`, `__app.__delete(0,0)`, etc. |
 | `window.__runAutoLoop(score)` | `(score: number) => void` | Run the AI engine until the score reaches `score` |
-| `window.__dev` | `{ undo, delete, swap, addTiles, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, help }` | Namespaced developer console object |
+| `window.__dev` | `{ undo, delete, deleteValue, swap, addTiles, add, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, validate, updatePosition, bypassValidation, help }` | Namespaced developer console object |
 
 ## Auto-Play Engine
 

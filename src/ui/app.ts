@@ -11,6 +11,12 @@ import {
 import { GameSession, restoreSession } from '../core/session';
 import { hasMoves } from '../core/grid';
 import { move } from '../core/move';
+import {
+  clampScoreToWindow,
+  planBypass,
+  validatePosition,
+  type ValidationResult,
+} from '../core/validate';
 import { SecureRng } from '../core/rng';
 import { SPAWN_PROB_4 } from '../core/constants';
 import { WasmEngine } from '../core/wasm-engine';
@@ -1341,6 +1347,102 @@ export class App {
     return spot;
   }
 
+  /**
+   * Check whether the displayed score is consistent with the tiles on the
+   * board. Every tile of value V contributes a [min, max] score window (min if
+   * it was built purely from 4-spawns, max if purely from 2-spawns); the board's
+   * total window must contain the score. Logs the window and verdict, returns
+   * the full result.
+   */
+  __validate(): ValidationResult {
+    const r = validatePosition(this.session.state.grid, this.session.state.score);
+    const tag = r.valid
+      ? 'VALID'
+      : r.score < r.min
+        ? `BELOW MIN by ${r.min - r.score}`
+        : `ABOVE MAX by ${r.score - r.max}`;
+    console.log(
+      `[dev] __validate -> ${tag}  | score=${r.score} window=[${r.min}, ${r.max}] tiles=${r.tileCount}`,
+    );
+    return r;
+  }
+
+  /**
+   * Clamp the score into the board's valid window so it matches a hacked
+   * position. A score below the minimum is raised to it; a score above the
+   * maximum is lowered to it; an in-window score is left alone. Mutates and
+   * persists state.
+   */
+  __updatePosition(): { from: number; to: number; min: number; max: number; changed: boolean } {
+    const r = clampScoreToWindow(this.session.state.grid, this.session.state.score);
+    const changed = r.to !== r.from;
+    if (changed) {
+      this.session.state.score = r.to;
+      this.session.state.best = Math.max(this.session.state.best, r.to);
+      this.clearPendingNew();
+      this.saveCurrent();
+      this.updateUI();
+      console.log(`[dev] __updatePosition -> score ${r.from} -> ${r.to} (window [${r.min}, ${r.max}])`);
+    } else {
+      console.log(`[dev] __updatePosition -> already valid (score ${r.from} in [${r.min}, ${r.max}])`);
+    }
+    return { from: r.from, to: r.to, min: r.min, max: r.max, changed };
+  }
+
+  /**
+   * Remove the fewest tiles (then the least total value) so the remaining board
+   * is valid for the current score. Fixes hacked-in tiles that the score cannot
+   * account for (e.g. a 32768 dropped onto a near-zero board). A score above the
+   * maximum cannot be fixed by removal and is reported infeasible. Mutates and
+   * persists state.
+   */
+  __bypassValidation(valueFirst = false): {
+    feasible: boolean;
+    removed: number;
+    totalValue: number;
+    heuristic: boolean;
+    valid: boolean;
+  } {
+    const g = this.session.state.grid;
+    const score = this.session.state.score;
+    const plan = planBypass(g, score, valueFirst);
+    if (plan.alreadyValid) {
+      console.log('[dev] __bypassValidation -> position already valid, nothing removed');
+      return { feasible: true, removed: 0, totalValue: 0, heuristic: false, valid: true };
+    }
+    if (!plan.feasible) {
+      console.warn(
+        `[dev] __bypassValidation -> cannot make valid by removing tiles (score ${score} is outside every subset's window)`,
+      );
+      return { feasible: false, removed: 0, totalValue: 0, heuristic: plan.heuristic, valid: false };
+    }
+    this.clearPendingNew();
+    let totalValue = 0;
+    for (const t of plan.remove) {
+      g[t.row][t.col] = null;
+      totalValue += t.value;
+    }
+    this.recomputeOver();
+    this.saveCurrent();
+    this.board.fullRender(g);
+    this.updateUI();
+    this.handleWinOver();
+    const after = validatePosition(g, score);
+    const note = plan.heuristic ? ' (heuristic - may not be perfectly minimal)' : '';
+    console.log(
+      `[dev] __bypassValidation -> removed ${plan.remove.length} tile(s) totalling ${totalValue}${note}; ` +
+        `priority=${valueFirst ? 'value-first' : 'count-first'}; ` +
+        `window now [${plan.after.min}, ${plan.after.max}], valid=${after.valid}`,
+    );
+    return {
+      feasible: true,
+      removed: plan.remove.length,
+      totalValue,
+      heuristic: plan.heuristic,
+      valid: after.valid,
+    };
+  }
+
   /** Print usage info for the developer console. */
   __help(): void {
     const lines = [
@@ -1369,6 +1471,9 @@ export class App {
       '__noDelay()               Start engine with zero delay (max speed)',
       '__nextNumber()            Peek next spawn value (2 or 4)',
       '__nextLocation()          Peek next spawn position',
+      '__validate()              Check score vs tile window (valid?)',
+      '__updatePosition()        Clamp score into the valid window',
+      '__bypassValidation(vf?)   Remove minimal tiles to make position valid (vf=true: value-first)',
       '__help()                  Show this message',
     ];
     console.log(...lines);

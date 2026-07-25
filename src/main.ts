@@ -1,4 +1,5 @@
 import type { Direction } from './core/types';
+import type { ValidationResult } from './core/validate';
 import { App } from './ui/app';
 import './styles/main.css';
 
@@ -13,6 +14,7 @@ declare global {
       deleteValue(n: number): void;
       swap(r1: number, c1: number, r2: number, c2: number): void;
       addTiles(n?: number): void;
+      add(a: number, b?: number, c?: number, d?: number): void;
       clear(): void;
       fill(val?: number): void;
       score(n: number): void;
@@ -24,6 +26,9 @@ declare global {
       noDelay(): void;
       nextNumber(): number;
       nextLocation(): { row: number; col: number };
+      validate(): ValidationResult | undefined;
+      updatePosition(): { from: number; to: number; min: number; max: number; changed: boolean } | undefined;
+      bypassValidation(valueFirst?: boolean): { feasible: boolean; removed: number; totalValue: number; heuristic: boolean; valid: boolean } | undefined;
       help(): void;
     };
   }
@@ -64,6 +69,9 @@ window.__dev = {
   noDelay: () => window.__app?.__noDelay(),
   nextNumber: () => window.__app?.__nextNumber() ?? -1,
   nextLocation: () => window.__app?.__nextLocation() ?? { row: -1, col: -1 },
+  validate: () => window.__app?.__validate(),
+  updatePosition: () => window.__app?.__updatePosition(),
+  bypassValidation: (valueFirst?: boolean) => window.__app?.__bypassValidation(valueFirst),
   help: () => window.__app?.__help(),
 };
 
