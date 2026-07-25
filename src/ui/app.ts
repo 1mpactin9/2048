@@ -1639,7 +1639,7 @@ export class App {
         fullness: tileCount / (size * size),
         emptyCells: empties,
         tileCount,
-        maxTile,
+        maxTile: maxT,
         minTile: minT === Infinity ? 0 : minT,
         avgTile,
         uniqueValues: [...new Set(values)].sort((a, b) => a - b),
@@ -1718,7 +1718,6 @@ export class App {
   __setBoard(
     a: number[][] | number[] | number,
     b?: number[][] | number,
-    c?: number,
   ): void {
     let grid: Grid;
     let size: number;
@@ -1766,8 +1765,8 @@ export class App {
         }
       }
     } else {
-      // __setBoard(values) — existing size
-      const vals = a as number[][];
+      // __setBoard(values) — existing size (a is number[][], b is undefined)
+      const vals = a as unknown as number[][];
       size = this.size;
       if (vals.length !== size || vals.some((row) => row.length !== size)) {
         console.warn(`[dev] __setBoard → values grid ${vals.length}x${vals[0]?.length} doesn't match current size ${size}`);
@@ -1795,8 +1794,8 @@ export class App {
     this.updateUI();
     this.handleWinOver();
 
-    if (wasOver) console.log(`[dev] __setBoard → restored from game-over (${size}x${size}, ${grid.flat().filter((v): v is Cell => v !== null).length} tiles)`);
-    else console.log(`[dev] __setBoard → set ${size}x${size} board with ${grid.flat().filter((v): v is Cell => v !== null).length} tiles`);
+    if (wasOver) console.log(`[dev] __setBoard → restored from game-over (${size}x${size}, ${grid.flat().filter(v => v !== null).length} tiles)`);
+    else console.log(`[dev] __setBoard → set ${size}x${size} board with ${grid.flat().filter(v => v !== null).length} tiles`);
   }
 
   /**

@@ -37,6 +37,11 @@
 - [Developer Console](#developer-console)
   - [Access](#access)
   - [Console API Reference](#console-api-reference)
+    - [`__getStats()` — Full board/session/UI diagnostics](#__getstats--full-boardsessionui-diagnostics)
+    - [`__setBoard(values?)` — Set the board to an arbitrary position](#__setboardvalues--set-the-board-to-an-arbitrary-position)
+    - [`__evalPosition()` — Heuristic position evaluation](#__evalposition--heuristic-position-evaluation)
+    - [`__afkHighScore()` — Run AFK until best score exceeds 3x](#__afkhighscore--run-afk-until-best-score-exceeds-3x)
+    - [`__updateScore()` — Ensure score matches current position](#__updatescore--ensure-score-matches-current-position)
   - [Internal Methods (App class)](#internal-methods-app-class)
   - [Global Window API](#global-window-api)
 - [Auto-Play Engine](#auto-play-engine)
@@ -807,6 +812,145 @@ __bypassValidation()      // count-first (default): fewest tiles removed
 __bypassValidation(true)  // value-first: least total value removed
 ```
 
+#### `__getStats()` — Full board/session/UI diagnostics
+
+Returns a comprehensive object with every relevant piece of information about the current game state, position analysis, RNG stream, engine config, and UI.
+
+**Returns:** `{ board, scores, position, rng, engine, powerups, history, ui, validation, timestamp }`
+
+| Field | Description |
+|-------|-------------|
+| `board.type` | Board description (e.g. `"4x4 standard"`) |
+| `board.size` | Grid dimension |
+| `board.mode` | `'standard'` or `'classic'` |
+| `board.fullness` | Occupancy ratio (0–1) |
+| `board.emptyCells` | Number of empty cells |
+| `board.tileCount` | Total occupied cells |
+| `board.maxTile` / `minTile` / `avgTile` | Tile value statistics |
+| `board.uniqueValues` | Sorted list of distinct tile values |
+| `board.valueDistribution` | Count per value |
+| `board.bitboard` | 2D array of bit flags (1 << index if occupied) |
+| `board.tileIds` | 2D array of tile ID values |
+| `board.log2Grid` | 2D array of log2(tile values) |
+| `board.smoothness` | Sum of log2 differences between adjacent tiles (lower = better) |
+| `board.monotonicity` | Count of decreasing adjacent pairs (higher = better) |
+| `board.openLines` | Edge-adjacent empty cells |
+| `board.mergeablePairs` | Adjacent equal-value pairs |
+| `scores.current` / `best` / `delta` | Score tracking |
+| `scores.windowMin` / `windowMax` / `valid` | Validation window |
+| `position.over` / `won` / `wonAcknowledged` | Game state flags |
+| `position.moveCount` | Total moves played |
+| `position.hasLegalMoves` | Whether any move is possible |
+| `rng.seed` | ChaCha20 seed (8 uint32) or null |
+| `rng.calls` | Stream position |
+| `rng.nextPredictedValue` | Next spawn value (2 or 4), or -1 |
+| `rng.nextPredictedLocation` | Predicted spawn position |
+| `engine.name` / `autoOn` / `autoSpeed` / `autoDepth` | Engine config |
+| `engine.autoPowerups` / `manipulate` | Power-up & RNG manipulation toggles |
+| `powerups` | Current charge counts `{ undo, swap, delete }` |
+| `history.length` / `maxHistory` / `canUndo` | Undo stack info |
+| `ui.armed` | Current powerup selection mode |
+| `ui.pendingNew` | Whether a new game is pending |
+| `ui.hasOverlay` / `isSelecting` | Modal/selection state |
+| `ui.theme` | Resolved theme (`'light'` or `'dark'`) |
+| `validation` | Full `ValidationResult` from `validatePosition()` |
+| `timestamp` | `Date.now()` at call time |
+
+**Example:**
+```javascript
+const stats = __getStats();
+console.log(stats.board.tileCount, 'tiles on', stats.board.size + 'x' + stats.board.size);
+```
+
+#### `__setBoard(values?)` — Set the board to an arbitrary position
+
+Overwrites the current board with tiles from a values matrix or flat array. Works with any size and any tile values. The board will spawn in the exact position provided.
+
+| Signature | Meaning |
+|-----------|---------|
+| `__setBoard(values)` | Set grid from `number[][]`. Uses existing size/mode. Fails if dimensions don't match. |
+| `__setBoard(size, values)` | Set grid with explicit size. Resizes the board to `size x size`. |
+| `__setBoard(flatArray)` | Set from flat `number[]`, inferring size from `Math.sqrt(length)`. |
+| `__setBoard(flatArray, size)` | Set from flat array with explicit size. |
+
+**Examples:**
+```javascript
+__setBoard([[2, 0, 0, 2], [0, 4, 4, 0], [0, 8, 0, 8], [16, 16, 0, 0]])  // 4x4 from matrix
+__setBoard(5, [[4, 0, 0, 0, 0], [0, 4, 0, 0, 0], [0, 0, 8, 0, 0], [0, 0, 0, 8, 0], [0, 0, 0, 0, 16]])  // 5x5
+__setBoard([2, 2, 4, 4, 8, 0, 0, 0, 0])  // flat 3x3
+__setBoard([2, 2, 4, 4, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4)  // flat 4x4
+```
+
+#### `__evalPosition()` — Heuristic position evaluation
+
+Analyzes the current board position and outputs a comprehensive evaluation including heuristic scores, tile statistics, and predictions.
+
+**Returns:** `{ calcTimeMs, currentScore, bestScore, board, heuristics }`
+
+| Field | Description |
+|-------|-------------|
+| `calcTimeMs` | Evaluation time in milliseconds |
+| `currentScore` / `bestScore` | Current and best scores |
+| `board.size` / `mode` / `tileCount` / `emptyCells` | Board overview |
+| `board.maxTile` / `sumTiles` | Tile value stats |
+| `board.uniqueValues` / `valueDistribution` | Value breakdown |
+| `heuristics.emptyBonus` | Empty cell score (reward for space) |
+| `heuristics.smoothness` | Adjacency smoothness (lower = better) |
+| `heuristics.monotonicity` | Ordered layout score (higher = better) |
+| `heuristics.maxCorner` | Whether max tile is in a corner |
+| `heuristics.singleCorner` | Whether any corner holds the max tile |
+| `heuristics.mergeablePairs` | Count of adjacent equal-value pairs |
+| `heuristics.openLines` | Edge-adjacent empty cells |
+| `heuristics.compositeScore` | Weighted combination of all heuristics |
+
+The console logs additional details including estimated highest achievable tile and score window.
+
+**Example:**
+```javascript
+__evalPosition()
+// → { calcTimeMs: 0.042, currentScore: 15360, bestScore: 15360, ... }
+```
+
+#### `__afkHighScore()` — Run AFK until best score exceeds 3x
+
+Starts the AI engine at maximum speed (zero delay) using current settings (depth, RNG manipulation toggle). Plays games automatically, restarting when stuck, until the best score has been matched or exceeded 3 consecutive times.
+
+This is fire-and-forget — it runs asynchronously and reports progress via console logs and toast notifications.
+
+**Behavior:**
+1. Sets `autoSpeed` to `0` (no delay between moves)
+2. Uses current `autoDepth` and `rngManip` settings
+3. Starts a new game if needed
+4. Loops: play → check best → restart → repeat
+5. Stops when the best score has been maintained/exceeded for 3 consecutive games
+6. Restores original auto-speed setting
+
+**Example:**
+```javascript
+__afkHighScore()  // → "[dev] __afkHighScore → starting AFK run"
+                  //    "[dev] __afkHighScore → new best: 245760 (game #1)"
+                  //    "[dev] __afkHighScore → DONE  Games played: 12  Final best: 245760"
+```
+
+#### `__updateScore()` — Ensure score matches current position
+
+Validates the displayed score against the tile composition window and clamps it into the valid range if necessary. Updates UI and persists state.
+
+**Returns:** `{ from, to, min, max, changed, tileCount, scoreFromMerges }`
+
+| Field | Description |
+|-------|-------------|
+| `from` | Original score before adjustment |
+| `to` | Adjusted score (same as `from` if already valid) |
+| `min` / `max` | Valid score window |
+| `changed` | Whether the score was adjusted |
+| `tileCount` | Number of tiles on the board |
+
+**Example:**
+```javascript
+__updateScore()  // → { from: 0, to: 425984, min: 425984, max: 458752, changed: true, ... }
+```
+
 #### `__help()` — Show usage
 
 Prints this documentation to the console using styled output (`%c` format specifiers).
@@ -827,7 +971,7 @@ The following methods are public members of the `App` class but are primarily in
 |--------|------|-------------|
 | `window.__app` | `App \| undefined` | The live `App` instance. Access any public method: `__app.__undo()`, `__app.__delete(0,0)`, etc. |
 | `window.__runAutoLoop(score)` | `(score: number) => void` | Run the AI engine until the score reaches `score` |
-| `window.__dev` | `{ undo, delete, deleteValue, swap, addTiles, add, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, validate, updatePosition, bypassValidation, help }` | Namespaced developer console object |
+| `window.__dev` | `{ undo, delete, deleteValue, swap, addTiles, add, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, validate, updatePosition, bypassValidation, getStats, setBoard, evalPosition, afkHighScore, updateScore, help }` | Namespaced developer console object |
 
 ## Auto-Play Engine
 
