@@ -1202,6 +1202,18 @@ export class App {
   }
 
   /**
+   * Start the engine with zero delay between moves for maximum speed.
+   * Equivalent to setting DELAY to 0 and enabling auto-play.
+   */
+  __noDelay(): void {
+    this.data.settings.autoSpeed = 0;
+    this.persist();
+    if (!this.autoOn) this.startAuto();
+    this.popover.update({ autoSpeed: 0 });
+    console.log('[dev] __noDelay → engine started with zero delay');
+  }
+
+  /**
    * Peek the next spawn value from the CSPRNG stream.
    * Returns 2 or 4 (10% chance of 4), without advancing game state.
    */
@@ -1277,6 +1289,7 @@ export class App {
       '__cheat(dir)              Move without spawning (free experiment)',
       '__fillPowerups()          Max out all powerups',
       '__win()                   Instantly win (place 2048)',
+      '__noDelay()               Start engine with zero delay (max speed)',
       '__nextNumber()            Peek next spawn value (2 or 4)',
       '__nextLocation()          Peek next spawn position',
       '__help()                  Show this message',

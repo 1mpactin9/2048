@@ -21,6 +21,7 @@ declare global {
       cheat(dir: Direction): void;
       fillPowerups(): void;
       win(): void;
+      noDelay(): void;
       nextNumber(): number;
       nextLocation(): { row: number; col: number };
       help(): void;
@@ -59,6 +60,7 @@ window.__dev = {
   cheat: (d: Direction) => window.__app?.__cheat(d),
   fillPowerups: () => window.__app?.__fillPowerups(),
   win: () => window.__app?.__win(),
+  noDelay: () => window.__app?.__noDelay(),
   nextNumber: () => window.__app?.__nextNumber() ?? -1,
   nextLocation: () => window.__app?.__nextLocation() ?? { row: -1, col: -1 },
   help: () => window.__app?.__help(),

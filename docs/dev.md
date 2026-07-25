@@ -714,6 +714,15 @@ Places a 2048 tile at a random empty cell and sets the `won` flag. Triggers the 
 __win()
 ```
 
+#### `__noDelay()` — Start engine with zero delay
+
+Starts the auto-play engine with absolutely no delay between moves, enabling maximum speed. Sets `autoSpeed` to `0` and enables auto-play if not already running.
+
+**Example:**
+```javascript
+__noDelay()  // Engine plays as fast as possible
+```
+
 #### `__nextNumber()` — Predict next spawn value
 
 Peeks into the ChaCha20 CSPRNG stream to predict the next tile value (2 or 4) without advancing game state. Logs the raw RNG value and probability to the console.
@@ -756,7 +765,7 @@ The following methods are public members of the `App` class but are primarily in
 |--------|------|-------------|
 | `window.__app` | `App \| undefined` | The live `App` instance. Access any public method: `__app.__undo()`, `__app.__delete(0,0)`, etc. |
 | `window.__runAutoLoop(score)` | `(score: number) => void` | Run the AI engine until the score reaches `score` |
-| `window.__dev` | `{ undo, delete, swap, addTiles, clear, fill, score, max, moves, cheat, fillPowerups, win, nextNumber, nextLocation, help }` | Namespaced developer console object |
+| `window.__dev` | `{ undo, delete, swap, addTiles, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, help }` | Namespaced developer console object |
 
 ## Auto-Play Engine
 
