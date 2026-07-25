@@ -6,6 +6,8 @@ import type {
   Grid,
   MoveTranscript,
   Powerups,
+  CellDelta,
+  HistoryStep,
 } from './types';
 import { DEFAULT_MODE, MAX_HISTORY, POWERUP_QUOTA, WIN_VALUE } from './constants';
 import {
@@ -89,6 +91,7 @@ export class GameSession {
       over: false,
       history: [],
       moveCount: 0,
+      deltaHistory: [],
       // Seed the CSPRNG for production games. The injected-RNG (test) path
       // leaves these unset; it never persists and ignores them.
       rngSeed: rng ? undefined : createRngSeed(),
@@ -131,6 +134,34 @@ export class GameSession {
     this.state.over = !hasMoves(this.state.grid);
   }
 
+  /** Record a delta-encoded history step for unlimited backtrack support. */
+  private recordDeltas(prevGrid: Grid): void {
+    const currGrid = this.state.grid;
+    const size = this.state.size;
+    const deltas: CellDelta[] = [];
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const prev = prevGrid[r]?.[c];
+        const curr = currGrid[r]?.[c];
+        if ((prev === null) !== (curr === null) ||
+            (prev && curr && (prev.id !== curr.id || prev.value !== curr.value))) {
+          deltas.push({ row: r, col: c, cell: curr ? { id: curr.id, value: curr.value } : null });
+        }
+      }
+    }
+
+    if (deltas.length > 0) {
+      const anchor = this.snapshot();
+      this.state.deltaHistory.push({ anchor, deltas });
+      // Cap at 2000 entries to prevent localStorage bloat
+      const MAX_DELTA_HISTORY = 2000;
+      while (this.state.deltaHistory.length > MAX_DELTA_HISTORY) {
+        this.state.deltaHistory.shift();
+      }
+    }
+  }
+
   /** Apply a directional move. Returns a transcript to animate, or null if the move was a no-op. */
   applyMove(dir: Direction): MoveTranscript | null {
     if (this.state.over) return null;
@@ -146,11 +177,15 @@ export class GameSession {
     this.state.grid = next;
     this.state.score += transcript.gained;
     this.state.best = Math.max(this.state.best, this.state.score);
+    // Record delta for unlimited backtrack
+    const prevGridForDelta = cloneGrid(next); // snapshot after move but before spawn
     transcript.spawned =
       spawnTile(next, { rng: this.rng, manipulate: this.manipulate }) ?? undefined;
     this.state.moveCount++;
     if (!this.state.won && hasTile(next, WIN_VALUE)) this.state.won = true;
     this.recomputeOver();
+    // Record deltas covering both the move and the spawn
+    this.recordDeltas(prevGridForDelta);
     return transcript;
   }
 
@@ -185,10 +220,12 @@ export class GameSession {
     if (!a || !b) return false;
 
     this.pushHistory();
+    const prevGridForDelta = cloneGrid(this.state.grid);
     this.state.grid[r1][c1] = b;
     this.state.grid[r2][c2] = a;
     this.state.powerups = { ...this.state.powerups, swap: this.state.powerups.swap - 1 };
     this.recomputeOver();
+    this.recordDeltas(prevGridForDelta);
     return true;
   }
 
@@ -199,9 +236,11 @@ export class GameSession {
     if (!this.state.grid[row]?.[col]) return false;
 
     this.pushHistory();
+    const prevGridForDelta = cloneGrid(this.state.grid);
     this.state.grid[row][col] = null;
     this.state.powerups = { ...this.state.powerups, delete: this.state.powerups.delete - 1 };
     this.recomputeOver();
+    this.recordDeltas(prevGridForDelta);
     return true;
   }
 
@@ -241,6 +280,8 @@ export class GameSession {
 
 /** Restore a session from a persisted GameState (e.g. localStorage). */
 export function restoreSession(state: GameState, rng?: () => number): GameSession {
+  // Ensure deltaHistory exists (backward compat with saves from before this feature)
+  if (!state.deltaHistory) state.deltaHistory = [];
   // Ensure the id counter is above any persisted tile id to avoid collisions.
   let maxId = 0;
   for (const row of state.grid) {

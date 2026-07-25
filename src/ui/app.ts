@@ -1031,6 +1031,27 @@ export class App {
       this.session.state.moveCount = snap.moveCount;
       this.session.state.powerups = { ...snap.powerups };
     }
+    // Fall through to delta history if regular history is exhausted
+    if (n > this.session.state.history.length) {
+      const remainingSteps = n - this.session.state.history.length;
+      for (let i = 0; i < remainingSteps; i++) {
+        if (!this.session.state.deltaHistory?.length) break;
+        const step = this.session.state.deltaHistory!.pop()!;
+        // Restore anchor state
+        this.session.state.grid = step.anchor.grid;
+        this.session.state.score = step.anchor.score;
+        this.session.state.won = step.anchor.won;
+        this.session.state.wonAcknowledged = step.anchor.wonAcknowledged;
+        this.session.state.moveCount = step.anchor.moveCount;
+        this.session.state.powerups = { ...step.anchor.powerups };
+        // Reverse-apply deltas
+        const deltas = step.deltas;
+        for (let j = deltas.length - 1; j >= 0; j--) {
+          const d = deltas[j];
+          this.session.state.grid[d.row][d.col] = d.cell;
+        }
+      }
+    }
     this.recomputeOver();
     this.saveCurrent();
     this.board.fullRender(this.session.state.grid);
