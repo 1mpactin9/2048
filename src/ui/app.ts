@@ -1141,6 +1141,79 @@ export class App {
     console.log(`[dev] __score → set to ${n}`);
   }
 
+  /**
+   * Place a tile on the board. Four signatures:
+   *
+   * | Call | Meaning |
+   * |------|---------|
+   * | `__add(val)` | Place `val` at first empty cell (smallest row, then col). |
+   * | `__add(x, y)` | Place a **2** at grid position `(x, y)`. |
+   * | `__add(val, x, y)` | Place `val` at `(x, y)`. Fails if occupied. |
+   * | `__add(val, x, y, 1)` | Same as above but **replace** if occupied. |
+   */
+  __add(a: number, b?: number, c?: number, _replace?: number): void {
+    const g = this.session.state.grid;
+
+    // 4 args → __add(val, x, y, replaceFlag)
+    if (b !== undefined && c !== undefined && _replace !== undefined) {
+      const val = a as number;
+      const x = b as number;
+      const y = c as number;
+      if (x < 0 || x >= g.length || y < 0 || y >= g[x].length) {
+        console.warn(`[dev] __add → out of bounds (${x},${y})`);
+        return;
+      }
+      if (g[x][y] && !_replace) {
+        console.warn(`[dev] __add → cell (${x},${y}) already occupied — pass 1 as 4th arg to force-replace`);
+        return;
+      }
+      g[x][y] = { id: freshDevId(), value: val };
+      this.saveCurrent();
+      this.board.fullRender(g);
+      this.updateUI();
+      console.log(`[dev] __add → placed ${val} at ${x},${y}${_replace ? ' (replaced)' : ''}`);
+      return;
+    }
+
+    // 2 args → __add(x, y), place a 2
+    if (b !== undefined && c === undefined) {
+      const x = a as number;
+      const y = b as number;
+      if (x < 0 || x >= g.length || y < 0 || y >= g[x].length) {
+        console.warn(`[dev] __add → out of bounds (${x},${y})`);
+        return;
+      }
+      if (g[x][y]) {
+        console.warn(`[dev] __add → cell (${x},${y}) already occupied`);
+        return;
+      }
+      g[x][y] = { id: freshDevId(), value: 2 };
+      this.saveCurrent();
+      this.board.fullRender(g);
+      this.updateUI();
+      console.log(`[dev] __add → placed 2 at ${x},${y}`);
+      return;
+    }
+
+    // 1 arg → __add(val), place at first empty cell
+    {
+      const val = a as number;
+      for (let r = 0; r < g.length; r++) {
+        for (let c = 0; c < g[r].length; c++) {
+          if (!g[r][c]) {
+            g[r][c] = { id: freshDevId(), value: val };
+            this.saveCurrent();
+            this.board.fullRender(g);
+            this.updateUI();
+            console.log(`[dev] __add → placed ${val} at first empty cell (${r},${c})`);
+            return;
+          }
+        }
+      }
+      console.warn('[dev] __add → board is full');
+    }
+  }
+
   /** Place a single tile of value `val` at [row, col]. Overwrites if occupied. */
   __max(row: number, col: number, val = 2048): void {
     const g = this.session.state.grid;
@@ -1281,6 +1354,10 @@ export class App {
       '__deleteValue(n)          Remove all tiles of value n',
       '__swap(r1, c1, r2, c2)   Swap two tiles',
       '__addTiles(n)             Spawn n free tiles (value 2)',
+      '__add(val)                Place val at first empty cell',
+      '__add(x, y)               Place a 2 at grid position',
+      '__add(val, x, y)          Place val at (x, y); error if occupied',
+      '__add(val, x, y, 1)       Place val at (x, y), replacing if needed',
       '__clear()                 Clear entire board',
       '__fill(val)               Fill board with tiles of value',
       '__score(n)                Set score to n',

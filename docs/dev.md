@@ -617,6 +617,25 @@ __addTiles()       // Add 1 tile
 __addTiles(5)      // Add 5 tiles
 ```
 
+#### `__add` — Place a tile on the board
+
+Four overloaded signatures:
+
+| Signature | Meaning |
+|-----------|---------|
+| `__add(val)` | Place `val` at the first empty cell (smallest row, then column). |
+| `__add(x, y)` | Place a **2** at grid position `(x, y)`. |
+| `__add(val, x, y)` | Place `val` at `(x, y)`. Fails with a warning if the cell is already occupied. |
+| `__add(val, x, y, 1)` | Same as above, but the `1` enables **replace mode** — overwrites any existing tile. Replace mode only applies to this 4-argument form. |
+
+**Examples:**
+```javascript
+__add(2048)             // Place 2048 at first empty cell
+__add(0, 3)             // Place a 2 at row 0, col 3
+__add(256, 1, 2)        // Place 256 at (1, 2); error if occupied
+__add(256, 1, 2, 1)     // Place 256 at (1, 2), replacing whatever's there
+```
+
 #### `__clear()` — Empty the board
 
 Removes every tile from the board.

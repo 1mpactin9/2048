@@ -52,6 +52,7 @@ window.__dev = {
   deleteValue: (n: number) => window.__app?.__deleteValue(n),
   swap: (r1: number, c1: number, r2: number, c2: number) => window.__app?.__swap(r1, c1, r2, c2),
   addTiles: (n = 1) => window.__app?.__addTiles(n),
+  add: (a: number, b?: number, c?: number, d?: number) => window.__app?.__add(a, b, c, d),
   clear: () => window.__app?.__clear(),
   fill: (v = 2) => window.__app?.__fill(v),
   score: (n: number) => window.__app?.__score(n),
