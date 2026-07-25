@@ -65,6 +65,22 @@ export interface GameSnapshot {
   moveCount: number;
 }
 
+/** A single cell change for delta-encoded backtrack history. */
+export interface CellDelta {
+  row: number;
+  col: number;
+  /** null means the cell was emptied; otherwise the new cell value/id. */
+  cell: { id: number; value: number } | null;
+}
+
+/** One step in the compressed (delta) history. Stores an anchor snapshot and the deltas since it. */
+export interface HistoryStep {
+  /** Snapshot taken BEFORE this step — needed as anchor for replay. */
+  anchor: GameSnapshot;
+  /** Ordered list of cell changes that occurred during this step. */
+  deltas: CellDelta[];
+}
+
 export interface GameState {
   size: number;
   mode: GameMode;
@@ -78,6 +94,12 @@ export interface GameState {
   over: boolean;
   history: GameSnapshot[];
   moveCount: number;
+  /**
+   * Compressed delta history for unlimited backtrack support via __undo.
+   * Each step stores a full anchor snapshot plus only the cells that changed.
+   * Capped at MAX_DELTA_HISTORY entries to prevent localStorage bloat.
+   */
+  deltaHistory?: HistoryStep[];
   /**
    * 32-byte CSPRNG seed (8 uint32, little-endian) for tile spawns. Generated
    * per game and persisted so each game differs. Optional only to tolerate

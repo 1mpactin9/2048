@@ -1076,20 +1076,26 @@ export class App {
     console.log(`[dev] __deleteValue → removed ${count} tile(s) of value ${n}`);
   }
 
-  /** Swap the tiles at [r1,c1] and [r2,c2]. Both must be occupied. */
+  /** Swap the tiles at [r1,c1] and [r2,c2]. At least one must be occupied. */
   __swap(r1: number, c1: number, r2: number, c2: number): void {
     const g = this.session.state.grid;
     if (r1 === r2 && c1 === c2) return;
     const a = g[r1]?.[c1];
     const b = g[r2]?.[c2];
-    if (!a || !b) { console.warn('[dev] __swap:', r1, c1, r2, c2, 'must both be occupied'); return; }
+    // Allow swapping with empty cell: at least one must be occupied
+    if (!a && !b) { console.warn('[dev] __swap:', r1, c1, r2, c2, 'both cells are empty'); return; }
     this.clearPendingNew();
-    g[r1][c1] = b;
-    g[r2][c2] = a;
+    g[r1][c1] = b ?? null;
+    g[r2][c2] = a ?? null;
+    // Only animate if both were occupied (real swap); otherwise full render
+    if (a && b) {
+      this.board.animateSwap(a.id, b.id);
+    } else {
+      this.board.fullRender(g);
+    }
     this.saveCurrent();
-    this.board.animateSwap(a.id, b.id);
     this.updateUI();
-    console.log('[dev] __swap →', r1, c1, '<->', r2, c2);
+    console.log('[dev] __swap →', r1, c1, '<->', r2, c2, a ? `(tile ${a.value})` : '(empty)', b ? `(tile ${b.value})` : '(empty)');
   }
 
   /** Add n free tiles (value 2) at random empty cells. */
@@ -1139,10 +1145,17 @@ export class App {
     console.log(`[dev] __fill → ${val} everywhere`);
   }
 
-  /** Set the score to `n`. */
+  /** Set the score to `n`. Validates input to prevent NaN corruption of best. */
   __score(n: number): void {
+    if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) {
+      console.warn(`[dev] __score → invalid value: ${n} (must be a non-negative finite number)`);
+      return;
+    }
     this.session.state.score = n;
-    this.session.state.best = Math.max(this.session.state.best, n);
+    const curBest = this.session.state.best;
+    if (typeof curBest !== 'number' || isNaN(curBest) || n > curBest) {
+      this.session.state.best = n;
+    }
     this.saveCurrent();
     this.updateUI();
     console.log(`[dev] __score → set to ${n}`);
@@ -1379,7 +1392,10 @@ export class App {
     const changed = r.to !== r.from;
     if (changed) {
       this.session.state.score = r.to;
-      this.session.state.best = Math.max(this.session.state.best, r.to);
+      const curBest = this.session.state.best;
+      if (typeof curBest !== 'number' || isNaN(curBest) || r.to > curBest) {
+        this.session.state.best = r.to;
+      }
       this.clearPendingNew();
       this.saveCurrent();
       this.updateUI();
@@ -2072,13 +2088,30 @@ export class App {
   }
 
   /**
+   * Recover from a NaN best score. If best is already valid (a finite number),
+   * does nothing. Otherwise sets best to the current score.
+   */
+  __fixBest(): void {
+    const s = this.session.state;
+    if (typeof s.best === 'number' && !isNaN(s.best)) {
+      console.log('[dev] __fixBest → best score is already valid');
+      return;
+    }
+    s.best = s.score;
+    this.saveCurrent();
+    this.updateUI();
+    console.log(`[dev] __fixBest → recovered best from NaN to ${s.best}`);
+  }
+
+  /**
    * Ensure the score correctly matches the latest position.
    * Recalculates the score window from the board tiles and clamps the
    * displayed score into the valid range. Updates UI and persists state.
+   * Also fixes NaN best scores if present.
    *
    * Returns the adjustment details.
    */
-  __updateScore(): {
+  __refreshScore(): {
     from: number;
     to: number;
     min: number;
@@ -2101,9 +2134,9 @@ export class App {
       this.clearPendingNew();
       this.saveCurrent();
       this.updateUI();
-      console.log(`[dev] __updateScore -> score adjusted ${originalScore} → ${clamped.to} (window [${clamped.min}, ${clamped.max}])`);
+      console.log(`[dev] __refreshScore -> score adjusted ${originalScore} → ${clamped.to} (window [${clamped.min}, ${clamped.max}])`);
     } else {
-      console.log(`[dev] __updateScore -> score ${originalScore} already valid (window [${clamped.min}, ${clamped.max}])`);
+      console.log(`[dev] __refreshScore -> score ${originalScore} already valid (window [${clamped.min}, ${clamped.max}])`);
     }
 
     return {
@@ -2115,6 +2148,17 @@ export class App {
       tileCount: vr.tileCount,
       scoreFromMerges: clamped.to,
     };
+  }
+
+  /**
+   * Explicitly refresh the Play Again bar visibility based on whether the
+   * board is dead (no legal moves left). Only shows when the board has no
+   * remaining moves.
+   */
+  __refreshPlayAgainStatus(): void {
+    const isDead = !hasMoves(this.session.state.grid);
+    this.gameOverBar.classList.toggle('is-visible', isDead);
+    console.log(`[dev] __refreshPlayAgainStatus → ${isDead ? 'visible (board is dead)' : 'hidden'}`);
   }
 
 
@@ -2153,7 +2197,9 @@ export class App {
       '__setBoard(vals?)         Set board from values grid or flat array',
       '__evalPosition()          Heuristic position evaluation & analysis',
       '__afkHighScore()          Auto-run AFK until best exceeds 3x',
-      '__updateScore()           Ensure score matches current position',
+      '__refreshScore()          Ensure score matches current position (also fixes NaN best)',
+      '__fixBest()               Recover from NaN best score',
+      '__refreshPlayAgainStatus  Explicitly toggle Play Again bar visibility',
       '__dev.log(fn, ms?)        Periodic logger — log a function every N ms',
       '__dev.stopLog(id?)        Stop a specific or all periodic loggers',
       '__dev.callNative(name, …) Call any built-in dev method by name',

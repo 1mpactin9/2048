@@ -47,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoDepth: 0,
   autoPowerups: true,
   rngManip: false,
+  backtrackEnabled: true,
 };
 
 export function load(): StoredData {
