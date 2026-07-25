@@ -7,7 +7,6 @@ import type {
   MoveTranscript,
   Powerups,
   CellDelta,
-  HistoryStep,
 } from './types';
 import { DEFAULT_MODE, MAX_HISTORY, POWERUP_QUOTA, WIN_VALUE } from './constants';
 import {
@@ -43,6 +42,8 @@ export class GameSession {
 
   constructor(state: GameState, rng?: () => number) {
     this.state = state;
+    // Ensure deltaHistory always exists (backward compat with test constructions)
+    if (!this.state.deltaHistory) this.state.deltaHistory = [];
     if (rng) {
       // Explicit RNG (used by tests for deterministic spawns). Not persisted;
       // tests don't round-trip state, so no CSPRNG state is needed.
@@ -153,11 +154,12 @@ export class GameSession {
 
     if (deltas.length > 0) {
       const anchor = this.snapshot();
-      this.state.deltaHistory.push({ anchor, deltas });
+      const dh = this.state.deltaHistory!;
+      dh.push({ anchor, deltas });
       // Cap at 2000 entries to prevent localStorage bloat
       const MAX_DELTA_HISTORY = 2000;
-      while (this.state.deltaHistory.length > MAX_DELTA_HISTORY) {
-        this.state.deltaHistory.shift();
+      while (dh.length > MAX_DELTA_HISTORY) {
+        dh.shift();
       }
     }
   }
