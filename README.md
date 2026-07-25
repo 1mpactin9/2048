@@ -84,5 +84,5 @@ In the preview, check:
 
 | Document | Description |
 |--------|-------------|
-| [Benchmark Result](benchmark.md) | some example benchmark results |
+| [Benchmark Result](docs/benchmark.md) | some example benchmark results |
 | [Developer Documentation](docs/dev.md) | throuogh project overview |
