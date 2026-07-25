@@ -156,8 +156,8 @@ export class GameSession {
       const anchor = this.snapshot();
       const dh = this.state.deltaHistory!;
       dh.push({ anchor, deltas });
-      // Cap at 2000 entries to prevent localStorage bloat
-      const MAX_DELTA_HISTORY = 2000;
+      // Cap at 10000 entries to prevent localStorage bloat
+      const MAX_DELTA_HISTORY = 10000;
       while (dh.length > MAX_DELTA_HISTORY) {
         dh.shift();
       }

@@ -945,7 +945,7 @@ export class App {
 
   /** Show dialog when user tries to disable backtrack with data present. */
   private showBacktrackDisableDialog(): void {
-    const hasData = this.session.state.deltaHistory?.length ?? 0 > 0;
+    const hasData = (this.session.state.deltaHistory?.length ?? 0) > 0;
     this.showOverlay({
       title: 'Disable backtrack?',
       danger: true,

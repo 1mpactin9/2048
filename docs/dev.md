@@ -1216,7 +1216,7 @@ If the stored version doesn't match `VERSION` (1), or parsing fails, `load()` re
 
 ## Backtrack (Unlimited Undo)
 
-The **Backtrack** toggle in the settings popover enables delta-encoded unlimited undo history. When enabled, every move is recorded as a compressed delta (only changed cells) alongside an anchor snapshot, allowing `__undo(n)` to step back far beyond the 16-snapshot powerup undo limit — up to 2000 steps per size/mode combo.
+The **Backtrack** toggle in the settings popover enables delta-encoded unlimited undo history. When enabled, every move is recorded as a compressed delta (only changed cells) alongside an anchor snapshot, allowing `__undo(n)` to step back far beyond the 16-snapshot powerup undo limit — up to 10000 steps per size/mode combo.
 
 **How it works:**
 - Each move stores: one full `GameSnapshot` (anchor) + a list of cell changes (deltas)
@@ -1229,7 +1229,7 @@ The **Backtrack** toggle in the settings popover enables delta-encoded unlimited
 
 **Persistence:** The `backtrackEnabled` setting is saved in localStorage and restored across page reloads and game switches.
 
-### Global Window API
+## CSS Custom Properties
 
 ### Button Styles
 
