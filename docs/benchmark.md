@@ -1,4 +1,11 @@
-# 2048 AI Benchmarks
+<div align="center">
+    <h1>Benchmark</h1>
+    <p>
+        <a href="#phase-1-directional-move-speed-plain-expectimax">Part 01</a> -
+        <a href="#phase-2-power-up-evaluation-full-action-search">02</a> -
+        <a href="#phase-3-predictive-search-rng-manipulation-mode">03</a>
+    </p>
+</div>
 
 Benchmark results for the Rust expectimax engine (`engine/src/lib.rs`), compiled to WASM and run in the browser via a dedicated Web Worker. All timings measured on a single core, release build (`--release`), averaged over 20 decisions per configuration.
 

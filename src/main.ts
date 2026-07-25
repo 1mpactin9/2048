@@ -100,7 +100,7 @@ window.__dev = {
     return id;
   },
   stopLog: function (id?: number): void {
-    const timers = (this as Record<string, unknown>)._timers as Map<number, number>;
+    const timers = (this as Record<string, unknown>)._timers as Map<number, ReturnType<typeof setInterval>>;
     if (id !== undefined && id !== null) {
       const timer = timers.get(id);
       if (timer) { clearInterval(timer); timers.delete(id); console.log(`[dev.log] stopped (id=${id})`); }

@@ -20,6 +20,12 @@ export interface Settings {
    * whichever leaves the board in the strongest position. Off by default.
    */
   rngManip: boolean;
+  /**
+   * Backtrack: when on, stores a delta-encoded history of every move so
+   * __undo can step back far beyond the 16-snapshot powerup undo limit.
+   * Default true.
+   */
+  backtrackEnabled: boolean;
 }
 
 export interface StoredData {
