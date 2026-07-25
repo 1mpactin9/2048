@@ -79,3 +79,10 @@ In the preview, check:
 | `npm run preview` | Preview the production `dist/` bundle locally |
 | `npm test` | Run Vitest test suite (node environment) |
 | `npm run test:watch` | Run Vitest in watch mode |
+
+## Quick Access
+
+| Document | Description |
+|--------|-------------|
+| [Benchmark Result](benchmark.md) | some example benchmark results |
+| [Developer Documentation](docs/dev.md) | throuogh project overview |
