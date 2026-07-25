@@ -42,6 +42,9 @@
     - [`__evalPosition()` — Heuristic position evaluation](#__evalposition--heuristic-position-evaluation)
     - [`__afkHighScore()` — Run AFK until best score exceeds 3x](#__afkhighscore--run-afk-until-best-score-exceeds-3x)
     - [`__updateScore()` — Ensure score matches current position](#__updatescore--ensure-score-matches-current-position)
+    - [`__dev.log(fn, intervalMs?)` — Periodic logger](#__devlogfn-intervalms--periodic-logger)
+    - [`__dev.stopLog(id?)` — Stop periodic logger(s)](#__devstoplogid--stop-periodic-loggers)
+    - [`__dev.callNative(methodName, ...args)` — Call any built-in method by name](#__devcallnamemethodname-args--call-any-built-in-method-by-name)
   - [Internal Methods (App class)](#internal-methods-app-class)
   - [Global Window API](#global-window-api)
 - [Auto-Play Engine](#auto-play-engine)
@@ -525,24 +528,44 @@ Development: `npm run dev` starts Vite dev server with HMR at `http://localhost:
 All developer console methods are exposed on `window.__dev` and also callable directly via `window.__app` method names. Open your browser DevTools console (F12) and type:
 
 ```javascript
-// Via the __dev namespace (recommended)
+// Via the __dev namespace (recommended — all built-in methods support this form)
 __dev.undo()
 __dev.delete(0, 0)
+__dev.win()
+__dev.getStats()
 
 // Via direct App method names
 window.__app.__undo()
 window.__app.__delete(2, 3)
+window.__app.__setBoard([[2,2],[2,2]])
 
-// Or just the bare method name on window
+// Or just the bare method name on window (only for methods that are proxied on __dev)
 __undo()
+__win()
 __help()
+```
+
+**Calling conventions:** Every method supports three forms:
+
+| Form | Example | Notes |
+|------|---------|-------|
+| `__dev.methodName(...)` | `__dev.win()` | Recommended. Works for all built-in methods listed below, including new ones (`getStats`, `setBoard`, etc.) |
+| `window.__app.__methodName(...)` | `window.__app.__undo(5)` | Direct access to the `App` class methods. Works for everything, including methods not proxied on `__dev` |
+| `__methodName(...)` | `__undo()` | Bare global — only works for methods explicitly proxied on `window.__dev` |
+
+Additionally, `__dev.callNative(name, ...args)` enables programmatic invocation of any `App` method by string name:
+
+```javascript
+__dev.callNative('__undo', 3)       // Undo 3 steps
+__dev.callNative('__fillPowerups')  // Max out powerups
+__dev.callNative('__add', 2048)     // Place 2048 at first empty cell
 ```
 
 Every method logs its result to the console with a `[dev]` prefix. Methods that fail silently log a warning. All mutations persist to localStorage automatically.
 
 ### Console API Reference
 
-try adding dev. at the start if it doesn't work
+All built-in dev methods support the `__dev.methodName()` form. Examples below show the bare form for brevity, but `__dev.undo()`, `__dev.win()`, etc. are equivalent and recommended. For methods not proxied on `__dev` (e.g. `__setBoard`), use `__dev.setBoard(...)` or `window.__app.__setBoard(...)`.
 
 ```javascript
 __dev.undo()
@@ -560,9 +583,9 @@ Reverts game state without consuming a powerup charge.
 
 **Examples:**
 ```javascript
-__undo()               // Undo 1 step
-__undo(5)              // Undo last 5 steps at once
-__undo(-10)            // Let AI play 10 moves, then stop
+__dev.undo()               // Undo 1 step
+__dev.undo(5)              // Undo last 5 steps at once
+__dev.undo(-10)            // Let AI play 10 moves, then stop
 ```
 
 #### `__delete(row, col)` — Remove a tile
@@ -576,7 +599,7 @@ Deletes the tile at the given grid position. No powerup cost.
 
 **Example:**
 ```javascript
-__delete(2, 3)  // Remove tile at row 2, column 3
+__dev.delete(2, 3)  // Remove tile at row 2, column 3
 ```
 
 #### `__deleteValue(char)` — Remove a tile
@@ -589,7 +612,7 @@ Deletes the tile at the given grid number. No powerup cost.
 
 **Example:**
 ```javascript
-__deleteValue(2)  // Remove tile of value 2
+__dev.deleteValue(2)  // Remove tile of value 2
 ```
 
 #### `__swap(r1, c1, r2, c2)` — Swap two tiles
@@ -605,7 +628,7 @@ Swaps the positions of two tiles. Both must be occupied. No powerup cost.
 
 **Example:**
 ```javascript
-__swap(0, 0, 3, 3)  // Swap tile at (0,0) with tile at (3,3)
+__dev.swap(0, 0, 3, 3)  // Swap tile at (0,0) with tile at (3,3)
 ```
 
 #### `__addTiles(n?)` — Spawn free tiles
@@ -618,8 +641,8 @@ Places `n` tiles of value 2 at random empty cells. Uses Fisher-Yates partial shu
 
 **Example:**
 ```javascript
-__addTiles()       // Add 1 tile
-__addTiles(5)      // Add 5 tiles
+__dev.addTiles()       // Add 1 tile
+__dev.addTiles(5)      // Add 5 tiles
 ```
 
 #### `__add` — Place a tile on the board
@@ -635,10 +658,10 @@ Four overloaded signatures:
 
 **Examples:**
 ```javascript
-__add(2048)             // Place 2048 at first empty cell
-__add(0, 3)             // Place a 2 at row 0, col 3
-__add(256, 1, 2)        // Place 256 at (1, 2); error if occupied
-__add(256, 1, 2, 1)     // Place 256 at (1, 2), replacing whatever's there
+__dev.add(2048)             // Place 2048 at first empty cell
+__dev.add(0, 3)             // Place a 2 at row 0, col 3
+__dev.add(256, 1, 2)        // Place 256 at (1, 2); error if occupied
+__dev.add(256, 1, 2, 1)     // Place 256 at (1, 2), replacing whatever's there
 ```
 
 #### `__clear()` — Empty the board
@@ -647,7 +670,7 @@ Removes every tile from the board.
 
 **Example:**
 ```javascript
-__clear()
+__dev.clear()
 ```
 
 #### `__fill(val?)` — Fill board with tiles
@@ -660,8 +683,8 @@ Places a tile of value `val` in every cell of the board. Overwrites existing til
 
 **Example:**
 ```javascript
-__fill()           // Fill with 2s
-__fill(64)         // Fill with 64s
+__dev.fill()           // Fill with 2s
+__dev.fill(64)         // Fill with 64s
 ```
 
 #### `__score(n)` — Set score
@@ -674,7 +697,7 @@ Sets the current score to `n`. Also updates `best` if `n` exceeds it.
 
 **Example:**
 ```javascript
-__score(5000)
+__dev.score(5000)
 ```
 
 #### `__max(row, col, val?)` — Place a tile
@@ -689,8 +712,8 @@ Places a single tile of value `val` at the specified position. Overwrites any ex
 
 **Example:**
 ```javascript
-__max(0, 0)          // Place 2048 at top-left
-__max(3, 3, 4096)    // Place 4096 at bottom-right
+__dev.max(0, 0)          // Place 2048 at top-left
+__dev.max(3, 3, 4096)    // Place 4096 at bottom-right
 ```
 
 #### `__moves(n)` — Set move count
@@ -703,7 +726,7 @@ Sets the internal move counter to `n`.
 
 **Example:**
 ```javascript
-__moves(0)
+__dev.moves(0)
 ```
 
 #### `__cheat(dir)` — Move without spawning
@@ -716,8 +739,8 @@ Applies a directional move exactly as normal play would, but **does not spawn a 
 
 **Example:**
 ```javascript
-__cheat('right')
-__cheat('up')
+__dev.cheat('right')
+__dev.cheat('up')
 ```
 
 #### `__fillPowerups()` — Max out powerups
@@ -726,7 +749,7 @@ Sets all powerup charges to 99.
 
 **Example:**
 ```javascript
-__fillPowerups()
+__dev.fillPowerups()
 ```
 
 #### `__win()` — Instantly win
@@ -735,7 +758,7 @@ Places a 2048 tile at a random empty cell and sets the `won` flag. Triggers the 
 
 **Example:**
 ```javascript
-__win()
+__dev.win()  // Instantly win: places a 2048 tile and sets won flag
 ```
 
 #### `__noDelay()` — Start engine with zero delay
@@ -744,7 +767,7 @@ Starts the auto-play engine with absolutely no delay between moves, enabling max
 
 **Example:**
 ```javascript
-__noDelay()  // Engine plays as fast as possible
+__dev.noDelay()  // Engine plays as fast as possible
 ```
 
 #### `__nextNumber()` — Predict next spawn value
@@ -755,7 +778,7 @@ Peeks into the ChaCha20 CSPRNG stream to predict the next tile value (2 or 4) wi
 
 **Example:**
 ```javascript
-__nextNumber()  // → 4 (rng=0.0823, p(4)=0.1)
+__dev.nextNumber()  // → 4 (rng=0.0823, p(4)=0.1)
 ```
 
 #### `__nextLocation()` — Predict next spawn position
@@ -766,7 +789,7 @@ Peeks into the ChaCha20 CSPRNG stream to predict which empty cell will receive t
 
 **Example:**
 ```javascript
-__nextLocation()  // → { row: 2, col: 1 } (rng=0.3412, empties=6)
+__dev.nextLocation()  // → { row: 2, col: 1 } (rng=0.3412, empties=6)
 ```
 
 #### `__validate()` — Check position validity
@@ -782,7 +805,7 @@ Logs the window and a `VALID` / `BELOW MIN by X` / `ABOVE MAX by X` verdict. Out
 
 **Example:**
 ```javascript
-__validate()  // -> { valid: false, score: 0, min: 425984, max: 458752, ... }  (hacked 32768 on a 0-score board)
+__dev.validate()  // -> { valid: false, score: 0, min: 425984, max: 458752, ... }  (hacked 32768 on a 0-score board)
 ```
 
 #### `__updatePosition()` — Clamp score into the valid window
@@ -793,7 +816,7 @@ Adjusts the score so it matches a hacked board: a score below the minimum is rai
 
 **Example:**
 ```javascript
-__updatePosition()  // -> { from: 0, to: 425984, min: 425984, max: 458752, changed: true }
+__dev.updatePosition()  // -> { from: 0, to: 425984, min: 425984, max: 458752, changed: true }
 ```
 
 #### `__bypassValidation()` — Remove minimal tiles to make the position valid
@@ -808,8 +831,8 @@ For boards with up to 20 score-bearing tiles (value >= 8) the solver is exact; l
 
 **Example:**
 ```javascript
-__bypassValidation()      // count-first (default): fewest tiles removed
-__bypassValidation(true)  // value-first: least total value removed
+__dev.bypassValidation()      // count-first (default): fewest tiles removed
+__dev.bypassValidation(true)  // value-first: least total value removed
 ```
 
 #### `__getStats()` — Full board/session/UI diagnostics
@@ -858,7 +881,7 @@ Returns a comprehensive object with every relevant piece of information about th
 
 **Example:**
 ```javascript
-const stats = __getStats();
+const stats = __dev.getStats();
 console.log(stats.board.tileCount, 'tiles on', stats.board.size + 'x' + stats.board.size);
 ```
 
@@ -875,10 +898,10 @@ Overwrites the current board with tiles from a values matrix or flat array. Work
 
 **Examples:**
 ```javascript
-__setBoard([[2, 0, 0, 2], [0, 4, 4, 0], [0, 8, 0, 8], [16, 16, 0, 0]])  // 4x4 from matrix
-__setBoard(5, [[4, 0, 0, 0, 0], [0, 4, 0, 0, 0], [0, 0, 8, 0, 0], [0, 0, 0, 8, 0], [0, 0, 0, 0, 16]])  // 5x5
-__setBoard([2, 2, 4, 4, 8, 0, 0, 0, 0])  // flat 3x3
-__setBoard([2, 2, 4, 4, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4)  // flat 4x4
+__dev.setBoard([[2, 0, 0, 2], [0, 4, 4, 0], [0, 8, 0, 8], [16, 16, 0, 0]])  // 4x4 from matrix
+__dev.setBoard(5, [[4, 0, 0, 0, 0], [0, 4, 0, 0, 0], [0, 0, 8, 0, 0], [0, 0, 0, 8, 0], [0, 0, 0, 0, 16]])  // 5x5
+__dev.setBoard([2, 2, 4, 4, 8, 0, 0, 0, 0])  // flat 3x3
+__dev.setBoard([2, 2, 4, 4, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4)  // flat 4x4
 ```
 
 #### `__evalPosition()` — Heuristic position evaluation
@@ -907,7 +930,7 @@ The console logs additional details including estimated highest achievable tile 
 
 **Example:**
 ```javascript
-__evalPosition()
+__dev.evalPosition()
 // → { calcTimeMs: 0.042, currentScore: 15360, bestScore: 15360, ... }
 ```
 
@@ -927,9 +950,9 @@ This is fire-and-forget — it runs asynchronously and reports progress via cons
 
 **Example:**
 ```javascript
-__afkHighScore()  // → "[dev] __afkHighScore → starting AFK run"
-                  //    "[dev] __afkHighScore → new best: 245760 (game #1)"
-                  //    "[dev] __afkHighScore → DONE  Games played: 12  Final best: 245760"
+__dev.afkHighScore()  // → "[dev] __afkHighScore → starting AFK run"
+                      //    "[dev] __afkHighScore → new best: 245760 (game #1)"
+                      //    "[dev] __afkHighScore → DONE  Games played: 12  Final best: 245760"
 ```
 
 #### `__updateScore()` — Ensure score matches current position
@@ -948,12 +971,91 @@ Validates the displayed score against the tile composition window and clamps it 
 
 **Example:**
 ```javascript
-__updateScore()  // → { from: 0, to: 425984, min: 425984, max: 458752, changed: true, ... }
+__dev.updateScore()  // → { from: 0, to: 425984, min: 425984, max: 458752, changed: true, ... }
 ```
 
-#### `__help()` — Show usage
+#### `__dev.log(fn, intervalMs?)` — Periodic logger
 
-Prints this documentation to the console using styled output (`%c` format specifiers).
+Executes a function or expression repeatedly at a set time interval and logs the returned values directly to the console. Returns a numeric ID that can be used to stop this specific logger.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `fn` | `Function` | — | **(Required)** The function or expression to execute on every tick. Receives no arguments. |
+| `intervalMs` | `number` | `1000` | Time between executions in milliseconds |
+
+**Returns:** `number` — A unique logger ID for later cancellation.
+
+**Examples:**
+```javascript
+// Log current timestamp every second
+__dev.log(() => performance.now())
+
+// Track score changes every 500ms
+__dev.log(() => window.__app?.session.state.score, 500)
+
+// Track board fullness
+__dev.log(() => {
+  const stats = __dev.getStats();
+  return `${stats.board.tileCount}/${stats.board.size * stats.board.size} tiles`;
+}, 2000)
+
+// Stop a specific logger by ID
+const id = __dev.log(() => performance.now(), 1000);
+// ... later ...
+__dev.stopLog(id)
+```
+
+Errors inside the logged function are caught and printed to the console without crashing the loop.
+
+#### `__dev.stopLog(id?)` — Stop periodic logger(s)
+
+Clears the active interval timer(s) to halt the logging process. Pass a specific logger ID to kill one loop, or call it with no arguments to clear all active loggers.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `id` | `number` | `undefined` | The specific log instance ID to stop. If omitted, stops **all** active loggers. |
+
+**Examples:**
+```javascript
+// Stop a specific background logger
+__dev.stopLog(loggerId)
+
+// Terminate all active logging streams
+__dev.stopLog()
+```
+
+#### `__dev.callNative(methodName, ...args)` — Call any built-in dev method by name
+
+Invokes any built-in dev method programmatically using its string name, with arbitrary arguments. Enables fully dynamic access to all cheats — replicate built-in functionality, build custom tooling, or chain operations from bookmarklets and scripts.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `methodName` | `string` | **(Required)** The name of the dev method to call (e.g. `'__undo'`, `'__fillPowerups'`, `'__win'`) |
+| `...args` | `unknown[]` | Arguments to pass to the method |
+
+**Returns:** The method's return value, or `undefined` if the method doesn't exist or throws.
+
+**Supported methods:** All methods listed in this document (`__undo`, `__delete`, `__swap`, `__addTiles`, `__add`, `__clear`, `__fill`, `__score`, `__max`, `__moves`, `__cheat`, `__fillPowerups`, `__win`, `__noDelay`, `__nextNumber`, `__nextLocation`, `__validate`, `__updatePosition`, `__bypassValidation`, `__getStats`, `__setBoard`, `__evalPosition`, `__afkHighScore`, `__updateScore`).
+
+**Examples:**
+```javascript
+// Replicate built-in cheat features
+__dev.callNative('__win')                          // Same as __win()
+__dev.callNative('__fillPowerups')                 // Same as __fillPowerups()
+__dev.callNative('__add', 2048)                    // Same as __add(2048)
+__dev.callNative('__cheat', 'right')               // Same as __cheat('right')
+__dev.callNative('__undo', 5)                      // Undo 5 steps
+__dev.callNative('__deleteValue', 4)               // Remove all 4-tiles
+
+// Chain multiple operations
+__dev.callNative('__clear'); __dev.callNative('__fill', 128); __dev.callNative('__score', 9999)
+
+// Use with __dev.log for automated monitoring
+__dev.log(() => __dev.callNative('__getStats').board.maxTile, 3000)
+
+// Access methods not on __dev proxy (e.g. __setBoard via App class)
+window.__app.__setBoard([[2,2],[2,2]])             // Direct App access
+```
 
 ### Internal Methods (App class)
 
@@ -971,7 +1073,7 @@ The following methods are public members of the `App` class but are primarily in
 |--------|------|-------------|
 | `window.__app` | `App \| undefined` | The live `App` instance. Access any public method: `__app.__undo()`, `__app.__delete(0,0)`, etc. |
 | `window.__runAutoLoop(score)` | `(score: number) => void` | Run the AI engine until the score reaches `score` |
-| `window.__dev` | `{ undo, delete, deleteValue, swap, addTiles, add, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, validate, updatePosition, bypassValidation, getStats, setBoard, evalPosition, afkHighScore, updateScore, help }` | Namespaced developer console object |
+| `window.__dev` | `{ undo, delete, deleteValue, swap, addTiles, add, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, validate, updatePosition, bypassValidation, getStats, setBoard, evalPosition, afkHighScore, updateScore, log, stopLog, callNative, help }` | Namespaced developer console object |
 
 ## Auto-Play Engine
 

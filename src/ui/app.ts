@@ -2154,6 +2154,9 @@ export class App {
       '__evalPosition()          Heuristic position evaluation & analysis',
       '__afkHighScore()          Auto-run AFK until best exceeds 3x',
       '__updateScore()           Ensure score matches current position',
+      '__dev.log(fn, ms?)        Periodic logger — log a function every N ms',
+      '__dev.stopLog(id?)        Stop a specific or all periodic loggers',
+      '__dev.callNative(name, …) Call any built-in dev method by name',
       '__help()                  Show this message',
     ];
     console.log(...lines);

@@ -30,6 +30,16 @@ declare global {
       updatePosition(): { from: number; to: number; min: number; max: number; changed: boolean } | undefined;
       bypassValidation(valueFirst?: boolean): { feasible: boolean; removed: number; totalValue: number; heuristic: boolean; valid: boolean } | undefined;
       help(): void;
+      /** Periodic logger — executes a function/expression at an interval and logs results. Returns an ID for later cancellation. */
+      log(fn: (...args: unknown[]) => unknown, intervalMs?: number): number;
+      /** Stop a specific or all periodic loggers. Pass an ID to stop one, omit to stop all. */
+      stopLog(id?: number): void;
+      /** Execute a dev method by name with arbitrary arguments. Enables programmatic access to all built-in cheats. */
+      callNative(methodName: string, ...args: unknown[]): unknown;
+      /** Internal: timer registry for log/stopLog (not part of public API). */
+      _timers: Map<number, ReturnType<typeof setInterval>>;
+      /** Internal: monotonic counter for log IDs (not part of public API). */
+      _nextId: number;
     };
   }
 }
@@ -73,6 +83,51 @@ window.__dev = {
   updatePosition: () => window.__app?.__updatePosition(),
   bypassValidation: (valueFirst?: boolean) => window.__app?.__bypassValidation(valueFirst),
   help: () => window.__app?.__help(),
+  // ---------- Periodic logger ----------
+  _timers: new Map<number, ReturnType<typeof setInterval>>(),
+  _nextId: 1,
+  log: function (fn: (...args: unknown[]) => unknown, intervalMs = 1000): number {
+    const app = window.__app;
+    if (!app) { console.warn('[2048] App not ready for __dev.log'); return -1; }
+    const id = this._nextId++;
+    // Log immediately on first call
+    try { console.log(`[dev.log#${id}]`, fn()); } catch (e) { console.error(`[dev.log#${id}]`, e); }
+    const timer = setInterval(() => {
+      try { console.log(`[dev.log#${id}]`, fn()); } catch (e) { console.error(`[dev.log#${id}]`, e); }
+    }, intervalMs);
+    this._timers.set(id, timer);
+    console.log(`[dev.log] started (id=${id}, interval=${intervalMs}ms)`);
+    return id;
+  },
+  stopLog: function (id?: number): void {
+    const timers = (this as Record<string, unknown>)._timers as Map<number, number>;
+    if (id !== undefined && id !== null) {
+      const timer = timers.get(id);
+      if (timer) { clearInterval(timer); timers.delete(id); console.log(`[dev.log] stopped (id=${id})`); }
+      else console.warn(`[dev.log] no logger found with id=${id}`);
+    } else {
+      for (const [, t] of timers) { clearInterval(t); }
+      timers.clear();
+      console.log('[dev.log] stopped all loggers');
+    }
+  },
+  // ---------- Native caller ----------
+  callNative: function (methodName: string, ...args: unknown[]): unknown {
+    const app = window.__app;
+    if (!app) { console.warn('[2048] App not ready for __dev.callNative'); return undefined; }
+    const method = (app as unknown as Record<string, unknown>)[methodName];
+    if (typeof method !== 'function') {
+      console.warn(`[dev.callNative] no such method: ${methodName}`);
+      return undefined;
+    }
+    try {
+      const result = (method as Function).apply(app, args);
+      return result;
+    } catch (e) {
+      console.error(`[dev.callNative] error calling ${methodName}:`, e);
+      return undefined;
+    }
+  },
 };
 
 // Dispose the old instance on hot reload so its timers/listeners don't linger.
