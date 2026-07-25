@@ -30,6 +30,12 @@ declare global {
       updatePosition(): { from: number; to: number; min: number; max: number; changed: boolean } | undefined;
       bypassValidation(valueFirst?: boolean): { feasible: boolean; removed: number; totalValue: number; heuristic: boolean; valid: boolean } | undefined;
       help(): void;
+      /** Recover from NaN best score. */
+      fixBest(): void;
+      /** Ensure score matches current position (also fixes NaN best). */
+      refreshScore(): { from: number; to: number; min: number; max: number; changed: boolean; tileCount: number; scoreFromMerges: number } | undefined;
+      /** Explicitly toggle Play Again bar visibility based on board dead state. */
+      refreshPlayAgainStatus(): void;
       /** Periodic logger — executes a function/expression at an interval and logs results. Returns an ID for later cancellation. */
       log(fn: (...args: unknown[]) => unknown, intervalMs?: number): number;
       /** Stop a specific or all periodic loggers. Pass an ID to stop one, omit to stop all. */
@@ -83,6 +89,9 @@ window.__dev = {
   updatePosition: () => window.__app?.__updatePosition(),
   bypassValidation: (valueFirst?: boolean) => window.__app?.__bypassValidation(valueFirst),
   help: () => window.__app?.__help(),
+  fixBest: () => window.__app?.__fixBest(),
+  refreshScore: () => window.__app?.__refreshScore(),
+  refreshPlayAgainStatus: () => window.__app?.__refreshPlayAgainStatus(),
   // ---------- Periodic logger ----------
   _timers: new Map<number, ReturnType<typeof setInterval>>(),
   _nextId: 1,

@@ -115,6 +115,8 @@ export class App {
       autoDepth: this.data.settings.autoDepth,
       autoPowerups: this.data.settings.autoPowerups,
       rngManip: this.data.settings.rngManip,
+      backtrackEnabled: this.data.settings.backtrackEnabled,
+      onBacktrack: (on) => this.onBacktrack(on),
       mode: this.mode,
       size: this.size,
       onTheme: (p) => this.onThemePref(p),
@@ -125,7 +127,13 @@ export class App {
       onRngManip: (on) => this.onRngManip(on),
       onMode: (m) => this.switchTo(this.size, m),
       onSize: (s) => this.switchTo(s, this.mode),
-      onClearAll: () => this.confirmClearAll(),
+      onClearAll: (isBacktrackPrompt?) => {
+        if (isBacktrackPrompt) {
+          this.showBacktrackDisableDialog();
+        } else {
+          this.confirmClearAll();
+        }
+      },
     });
 
     const logoBlock = document.createElement('div');
@@ -925,6 +933,48 @@ export class App {
     this.persist();
     this.popover.update({ rngManip: on });
     this.notify(on ? 'RNG Manipulation enabled' : 'RNG Manipulation disabled', Icons.dice);
+  }
+
+  // Backtrack toggle — enables/disables delta-encoded unlimited undo history.
+  private onBacktrack(on: boolean): void {
+    this.data.settings.backtrackEnabled = on;
+    this.persist();
+    this.popover.update({ backtrackEnabled: on });
+    console.log(`[dev] Backtrack ${on ? 'enabled' : 'disabled'}`);
+  }
+
+  /** Show dialog when user tries to disable backtrack with data present. */
+  private showBacktrackDisableDialog(): void {
+    const hasData = this.session.state.deltaHistory?.length ?? 0 > 0;
+    this.showOverlay({
+      title: 'Disable backtrack?',
+      danger: true,
+      message: hasData
+        ? 'You have backtrack data stored. Do you want to keep it or clear it?'
+        : 'Backtrack data will be cleared.',
+      actions: [
+        { label: 'Cancel', onClick: () => this.closeOverlay() },
+        ...(hasData
+          ? [
+              { label: 'Keep & Disable', onClick: () => this.disableBacktrack(false) },
+              { label: 'Clear & Disable', primary: true, onClick: () => this.disableBacktrack(true) },
+            ]
+          : [
+              { label: 'Disable', primary: true, onClick: () => this.disableBacktrack(false) },
+            ]),
+      ],
+    });
+  }
+
+  private disableBacktrack(clearCache: boolean): void {
+    if (clearCache && this.session.state.deltaHistory) {
+      this.session.state.deltaHistory.length = 0;
+    }
+    this.data.settings.backtrackEnabled = false;
+    this.persist();
+    this.popover.update({ backtrackEnabled: false });
+    this.closeOverlay();
+    console.log('[dev] Backtrack disabled' + (clearCache ? ' (cache cleared)' : ' (cache kept)'));
   }
 
   // ---------- Theme & settings ----------

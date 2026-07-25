@@ -74,6 +74,9 @@ export interface PopoverOpts {
   autoPowerups: boolean;
   /** RNG Manipulation: biases tile spawns toward the player via the same CSPRNG stream. */
   rngManip: boolean;
+  /** Backtrack: stores delta-encoded history for unlimited __undo. */
+  backtrackEnabled: boolean;
+  onBacktrack: (on: boolean) => void;
   mode: 'standard' | 'classic';
   size: number;
   onTheme: (pref: ThemePref) => void;
@@ -84,7 +87,7 @@ export interface PopoverOpts {
   onRngManip: (on: boolean) => void;
   onMode: (mode: 'standard' | 'classic') => void;
   onSize: (size: number) => void;
-  onClearAll: () => void;
+  onClearAll: (isBacktrackPrompt?: boolean) => void;
 }
 
 /** The settings (gear) button + dropdown popover. */
@@ -93,6 +96,7 @@ export class SettingsPopover {
   private popover: HTMLElement;
   private autoSwitch!: HTMLElement;
   private rngSwitch!: HTMLElement;
+  private backtrackSwitch!: HTMLElement;
   private powerupSwitch!: HTMLElement;
   private powerupRow!: HTMLElement;
   private themeSeg!: { el: HTMLElement; setActive: (v: string) => void; layout: () => void };
@@ -273,6 +277,31 @@ export class SettingsPopover {
     delayField.className = 'popover__field';
     delayField.append(delayLabel, this.delaySeg.el);
 
+    // Backtrack toggle — enables unlimited undo via delta-encoded history.
+    const backtrackRow = document.createElement('div');
+    backtrackRow.className = 'popover__row';
+    const backtrackLabel = document.createElement('span');
+    backtrackLabel.textContent = 'Backtrack';
+    backtrackLabel.style.fontWeight = '600';
+    backtrackLabel.style.fontSize = '13px';
+    const backtrackSwitch = document.createElement('button');
+    backtrackSwitch.type = 'button';
+    backtrackSwitch.className = 'switch' + (this.opts.backtrackEnabled ? ' is-on' : '');
+    backtrackSwitch.setAttribute('aria-label', 'Toggle backtrack (unlimited undo)');
+    backtrackSwitch.setAttribute('aria-pressed', String(this.opts.backtrackEnabled));
+    backtrackSwitch.addEventListener('click', () => {
+      if (this.opts.backtrackEnabled) {
+        // User wants to disable — prompt to clear or keep cache
+        this.popover.hidden = true;
+        this.open = false;
+        this.opts.onClearAll(true);  // signal: need clear-backtrack dialog
+      } else {
+        this.opts.onBacktrack(true);
+      }
+    });
+    this.backtrackSwitch = backtrackSwitch;
+    backtrackRow.append(backtrackLabel, backtrackSwitch);
+
     const powerupRow = document.createElement('div');
     powerupRow.className = 'popover__row';
     const powerupLabel = document.createElement('span');
@@ -289,7 +318,7 @@ export class SettingsPopover {
     this.powerupRow = powerupRow;
     powerupRow.append(powerupLabel, powerupSwitch);
 
-    engineGroup.append(autoRow, rngRow, depthField, delayField, powerupRow);
+    engineGroup.append(autoRow, rngRow, depthField, delayField, backtrackRow, powerupRow);
     this.applyPowerupVisibility();
 
     const divider2 = document.createElement('div');
@@ -363,6 +392,10 @@ export class SettingsPopover {
     if (opts.rngManip !== undefined) {
       this.rngSwitch.classList.toggle('is-on', opts.rngManip);
       this.rngSwitch.setAttribute('aria-pressed', String(opts.rngManip));
+    }
+    if (opts.backtrackEnabled !== undefined) {
+      this.backtrackSwitch.classList.toggle('is-on', opts.backtrackEnabled);
+      this.backtrackSwitch.setAttribute('aria-pressed', String(opts.backtrackEnabled));
     }
   }
 }

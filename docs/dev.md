@@ -37,19 +37,12 @@
 - [Developer Console](#developer-console)
   - [Access](#access)
   - [Console API Reference](#console-api-reference)
-    - [`__getStats()` — Full board/session/UI diagnostics](#__getstats--full-boardsessionui-diagnostics)
-    - [`__setBoard(values?)` — Set the board to an arbitrary position](#__setboardvalues--set-the-board-to-an-arbitrary-position)
-    - [`__evalPosition()` — Heuristic position evaluation](#__evalposition--heuristic-position-evaluation)
-    - [`__afkHighScore()` — Run AFK until best score exceeds 3x](#__afkhighscore--run-afk-until-best-score-exceeds-3x)
-    - [`__updateScore()` — Ensure score matches current position](#__updatescore--ensure-score-matches-current-position)
-    - [`__dev.log(fn, intervalMs?)` — Periodic logger](#__devlogfn-intervalms--periodic-logger)
-    - [`__dev.stopLog(id?)` — Stop periodic logger(s)](#__devstoplogid--stop-periodic-loggers)
-    - [`__dev.callNative(methodName, ...args)` — Call any built-in method by name](#__devcallnamemethodname-args--call-any-built-in-method-by-name)
   - [Internal Methods (App class)](#internal-methods-app-class)
   - [Global Window API](#global-window-api)
 - [Auto-Play Engine](#auto-play-engine)
 - [RNG & Spawn System](#rng--spawn-system)
 - [Persistence Model](#persistence-model)
+- [Backtrack (Unlimited Undo)](#backtrack-unlimited-undo)
 - [CSS Custom Properties](#css-custom-properties)
 
 ## Project Structure
@@ -149,7 +142,7 @@ Central type definitions. No implementation, only interfaces and type aliases:
 | `WIN_VALUE` | `2048` | Tile value that triggers win banner |
 | `SPAWN_PROB_4` | `0.1` | 10% chance a new tile is 4 (else 2) |
 | `POWERUP_QUOTA` | `{ undo: 2, swap: 2, delete: 2 }` | Starting charges per Standard game |
-| `MAX_HISTORY` | `16` | Bounded undo history count |
+| `MAX_HISTORY` | `16` | Bounded undo history count (powerup undo). Backtrack via delta history extends this to ~2000 steps when enabled in settings. |
 | `TILE_COLORS` | `Record<number, {bg, fg}>` | Per-value CSS variable references |
 | `SUPER_TILE` | `{ bg: var(--tile-super-bg), fg: var(--tile-super-fg) }` | Fallback for values above 2048 |
 | `tileColor(value)` | Returns `{bg, fg}` | Lookup helper; falls back to SUPER_TILE |
@@ -220,7 +213,7 @@ The transcript contains:
 | `canSwap` | `boolean` | Has charges + Standard mode |
 | `canDelete` | `boolean` | Has charges + Standard mode |
 
-**History:** Each `applyMove`, `swap`, and `deleteTile` pushes a `GameSnapshot` onto `history` before mutating state. `undo` pops it. History is capped at `MAX_HISTORY` (16) entries. Undo itself is not recorded in history (cannot be "undone").
+**History:** Each `applyMove`, `swap`, and `deleteTile` pushes a `GameSnapshot` onto `history` before mutating state. `undo` pops it. History is capped at `MAX_HISTORY` (16) entries for powerup undo. For unlimited backtrack, `deltaHistory` stores compressed delta-encoded steps (capped at 2000), enabled via the Backtrack toggle in settings. Undo itself is not recorded in history (cannot be "undone").
 
 ### Storage (`src/core/storage.ts`)
 
@@ -615,20 +608,21 @@ Deletes the tile at the given grid number. No powerup cost.
 __dev.deleteValue(2)  // Remove tile of value 2
 ```
 
-#### `__swap(r1, c1, r2, c2)` — Swap two tiles
+#### `__swap(r1, c1, r2, c2)` — Swap two tiles or move to empty cell
 
-Swaps the positions of two tiles. Both must be occupied. No powerup cost.
+Swaps two tiles, or moves a tile to an empty cell. At least one cell must be occupied. Does NOT consume a powerup charge and works in any mode.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `r1` | number | Row of first tile |
-| `c1` | number | Column of first tile |
-| `r2` | number | Row of second tile |
-| `c2` | number | Column of second tile |
+| `r1` | number | Row of first cell |
+| `c1` | number | Column of first cell |
+| `r2` | number | Row of second cell |
+| `c2` | number | Column of second cell |
 
-**Example:**
+**Examples:**
 ```javascript
-__dev.swap(0, 0, 3, 3)  // Swap tile at (0,0) with tile at (3,3)
+__dev.swap(0, 0, 3, 3)   // Swap two tiles
+__dev.swap(0, 0, 1, 2)   // Move tile from (0,0) to empty cell (1,2)
 ```
 
 #### `__addTiles(n?)` — Spawn free tiles
@@ -955,9 +949,9 @@ __dev.afkHighScore()  // → "[dev] __afkHighScore → starting AFK run"
                       //    "[dev] __afkHighScore → DONE  Games played: 12  Final best: 245760"
 ```
 
-#### `__updateScore()` — Ensure score matches current position
+#### `__refreshScore()` — Ensure score matches current position
 
-Validates the displayed score against the tile composition window and clamps it into the valid range if necessary. Updates UI and persists state.
+Validates the displayed score against the tile composition window and clamps it into the valid range if necessary. Updates UI and persists state. Also fixes NaN best scores if present.
 
 **Returns:** `{ from, to, min, max, changed, tileCount, scoreFromMerges }`
 
@@ -971,7 +965,7 @@ Validates the displayed score against the tile composition window and clamps it 
 
 **Example:**
 ```javascript
-__dev.updateScore()  // → { from: 0, to: 425984, min: 425984, max: 458752, changed: true, ... }
+__dev.refreshScore()  // → { from: 0, to: 425984, min: 425984, max: 458752, changed: true, ... }
 ```
 
 #### `__dev.log(fn, intervalMs?)` — Periodic logger
@@ -1057,6 +1051,24 @@ __dev.log(() => __dev.callNative('__getStats').board.maxTile, 3000)
 window.__app.__setBoard([[2,2],[2,2]])             // Direct App access
 ```
 
+#### `__fixBest()` — Recover from NaN best score
+
+If the best score has been corrupted to NaN (e.g., from passing a non-numeric value to `__score`), this method recovers it by setting best to the current score.
+
+**Example:**
+```javascript
+__dev.fixBest()  // → "[dev] __fixBest → recovered best from NaN to 15360"
+```
+
+#### `__refreshPlayAgainStatus()` — Toggle Play Again bar visibility
+
+Explicitly refreshes the Play Again bar below the board. Shows the bar only when the board is dead (no legal moves remain).
+
+**Example:**
+```javascript
+__dev.refreshPlayAgainStatus()  // → "[dev] __refreshPlayAgainStatus → visible (board is dead)"
+```
+
 ### Internal Methods (App class)
 
 The following methods are public members of the `App` class but are primarily intended for internal use. They are also accessible via `window.__app.methodName(...)`:
@@ -1073,7 +1085,7 @@ The following methods are public members of the `App` class but are primarily in
 |--------|------|-------------|
 | `window.__app` | `App \| undefined` | The live `App` instance. Access any public method: `__app.__undo()`, `__app.__delete(0,0)`, etc. |
 | `window.__runAutoLoop(score)` | `(score: number) => void` | Run the AI engine until the score reaches `score` |
-| `window.__dev` | `{ undo, delete, deleteValue, swap, addTiles, add, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, validate, updatePosition, bypassValidation, getStats, setBoard, evalPosition, afkHighScore, updateScore, log, stopLog, callNative, help }` | Namespaced developer console object |
+| `window.__dev` | `{ undo, delete, deleteValue, swap, addTiles, add, clear, fill, score, max, moves, cheat, fillPowerups, win, noDelay, nextNumber, nextLocation, validate, updatePosition, bypassValidation, getStats, setBoard, evalPosition, afkHighScore, refreshScore, fixBest, refreshPlayAgainStatus, log, stopLog, callNative, help }` | Namespaced developer console object |
 
 ## Auto-Play Engine
 
@@ -1202,7 +1214,22 @@ Data is loaded on:
 
 If the stored version doesn't match `VERSION` (1), or parsing fails, `load()` returns fresh data — effectively a soft reset.
 
-## CSS Custom Properties
+## Backtrack (Unlimited Undo)
+
+The **Backtrack** toggle in the settings popover enables delta-encoded unlimited undo history. When enabled, every move is recorded as a compressed delta (only changed cells) alongside an anchor snapshot, allowing `__undo(n)` to step back far beyond the 16-snapshot powerup undo limit — up to 2000 steps per size/mode combo.
+
+**How it works:**
+- Each move stores: one full `GameSnapshot` (anchor) + a list of cell changes (deltas)
+- Delta encoding means each step uses ~10% of the space of a full-grid clone
+- The backtrack cache is stored in `GameState.deltaHistory` and persisted with the game
+- When you start a new game, the old game's data stays in storage under its `size:mode` key
+- Resume becomes unavailable after the first move on a new game — at that point the previous game's backtrack cache is no longer accessible unless you switch back to that size/mode
+
+**Disabling backtrack:** When you toggle backtrack off, you're prompted to either keep the stored data or clear it. "Keep & Disable" preserves the delta history in storage; "Clear & Disable" removes it. If you later want to use backtrack again, re-enable the toggle and a fresh delta history starts building.
+
+**Persistence:** The `backtrackEnabled` setting is saved in localStorage and restored across page reloads and game switches.
+
+### Global Window API
 
 ### Button Styles
 
