@@ -1,5 +1,5 @@
-import type { AutoAction, Direction, EngineContext, GameMode, GameState } from '../core/types';
-import { DEFAULT_MODE, DEFAULT_SIZE } from '../core/constants';
+import type { AutoAction, Direction, EngineContext, GameMode, GameState, Powerups, Grid } from '../core/types';
+import { DEFAULT_MODE, DEFAULT_SIZE, MAX_HISTORY } from '../core/constants';
 import {
   type StoredData,
   clearGames,
@@ -9,11 +9,12 @@ import {
   save,
 } from '../core/storage';
 import { GameSession, restoreSession } from '../core/session';
-import { hasMoves } from '../core/grid';
+import { hasMoves, emptyCells, createGrid } from '../core/grid';
 import { move } from '../core/move';
 import {
   clampScoreToWindow,
   planBypass,
+  scoreWindow,
   validatePosition,
   type ValidationResult,
 } from '../core/validate';
@@ -1443,6 +1444,681 @@ export class App {
     };
   }
 
+  // ---------- New dev methods (getStats, setBoard, evalPosition, afkHighScore, updateScore) ----------
+
+  /**
+   * Comprehensive board / session / UI diagnostics dump.
+   * Returns an object with every relevant piece of information about the
+   * current position, engine config, RNG state, validation, and UI.
+   */
+  __getStats(): {
+    board: {
+      type: string;
+      size: number;
+      mode: GameMode;
+      fullness: number;
+      emptyCells: number;
+      tileCount: number;
+      maxTile: number;
+      minTile: number;
+      avgTile: number;
+      uniqueValues: number[];
+      valueDistribution: Record<string, number>;
+      bitboard: number[][];
+      tileIds: number[][];
+      log2Grid: number[][];
+      smoothness: number;
+      monotonicity: number;
+      openLines: number;
+      mergeablePairs: number;
+    };
+    scores: {
+      current: number;
+      best: number;
+      delta: number;
+      windowMin: number;
+      windowMax: number;
+      valid: boolean;
+      belowBy: number;
+      aboveBy: number;
+    };
+    position: {
+      over: boolean;
+      won: boolean;
+      wonAcknowledged: boolean;
+      moveCount: number;
+      hasLegalMoves: boolean;
+    };
+    rng: {
+      seed: number[] | null;
+      calls: number;
+      nextPredictedValue: number;
+      nextPredictedLocation: { row: number; col: number } | null;
+    };
+    engine: {
+      name: string;
+      autoOn: boolean;
+      autoSpeed: number;
+      autoDepth: number;
+      autoPowerups: boolean;
+      manipulate: boolean;
+    };
+    powerups: Powerups;
+    history: {
+      length: number;
+      maxHistory: number;
+      canUndo: boolean;
+    };
+    ui: {
+      armed: Armed;
+      pendingNew: boolean;
+      hasOverlay: boolean;
+      isSelecting: boolean;
+      theme: 'light' | 'dark';
+      lastScore: number;
+      lastBest: number;
+      gameOverBarVisible: boolean;
+    };
+    validation: {
+      valid: boolean;
+      score: number;
+      min: number;
+      max: number;
+      belowBy: number;
+      aboveBy: number;
+      tileCount: number;
+    };
+    timestamp: number;
+  } {
+    const s = this.session.state;
+    const g = s.grid;
+    const size = s.size;
+
+    // --- Board analysis ---
+    const values: number[] = [];
+    const dist: Record<string, number> = {};
+    let maxT = 0;
+    let minT = Infinity;
+    let sumT = 0;
+    let empties = 0;
+    let mergeable = 0;
+    let openLines = 0;
+    let smoothness = 0;
+    let monotonicity = 0;
+
+    for (let r = 0; r < g.length; r++) {
+      for (let c = 0; c < g[r].length; c++) {
+        const cell = g[r][c];
+        if (!cell) {
+          empties++;
+          continue;
+        }
+        values.push(cell.value);
+        const key = String(cell.value);
+        dist[key] = (dist[key] ?? 0) + 1;
+        if (cell.value > maxT) maxT = cell.value;
+        if (cell.value < minT) minT = cell.value;
+        sumT += cell.value;
+
+        // Smoothness: sum of log2 differences between adjacent tiles
+        const v = Math.log2(cell.value);
+        const right = g[r][c + 1];
+        if (right) smoothness += Math.abs(v - Math.log2(right.value));
+        const down = g[r + 1]?.[c];
+        if (down) smoothness += Math.abs(v - Math.log2(down.value));
+
+        // Mergeable pairs
+        if (c + 1 < g[r].length && g[r][c + 1] && g[r][c + 1]!.value === cell.value) mergeable++;
+        if (r + 1 < g.length && g[r + 1][c] && g[r + 1][c]!.value === cell.value) mergeable++;
+
+        // Open lines per row/col (consecutive empty cells at edges)
+        if (c === 0 && !g[r][c]) openLines++;
+        if (r === 0 && !g[r][c]) openLines++;
+      }
+    }
+
+    // Monotonicity: count decreasing adjacent pairs (rightward + downward)
+    for (let r = 0; r < g.length; r++) {
+      for (let c = 0; c < g[r].length; c++) {
+        const val = g[r][c]?.value ?? 0;
+        const right = g[r][c + 1]?.value ?? 0;
+        const down = g[r + 1]?.[c]?.value ?? 0;
+        if (val > right) monotonicity++;
+        if (val > down) monotonicity++;
+      }
+    }
+
+    const tileCount = values.length;
+    const avgTile = tileCount > 0 ? sumT / tileCount : 0;
+
+    // Bitboard: each cell mapped to a bit position (r * size + c)
+    const bitboard: number[][] = [];
+    const idGrid: number[][] = [];
+    const log2Grid: number[][] = [];
+    for (let r = 0; r < g.length; r++) {
+      const bbRow: number[] = [];
+      const idRow: number[] = [];
+      const l2Row: number[] = [];
+      for (let c = 0; c < g[r].length; c++) {
+        const cell = g[r][c];
+        bbRow.push(cell ? 1 << (r * size + c) : 0);
+        idRow.push(cell?.id ?? 0);
+        l2Row.push(cell ? Math.log2(cell.value) : 0);
+      }
+      bitboard.push(bbRow);
+      idGrid.push(idRow);
+      log2Grid.push(l2Row);
+    }
+
+    // --- Validation ---
+    const vr = validatePosition(g, s.score);
+
+    // --- RNG prediction ---
+    const seed = s.rngSeed ?? null;
+    const calls = s.rngCalls ?? 0;
+    let predValue = -1;
+    let predLoc: { row: number; col: number } | null = null;
+    if (seed && seed.length >= 8) {
+      const gen = new SecureRng(seed, calls);
+      const totalSpawns = 2 + s.moveCount;
+      for (let i = 0; i < totalSpawns; i++) { gen.next(); gen.next(); }
+      const roll = gen.next();
+      predValue = roll < SPAWN_PROB_4 ? 4 : 2;
+      const emptiesList = emptyCells(g);
+      if (emptiesList.length > 0) {
+        const posRoll = gen.next();
+        predLoc = emptiesList[Math.floor(posRoll * emptiesList.length)];
+      }
+    }
+
+    return {
+      board: {
+        type: `${size}x${size} ${s.mode}`,
+        size,
+        mode: s.mode,
+        fullness: tileCount / (size * size),
+        emptyCells: empties,
+        tileCount,
+        maxTile,
+        minTile: minT === Infinity ? 0 : minT,
+        avgTile,
+        uniqueValues: [...new Set(values)].sort((a, b) => a - b),
+        valueDistribution: dist,
+        bitboard,
+        tileIds: idGrid,
+        log2Grid,
+        smoothness,
+        monotonicity,
+        openLines,
+        mergeablePairs: mergeable,
+      },
+      scores: {
+        current: s.score,
+        best: s.best,
+        delta: s.score - s.best,
+        windowMin: vr.min,
+        windowMax: vr.max,
+        valid: vr.valid,
+        belowBy: vr.belowBy,
+        aboveBy: vr.aboveBy,
+      },
+      position: {
+        over: s.over,
+        won: s.won,
+        wonAcknowledged: s.wonAcknowledged,
+        moveCount: s.moveCount,
+        hasLegalMoves: hasMoves(g),
+      },
+      rng: {
+        seed,
+        calls,
+        nextPredictedValue: predValue,
+        nextPredictedLocation: predLoc,
+      },
+      engine: {
+        name: WasmEngine.name,
+        autoOn: this.autoOn,
+        autoSpeed: this.data.settings.autoSpeed,
+        autoDepth: this.data.settings.autoDepth,
+        autoPowerups: this.data.settings.autoPowerups,
+        manipulate: this.session.toContext().manipulate ?? false,
+      },
+      powerups: { ...s.powerups },
+      history: {
+        length: s.history.length,
+        maxHistory: MAX_HISTORY,
+        canUndo: this.session.canUndo,
+      },
+      ui: {
+        armed: this.armed,
+        pendingNew: this.pendingNew,
+        hasOverlay: !!this.currentOverlay,
+        isSelecting: this.board.isSelecting,
+        theme: currentResolved(),
+        lastScore: this.lastScore,
+        lastBest: this.lastBest,
+        gameOverBarVisible: this.gameOverBar.classList.contains('is-visible'),
+      },
+      validation: { ...vr },
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Set the board to an arbitrary position from a flat bitboard or values matrix.
+   *
+   * Signatures:
+   * | Call | Meaning |
+   * |------|---------|
+   * | `__setBoard(values)` | Set grid from `number[][]` (0 = empty). Uses existing size/mode. |
+   * | `__setBoard(size, values)` | Create a new game of given size with the values grid. |
+   * | `__setBoard(flatArray, size)` | Set from a flat `number[]` of length `size*size` (row-major). |
+   * | `__setBoard(flatArray)` | Set from flat array, inferring size from `Math.sqrt(length)`. |
+   */
+  __setBoard(
+    a: number[][] | number[] | number,
+    b?: number[][] | number,
+    c?: number,
+  ): void {
+    let grid: Grid;
+    let size: number;
+
+    if (Array.isArray(a)) {
+      // Flat array form: __setBoard(flat, size?)
+      const flat = a;
+      if (b !== undefined && typeof b === 'number') {
+        size = b;
+      } else {
+        const root = Math.sqrt(flat.length);
+        if (!Number.isInteger(root)) {
+          console.warn('[dev] __setBoard → flat array length must be a perfect square');
+          return;
+        }
+        size = root;
+      }
+      if (flat.length !== size * size) {
+        console.warn('[dev] __setBoard → flat array length', flat.length, '!= size²', size * size);
+        return;
+      }
+      grid = createGrid(size);
+      for (let i = 0; i < flat.length; i++) {
+        const row = Math.floor(i / size);
+        const col = i % size;
+        const val = flat[i];
+        if (typeof val === 'number' && val > 0) {
+          grid[row][col] = { id: freshDevId(), value: val };
+        }
+      }
+    } else if (Array.isArray(b)) {
+      // __setBoard(size, values)
+      size = a as number;
+      const vals = b as number[][];
+      if (vals.length !== size || vals.some((row) => row.length !== size)) {
+        console.warn(`[dev] __setBoard → values grid ${vals.length}x${vals[0]?.length} doesn't match size ${size}`);
+        return;
+      }
+      grid = createGrid(size);
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if (vals[r][c] > 0) {
+            grid[r][c] = { id: freshDevId(), value: vals[r][c] };
+          }
+        }
+      }
+    } else {
+      // __setBoard(values) — existing size
+      const vals = a as number[][];
+      size = this.size;
+      if (vals.length !== size || vals.some((row) => row.length !== size)) {
+        console.warn(`[dev] __setBoard → values grid ${vals.length}x${vals[0]?.length} doesn't match current size ${size}`);
+        return;
+      }
+      grid = createGrid(size);
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if (vals[r][c] > 0) {
+            grid[r][c] = { id: freshDevId(), value: vals[r][c] };
+          }
+        }
+      }
+    }
+
+    // Clamp game-over state since we're fabricating a position
+    const wasOver = this.session.state.over;
+    this.clearPendingNew();
+    this.session.state.grid = grid;
+    this.session.state.over = false;
+    this.recomputeOver();
+    this.saveCurrent();
+    this.board.setSize(size);
+    this.board.fullRender(grid);
+    this.updateUI();
+    this.handleWinOver();
+
+    if (wasOver) console.log(`[dev] __setBoard → restored from game-over (${size}x${size}, ${grid.flat().filter((v): v is Cell => v !== null).length} tiles)`);
+    else console.log(`[dev] __setBoard → set ${size}x${size} board with ${grid.flat().filter((v): v is Cell => v !== null).length} tiles`);
+  }
+
+  /**
+   * Evaluate the current position with heuristic scoring.
+   * Returns a comprehensive analysis including:
+   *   - Current score and best score
+   *   - Empty cell count and occupancy ratio
+   *   - Max tile and sum of all tiles
+   *   - Smoothness score (lower = better tile adjacency)
+   *   - Monotonicity score (higher = better ordered layout)
+   *   - Open line count
+   *   - Estimated highest possible tile achievable
+   *   - Estimated eval score (heuristic position quality)
+   *   - Predicted score range based on tile composition
+   *   - Calculation time in ms
+   */
+  __evalPosition(): {
+    calcTimeMs: number;
+    currentScore: number;
+    bestScore: number;
+    board: {
+      size: number;
+      mode: GameMode;
+      tileCount: number;
+      emptyCells: number;
+      fullness: number;
+      maxTile: number;
+      sumTiles: number;
+      uniqueValues: number[];
+      valueDistribution: Record<string, number>;
+    };
+    heuristics: {
+      emptyBonus: number;
+      smoothness: number;
+      monotonicity: number;
+      maxCorner: boolean;
+      singleCorner: boolean;
+      mergeablePairs: number;
+      openLines: number;
+      compositeScore: number;
+    };
+  } {
+    const t0 = performance.now();
+    const s = this.session.state;
+    const g = s.grid;
+    const size = s.size;
+
+    const values: number[] = [];
+    const dist: Record<string, number> = {};
+    let maxT = 0;
+    let sumT = 0;
+    let mergeable = 0;
+    let openLines = 0;
+    let smoothness = 0;
+    let mono = 0;
+
+    for (let r = 0; r < g.length; r++) {
+      for (let c = 0; c < g[r].length; c++) {
+        const cell = g[r][c];
+        if (!cell) continue;
+        values.push(cell.value);
+        const key = String(cell.value);
+        dist[key] = (dist[key] ?? 0) + 1;
+        if (cell.value > maxT) maxT = cell.value;
+        sumT += cell.value;
+
+        const v = Math.log2(cell.value);
+        const right = g[r][c + 1];
+        if (right) smoothness += Math.abs(v - Math.log2(right.value));
+        const down = g[r + 1]?.[c];
+        if (down) smoothness += Math.abs(v - Math.log2(down.value));
+
+        if (c + 1 < g[r].length && g[r][c + 1] && g[r][c + 1]!.value === cell.value) mergeable++;
+        if (r + 1 < g.length && g[r + 1][c] && g[r + 1][c]!.value === cell.value) mergeable++;
+
+        if (c === 0 && !g[r][c]) openLines++;
+        if (r === 0 && !g[r][c]) openLines++;
+
+        const val = cell.value;
+        const rightV = g[r][c + 1]?.value ?? 0;
+        const downV = g[r + 1]?.[c]?.value ?? 0;
+        if (val > rightV) mono++;
+        if (val > downV) mono++;
+      }
+    }
+
+    const tileCount = values.length;
+    const totalCells = size * size;
+    const emptyCells = totalCells - tileCount;
+
+    // Heuristic weights (tuned for 2048 strategy)
+    const W_EMPTY = 1.0;
+    const W_SMOOTH = 0.5;
+    const W_MONO = 0.3;
+    const W_MERGE = 1.0;
+    const W_MAX_CORNER = 2.0;
+    const W_SINGLE_CORNER = 0.5;
+
+    // Check if max tile is in a corner
+    let maxCorner = false;
+    let singleCorner = false;
+    if (tileCount > 0) {
+      const corners = [[0, 0], [0, size - 1], [size - 1, 0], [size - 1, size - 1]];
+      for (const [cr, cc] of corners) {
+        if (g[cr][cc] && g[cr][cc]!.value === maxT) { maxCorner = true; break; }
+      }
+      singleCorner = maxCorner;
+    }
+
+    // Composite score
+    const composite =
+      emptyCells * W_EMPTY
+      - smoothness * W_SMOOTH
+      + mono * W_MONO
+      + mergeable * W_MERGE
+      + (maxCorner ? W_MAX_CORNER : 0)
+      + (singleCorner ? W_SINGLE_CORNER : 0);
+
+    // Estimate highest possible tile: log2(maxT) + estimated merges possible
+    const estMerges = emptyCells + mergeable;
+    const estHighestTile = Math.pow(2, Math.log2(maxT) + Math.floor(estMerges / 2));
+
+    // Predicted score range from tile composition
+    const win = scoreWindow(g);
+
+    const calcTimeMs = parseFloat(((performance.now() - t0).toFixed(3)));
+
+    const result = {
+      calcTimeMs,
+      currentScore: s.score,
+      bestScore: s.best,
+      board: {
+        size,
+        mode: s.mode,
+        tileCount,
+        emptyCells,
+        fullness: tileCount / totalCells,
+        maxTile: maxT,
+        sumTiles: sumT,
+        uniqueValues: [...new Set(values)].sort((a, b) => a - b),
+        valueDistribution: dist,
+      },
+      heuristics: {
+        emptyBonus: emptyCells * W_EMPTY,
+        smoothness,
+        monotonicity: mono,
+        maxCorner,
+        singleCorner,
+        mergeablePairs: mergeable,
+        openLines,
+        compositeScore: composite,
+      },
+    };
+
+    console.log(
+      `%c[dev] __evalPosition%c`,
+      'font-weight:bold',
+      '',
+      `\n  Score: ${s.score} / Best: ${s.best}`,
+      `\n  Board: ${size}x${size} | Tiles: ${tileCount} | Empty: ${emptyCells}`,
+      `\n  Max tile: ${maxT} | Sum: ${sumT}`,
+      `\n  Smoothness: ${smoothness.toFixed(2)} | Monotonicity: ${mono}`,
+      `\n  Mergeable pairs: ${mergeable} | Open lines: ${openLines}`,
+      `\n  Max in corner: ${maxCorner}`,
+      `\n  Composite score: ${composite.toFixed(2)}`,
+      `\n  Est. highest possible tile: ~${estHighestTile.toLocaleString()}`,
+      `\n  Score window: [${win.min}, ${win.max}] (valid: ${s.score >= win.min && s.score <= win.max})`,
+      `\n  Calc time: ${calcTimeMs}ms`,
+    );
+
+    return result;
+  }
+
+  /**
+   * Run the AI engine AFK until the high score exceeds itself 3 consecutive times.
+   *
+   * Behavior:
+   *   - Sets autoSpeed to 0 (no delay, maximum speed)
+   *   - Uses current autoDepth and manipulate settings
+   *   - Starts a new game if needed
+   *   - Loops until best score has been beaten by at least 3x in a row
+   *   - Reports progress and final stats
+   *
+   * This is fire-and-forget: it runs asynchronously and notifies via console.
+   */
+  async __afkHighScore(): Promise<void> {
+    const s = this.session.state;
+    const initialBest = s.best;
+    const depth = this.data.settings.autoDepth;
+    const manipulate = this.data.settings.rngManip;
+
+    console.log(`[dev] __afkHighScore → starting AFK run`);
+    console.log(`[dev]   depth=${depth}, manipulate=${manipulate}, initialBest=${initialBest}`);
+
+    // Set zero delay for max speed
+    const prevSpeed = this.data.settings.autoSpeed;
+    this.data.settings.autoSpeed = 0;
+    this.persist();
+    this.popover.update({ autoSpeed: 0 });
+
+    let exceedCount = 0;
+    let currentBest = initialBest;
+    let gamesPlayed = 0;
+    const startTime = Date.now();
+
+    // We run in a loop: play until game over, check if best exceeded 3x, repeat
+    const loop = async () => {
+      if (this.session.state.over || this.session.state.moveCount === 0) {
+        this.newGame();
+        gamesPlayed++;
+      }
+
+      // Start auto-play
+      this.data.settings.autoOn = true;
+      this.data.settings.autoDepth = depth;
+      this.data.settings.rngManip = manipulate;
+      this.startAuto();
+
+      // Wait for the engine to finish (game over or stop)
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (!this.autoOn || this.session.state.over) {
+            resolve();
+            return;
+          }
+          setTimeout(check, 100);
+        };
+        check();
+      });
+
+      const finishedBest = this.session.state.best;
+      if (finishedBest > currentBest) {
+        currentBest = finishedBest;
+        exceedCount = 1;
+        console.log(`[dev] __afkHighScore → new best: ${currentBest} (game #${gamesPlayed})`);
+      } else if (finishedBest >= currentBest) {
+        // Same best counts toward the 3x threshold
+        exceedCount++;
+        console.log(`[dev] __afkHighScore → best maintained: ${currentBest} (exceedCount=${exceedCount}/3)`);
+      } else {
+        // Score dropped below threshold — reset counter
+        exceedCount = 0;
+      }
+
+      if (exceedCount >= 3) {
+        // Done!
+        this.stopAuto();
+        this.data.settings.autoSpeed = prevSpeed;
+        this.persist();
+        this.popover.update({ autoSpeed: prevSpeed });
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(
+          `%c[dev] __afkHighScore → DONE%c`,
+          'font-weight:bold;color:#4ade80',
+          '',
+          `  Games played: ${gamesPlayed}`,
+          `  Final best: ${currentBest}`,
+          `  Time: ${elapsed}s`,
+          `  Exceeded 3x threshold ✓`,
+        );
+        this.notify(`AFK High Score: ${currentBest} in ${elapsed}s`, Icons.engine);
+        return;
+      }
+
+      // Continue: new game and loop
+      if (!this.session.state.over) {
+        this.newGame();
+      }
+      gamesPlayed++;
+      setTimeout(loop, 0);
+    };
+
+    loop();
+  }
+
+  /**
+   * Ensure the score correctly matches the latest position.
+   * Recalculates the score window from the board tiles and clamps the
+   * displayed score into the valid range. Updates UI and persists state.
+   *
+   * Returns the adjustment details.
+   */
+  __updateScore(): {
+    from: number;
+    to: number;
+    min: number;
+    max: number;
+    changed: boolean;
+    tileCount: number;
+    scoreFromMerges: number;
+  } {
+    const s = this.session.state;
+    const g = s.grid;
+    const originalScore = s.score;
+
+    // Use the validation window as the source of truth for score consistency
+    const vr = validatePosition(g, s.score);
+    const clamped = clampScoreToWindow(g, s.score);
+
+    if (clamped.to !== clamped.from) {
+      s.score = clamped.to;
+      s.best = Math.max(s.best, clamped.to);
+      this.clearPendingNew();
+      this.saveCurrent();
+      this.updateUI();
+      console.log(`[dev] __updateScore -> score adjusted ${originalScore} → ${clamped.to} (window [${clamped.min}, ${clamped.max}])`);
+    } else {
+      console.log(`[dev] __updateScore -> score ${originalScore} already valid (window [${clamped.min}, ${clamped.max}])`);
+    }
+
+    return {
+      from: originalScore,
+      to: s.score,
+      min: clamped.min,
+      max: clamped.max,
+      changed: clamped.to !== clamped.from,
+      tileCount: vr.tileCount,
+      scoreFromMerges: clamped.to,
+    };
+  }
+
+
   /** Print usage info for the developer console. */
   __help(): void {
     const lines = [
@@ -1474,6 +2150,11 @@ export class App {
       '__validate()              Check score vs tile window (valid?)',
       '__updatePosition()        Clamp score into the valid window',
       '__bypassValidation(vf?)   Remove minimal tiles to make position valid (vf=true: value-first)',
+      '__getStats()              Full board/session/UI diagnostics dump',
+      '__setBoard(vals?)         Set board from values grid or flat array',
+      '__evalPosition()          Heuristic position evaluation & analysis',
+      '__afkHighScore()          Auto-run AFK until best exceeds 3x',
+      '__updateScore()           Ensure score matches current position',
       '__help()                  Show this message',
     ];
     console.log(...lines);
