@@ -7,9 +7,9 @@
     </p>
 </div>
 
-Benchmark results for the Rust expectimax engine (`engine/src/lib.rs`), compiled to WASM and run in the browser via a dedicated Web Worker. All timings measured on a single core, release build (`--release`), averaged over 20 decisions per configuration.
+Benchmark results for the Rust expectimax engine (`engine/src/lib.rs`), compiled to WASM and run in a Web Worker.
 
----
+All timings are single-core, release build (`--release`), averaged over 20 decisions per configuration.
 
 ## Test Configurations
 
@@ -20,17 +20,15 @@ Benchmark results for the Rust expectimax engine (`engine/src/lib.rs`), compiled
 | **Search depth** | Auto (adaptive) / Basic (d=2) / Medium (d=4) / Advanced (d=6) |
 | **AI mode** | Plain expectimax / Predictive (RNG manipulation) / Full action (with power-ups) |
 
-### Board states used
+### Board states
 
-- **Opening**: 2–3 tiles placed near the corner; most cells empty. Adaptive depth drops to ~1–2.
-- **Danger**: Nearly full board with high-value tiles arranged along a snake path; 2 cells empty. Adaptive depth ramps up aggressively.
-- **Stuck**: 4×4 board with alternating 2/4 pattern and zero legal moves — forces power-up evaluation in `suggest_action_for`.
-
----
+- **Opening** — 2–3 tiles near the corner, mostly empty. Adaptive depth drops to ~1–2.
+- **Danger** — Nearly full board, high tiles along a snake path, 2 cells empty. Adaptive depth ramps up hard.
+- **Stuck** — 4×4 board, alternating 2/4 pattern, no legal moves. Forces power-up evaluation in `suggest_action_for`.
 
 ## Phase 1: Directional Move Speed (Plain Expectimax)
 
-Time per AI decision when only choosing a direction (up/down/left/right). No power-up evaluation.
+Time per decision when only picking a direction. No power-up evaluation.
 
 | Size | State | Depth | μs/decision | vs opening |
 |------|-------|-------|-------------:|-----------:|
@@ -53,16 +51,14 @@ Time per AI decision when only choosing a direction (up/down/left/right). No pow
 
 ### Key observations
 
-- **The 5×5 danger zone is the worst case by far** — adaptive depth ramps to ~8 on nearly-full 5×5 boards, producing trees of millions of nodes. At 5.9 ms per decision, this is the single slowest configuration tested.
-- **4×4 stays well bounded** — even in danger, the node budget (150k) and capped branching (MAX_CELLS=6) keep decisions under 2 ms.
-- **Larger boards stay fast** — 6×6 and 8×8 use shallower adaptive depths (base 2 and 1 respectively), so they never explode.
+- **5×5 danger is the worst case.** Adaptive depth ramps to ~8 on nearly-full boards, producing million-node trees. At 5.9 ms, it's the slowest configuration tested.
+- **4×4 stays bounded.** Even in danger, the 150k node budget and capped branching (MAX_CELLS=6) keep decisions under 2 ms.
+- **Larger boards stay fast.** 6×6 and 8×8 use shallower base depths (2 and 1), so they never explode.
 - **Depth has diminishing returns past d=2** on 4×4 danger — the node budget caps expansion regardless of requested depth.
-
----
 
 ## Phase 2: Power-Up Evaluation (Full Action Search)
 
-Time per AI decision when `suggest_action_for` evaluates delete and swap candidates. Tested on a stuck board (no legal moves, so power-up search is always triggered).
+Time per decision when `suggest_action_for` evaluates delete and swap candidates. Tested on a stuck board, so power-up search always triggers.
 
 | Size | Depth | μs/decision | vs plain move |
 |------|-------|-------------:|--------------:|
@@ -82,25 +78,23 @@ Time per AI decision when `suggest_action_for` evaluates delete and swap candida
 | 8×8 | basic (d=2) | 1,245 | 415× |
 | 8×8 | medium (d=4) | 21,576 | 7,192× |
 
-### What's happening here
+### What's happening
 
-`Engine::suggest_action_for` evaluates three categories of candidate:
+`Engine::suggest_action_for` evaluates three candidate types:
 
-1. **Directional moves** — 4 expectimax searches (one per direction)
-2. **Delete candidates** — O(n²) searches, one per occupied cell
-3. **Swap candidates** — Up to 48 sampled pairs, each with a full expectimax search
+1. **Directional moves** — 4 searches, one per direction.
+2. **Delete candidates** — O(n²) searches, one per occupied cell.
+3. **Swap candidates** — up to 48 sampled pairs, each with a full search.
 
-At `auto` or `basic(d=2)` depth, each individual search is cheap (~10–50 μs), so the total stays under 1.4 ms. At `medium(d=4)`, each search balloons to ~400–500 μs, and with dozens of candidates the total hits 20+ ms.
+At `auto` or `basic (d=2)`, each search is cheap (~10–50 μs), so totals stay under 1.4 ms. At `medium (d=4)`, each search balloons to ~400–500 μs, and dozens of candidates push the total past 20 ms.
 
 ### Implications for the Web Worker
 
-The worker has a 2-second hard timeout per decision. Even at d=4 on a stuck board, the worst case (~22 ms) is well within budget. But on a larger board with more occupied cells, this could approach the limit — which is why the default AI mode in the browser uses `depth=0` (auto) rather than fixed medium/advanced.
-
----
+The worker has a 2-second timeout per decision. Even the worst case here (~22 ms) is well within budget. But a larger board with more occupied cells could push closer to the limit — which is why the browser defaults to `depth=0` (auto) instead of fixed medium/advanced.
 
 ## Phase 3: Predictive Search (RNG Manipulation Mode)
 
-Compares plain expectimax against the deterministic ("cheat") variant that peeks the ChaCha20 spawn stream. The predictive search collapses each chance node from up to 12 branches (6 empty cells × {2, 4}) down to exactly 1, so the same node budget reaches much deeper plies.
+Compares plain expectimax against the deterministic "cheat" variant, which peeks the ChaCha20 spawn stream. Predictive search collapses each chance node from up to 12 branches (6 empty cells × {2, 4}) down to exactly 1, so the same node budget reaches much deeper plies.
 
 | Size | State | Plain μs | Predictive μs | Speedup |
 |------|-------|---------:|--------------:|--------:|
@@ -117,17 +111,15 @@ Compares plain expectimax against the deterministic ("cheat") variant that peeks
 
 ### Why this matters
 
-Turning RNG Manipulation **on** doesn't slow down the AI — it makes it significantly faster. The predictive search is the same algorithm but with a deterministic chance node instead of probabilistic branching. On the 5×5 danger case (the slowest plain configuration), manipulation brings it from 5.3 ms down to 77 μs.
+Turning RNG manipulation **on** doesn't slow the AI down — it speeds it up. Predictive search is the same algorithm, just with a deterministic chance node instead of probabilistic branching. On 5×5 danger (the slowest plain case), manipulation drops 5.3 ms to 77 μs.
 
-This also means the `suggest_move_det` / `suggest_action_det` WASM entry points are cheaper to call than their plain counterparts, which is beneficial since they're called every auto-play tick when manipulation is enabled.
-
----
+This also means `suggest_move_det` / `suggest_action_det` are cheaper than their plain counterparts — useful, since they're called every auto-play tick when manipulation is on.
 
 ## Configuration Reference
 
 ### Adaptive depth ramp
 
-The engine automatically adjusts search depth based on how full the board is:
+The engine adjusts search depth based on how full the board is:
 
 | Empty ratio | Depth adjustment | Typical range |
 |-------------|-----------------:|---------------|
@@ -170,21 +162,19 @@ Base depth by board size:
 | Chance nodes (plain) | Up to MAX_CELLS=6 empty cells × 2 values = 12 branches |
 | Chance nodes (predictive) | Exactly 1 branch (stream peek) |
 
----
-
 ## How to Run
 
 ```bash
-# Full benchmark (all sizes, all phases)
+# full benchmark
 cd engine
 cargo run --release --bin bench-speed
 
-# Single board size
+# single board size
 cargo run --release --bin bench-speed -- 4
 
-# Score benchmark (full games, existing binary)
+# score benchmark
 cargo run --release --bin bench           # 20 games
 cargo run --release --bin bench -- 50     # 50 games
 ```
 
-All benchmarks require `--release` — debug builds are 10–50× slower and not representative of real usage.
+All benchmarks require `--release`. Debug builds are 10–50× slower and not representative.

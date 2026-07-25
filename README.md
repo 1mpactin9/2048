@@ -13,9 +13,9 @@ A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game 
 
 | Tool | Why | Minimum version |
 |------|-----|-----------------|
-| [Node.js](https://nodejs.org) | Package manager & dev server | 18+ |
-| [Rust + Cargo](https://rustup.rs) | Compile the WASM game engine | Latest stable |
-| [wasm-pack](https://rustwasm.github.io/wasm-pack/) | Bridge Rust → WebAssembly | latest |
+| [Node.js](https://nodejs.org) | Package manager & dev | 18+ |
+| [Rust + Cargo](https://rustup.rs) | Compile the game engine | Latest stable |
+| [wasm-pack](https://rustwasm.github.io/wasm-pack/) | Bridge Rust > webAssembly | latest |
 
 Install Rust + Cargo first, then:
 
@@ -27,7 +27,7 @@ cargo install wasm-pack
 
 ```bash
 npm install          # install dependencies
-npm run dev          # start the dev server at http://localhost:5173
+npm run dev          # start the dev server
 ```
 
 ## Build
@@ -35,29 +35,23 @@ npm run dev          # start the dev server at http://localhost:5173
 Run this sequence to start from a completely clean state:
 
 ```bash
-# 1. Remove all generated artifacts
+# remove generated artifacts
 rm -rf node_modules dist engine/pkg/engine2048_bg.wasm engine/pkg/engine2048.js engine/pkg/engine2048.d.ts
 
-# 2. Reinstall dependencies
+# reinstall dependencies
 npm install
 
-# 3. Full build — compiles WASM, type-checks, then bundles
+# full build
 npm run build
 ```
-
-This does three things in order:
-
-1. **`npm run build:wasm`** — Compiles `engine/` (Rust) into a `.wasm` binary via `wasm-pack`, targeting the web. Output lands in `engine/pkg/`.
-2. **`tsc --noEmit`** — Type-checks all TypeScript with zero emit. Catches errors before bundling.
-3. **`vite build`** — Bundles the app (HTML, CSS, JS, WASM) into `dist/` for production.
 
 ## Verification
 
 ```bash
-# Run the test suite
+# run test suite
 npm test
 
-# Build and preview the production bundle locally
+# build and preview
 npm run build
 npm run preview
 ```
