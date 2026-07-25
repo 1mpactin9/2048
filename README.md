@@ -59,7 +59,7 @@ npm run preview
 In the preview, check:
 
 - **Gameplay** — tiles merge correctly on swipe / arrow-key input
-- **WASM engine** — AI move suggestion (if exposed) runs without console errors
+- **WASM engine** — Rust expectimax AI runs in a Web Worker without console errors
 - **Theme toggle** — light/dark mode switches cleanly
 - **Responsive** — board scales on different viewport sizes
 

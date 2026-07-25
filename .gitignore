@@ -1,6 +1,5 @@
 dist/
 node_modules/
-play2048.co/
 .claude/
-# wasm-pack output (built from engine/ via `npm run build:wasm`).
+.codegraph/
 engine/pkg/

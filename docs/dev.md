@@ -494,6 +494,7 @@ Test suite lives in `tests/` and runs with Vitest in Node environment:
 |-----------|----------|
 | `tests/core.test.ts` | Grid operations, spawn logic, move resolution, canMove, hasMoves, maxTile, hasTile, grid helpers |
 | `tests/predict.test.ts` | ChaCha20 RNG predictability, spawn prediction accuracy, manipulation mode behavior |
+| `tests/validate.test.ts` | Score window validation, position consistency checks |
 
 Run with `npm test` or `npm run test:watch`.
 
