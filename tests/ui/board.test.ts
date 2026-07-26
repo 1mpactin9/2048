@@ -5,11 +5,14 @@ import { BoardRenderer } from "@/ui/board";
 import type { MoveTranscript } from "@/core/types";
 
 // Mock ResizeObserver for jsdom
-vi.stubGlobal("ResizeObserver", class ResizeObserver {
-  observe = vi.fn();
-  disconnect = vi.fn();
-  unobserve = vi.fn();
-});
+vi.stubGlobal(
+  "ResizeObserver",
+  class ResizeObserver {
+    observe = vi.fn();
+    disconnect = vi.fn();
+    unobserve = vi.fn();
+  },
+);
 
 describe("BoardRenderer — constructor", () => {
   let container: HTMLElement;
@@ -170,9 +173,7 @@ describe("BoardRenderer — animateMove", () => {
     const transcript: MoveTranscript = {
       moved: true,
       gained: 4,
-      moves: [
-        { id: 1, fromRow: 0, fromCol: 0, toRow: 0, toCol: 0 },
-      ],
+      moves: [{ id: 1, fromRow: 0, fromCol: 0, toRow: 0, toCol: 0 }],
       spawned: { id: 99, value: 4, row: 3, col: 3 },
     };
     board.animateMove(transcript);

@@ -56,7 +56,11 @@ describe("PlaceholderEngine", () => {
     ]);
     for (let i = 0; i < 20; i++) {
       const action = PlaceholderEngine.chooseAction(ctx);
-      if (typeof action === "object" && "kind" in action && action.kind !== "stop") {
+      if (
+        typeof action === "object" &&
+        "kind" in action &&
+        action.kind !== "stop"
+      ) {
         expect(action.kind).toBe("move");
       }
     }

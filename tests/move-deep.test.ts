@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { Grid } from "../src/core/types";
 import { move, canMove } from "../src/core/move";
-import { cloneGrid, gridsEqual, createGrid, gridFromValues, gridToValues } from "../src/core/grid";
+import {
+  cloneGrid,
+  gridsEqual,
+  createGrid,
+  gridFromValues,
+  gridToValues,
+} from "../src/core/grid";
 
 /** Helper: build a square grid from row values. */
 function makeGrid(rows: number[][]): Grid {
@@ -10,7 +16,12 @@ function makeGrid(rows: number[][]): Grid {
 
 describe("Transcript correctness — merged tiles", () => {
   it("merged tile has mergedInto pointing to survivor id", () => {
-    const g = makeGrid([[2, 0, 2, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+    const g = makeGrid([
+      [2, 0, 2, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     const { transcript } = move(g, "left");
     const absorbed = transcript.moves.find((m) => m.mergedInto !== undefined);
     const survivor = transcript.moves.find((m) => m.newValue !== undefined);
@@ -20,7 +31,12 @@ describe("Transcript correctness — merged tiles", () => {
   });
 
   it("survivor tile has newValue set", () => {
-    const g = makeGrid([[2, 0, 2, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+    const g = makeGrid([
+      [2, 0, 2, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     const { transcript } = move(g, "left");
     const survivor = transcript.moves.find((m) => m.newValue !== undefined);
     expect(survivor).toBeDefined();
@@ -28,7 +44,12 @@ describe("Transcript correctness — merged tiles", () => {
   });
 
   it("non-merged survivors have neither mergedInto nor newValue", () => {
-    const g = makeGrid([[2, 0, 4, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+    const g = makeGrid([
+      [2, 0, 4, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     const { transcript } = move(g, "left");
     const nonMerged = transcript.moves.filter(
       (m) => m.mergedInto === undefined && m.newValue === undefined,
@@ -38,14 +59,24 @@ describe("Transcript correctness — merged tiles", () => {
   });
 
   it("gained equals sum of merged tile values", () => {
-    const g = makeGrid([[2, 2, 4, 4], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+    const g = makeGrid([
+      [2, 2, 4, 4],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     const { transcript } = move(g, "left");
     // Merge 2+2=4 and 4+4=8, gained = 4 + 8 = 12
     expect(transcript.gained).toBe(12);
   });
 
   it("moves array has entries for original tiles plus survivors", () => {
-    const g = makeGrid([[2, 2, 4, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+    const g = makeGrid([
+      [2, 2, 4, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     const { transcript } = move(g, "left");
     // Two 2s merge into one, 4 slides: 3 move entries
     expect(transcript.moves.length).toBe(3);
@@ -125,13 +156,23 @@ describe("All four directions on complex boards", () => {
 
 describe("Edge cases — cascading and special patterns", () => {
   it("three identical tiles: first pair merges, third slides", () => {
-    const g = makeGrid([[2, 2, 2, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+    const g = makeGrid([
+      [2, 2, 2, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     const { grid: out } = move(g, "left");
     expect(gridToValues(out)[0]).toEqual([4, 2, 0, 0]);
   });
 
   it("four identical tiles: two pairs merge independently", () => {
-    const g = makeGrid([[2, 2, 2, 2], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+    const g = makeGrid([
+      [2, 2, 2, 2],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     const { grid: out } = move(g, "left");
     expect(gridToValues(out)[0]).toEqual([4, 4, 0, 0]);
   });
@@ -201,7 +242,12 @@ describe("canMove thoroughness", () => {
   });
 
   it("true when any direction changes board", () => {
-    const g = makeGrid([[2, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+    const g = makeGrid([
+      [2, 2, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     expect(canMove(g, "left")).toBe(true);
   });
 
@@ -220,14 +266,20 @@ describe("canMove thoroughness", () => {
 
 describe("cloneGrid independence", () => {
   it("mutation of clone does not affect original", () => {
-    const g = makeGrid([[2, 4], [8, 16]]);
+    const g = makeGrid([
+      [2, 4],
+      [8, 16],
+    ]);
     const cloned = cloneGrid(g);
     cloned[0][0] = null;
     expect(g[0][0]?.value).toBe(2);
   });
 
   it("deep copy: nested cell mutation doesn't affect original", () => {
-    const g = makeGrid([[2, 4], [8, 16]]);
+    const g = makeGrid([
+      [2, 4],
+      [8, 16],
+    ]);
     const cloned = cloneGrid(g);
     cloned[0][0]!.value = 1024;
     expect(g[0][0]?.value).toBe(2);
@@ -236,8 +288,14 @@ describe("cloneGrid independence", () => {
 
 describe("gridsEqual", () => {
   it("true for identical grids", () => {
-    const g1 = makeGrid([[2, 4], [8, 16]]);
-    const g2 = makeGrid([[2, 4], [8, 16]]);
+    const g1 = makeGrid([
+      [2, 4],
+      [8, 16],
+    ]);
+    const g2 = makeGrid([
+      [2, 4],
+      [8, 16],
+    ]);
     expect(gridsEqual(g1, g2)).toBe(true);
   });
 

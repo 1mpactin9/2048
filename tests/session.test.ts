@@ -1,10 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { GameMode, GameState } from "../src/core/types";
 import { POWERUP_QUOTA, MAX_HISTORY } from "../src/core/constants";
-import {
-  gridFromValues,
-  gridToValues,
-} from "../src/core/grid";
+import { gridFromValues, gridToValues } from "../src/core/grid";
 import { GameSession, restoreSession } from "../src/core/session";
 
 // --- Helpers (mirrors core.test.ts to keep files self-contained) ---
@@ -25,7 +22,9 @@ function makeSession(
   const grid = gridFromValues(values);
   const size = values.length;
   const powerups =
-    mode === "standard" ? { ...POWERUP_QUOTA } : { undo: 0, swap: 0, delete: 0 };
+    mode === "standard"
+      ? { ...POWERUP_QUOTA }
+      : { undo: 0, swap: 0, delete: 0 };
   const state: GameState = {
     size,
     mode,
@@ -318,7 +317,12 @@ describe("GameSession — undo", () => {
     ]);
     // Push many moves
     let moveCount = 0;
-    const dirs: Array<"up" | "down" | "left" | "right"> = ["up", "down", "left", "right"];
+    const dirs: Array<"up" | "down" | "left" | "right"> = [
+      "up",
+      "down",
+      "left",
+      "right",
+    ];
     while (moveCount < MAX_HISTORY && !s.state.over) {
       let moved = false;
       for (const dir of dirs) {
@@ -367,8 +371,7 @@ describe("GameSession — swap", () => {
     // Find two occupied cells
     let occupied: [number, number][] = [];
     for (let r = 0; r < g.length; r++)
-      for (let c = 0; c < g[r].length; c++)
-        if (g[r][c]) occupied.push([r, c]);
+      for (let c = 0; c < g[r].length; c++) if (g[r][c]) occupied.push([r, c]);
     if (occupied.length >= 2) {
       s.swap(occupied[0][0], occupied[0][1], occupied[1][0], occupied[1][1]);
       expect(s.state.powerups.swap).toBe(1);
@@ -403,8 +406,7 @@ describe("GameSession — swap", () => {
     const g = s.state.grid;
     let occupied: [number, number][] = [];
     for (let r = 0; r < g.length; r++)
-      for (let c = 0; c < g[r].length; c++)
-        if (g[r][c]) occupied.push([r, c]);
+      for (let c = 0; c < g[r].length; c++) if (g[r][c]) occupied.push([r, c]);
     if (occupied.length >= 2) {
       s.swap(occupied[0][0], occupied[0][1], occupied[1][0], occupied[1][1]);
       expect(s.state.history.length).toBe(histBefore + 1);
@@ -541,7 +543,10 @@ describe("GameSession — restoreSession", () => {
   });
 
   it("initializes deltaHistory if missing", () => {
-    const grid = gridFromValues([[2, 0], [0, 4]]);
+    const grid = gridFromValues([
+      [2, 0],
+      [0, 4],
+    ]);
     const state: GameState = {
       size: 2,
       mode: "standard",
@@ -567,7 +572,12 @@ describe("GameSession — state consistency", () => {
     const s = makeSession(row0([2, 0, 2, 0]));
     // Play several moves
     for (let i = 0; i < 20; i++) {
-      const dirs: Array<"up" | "down" | "left" | "right"> = ["up", "down", "left", "right"];
+      const dirs: Array<"up" | "down" | "left" | "right"> = [
+        "up",
+        "down",
+        "left",
+        "right",
+      ];
       let moved = false;
       for (const dir of dirs) {
         if (s.applyMove(dir)) {

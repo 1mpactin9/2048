@@ -3,14 +3,24 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Mock matchMedia BEFORE importing theme module
-vi.stubGlobal("matchMedia", () => ({
-  matches: false,
-  media: "(prefers-color-scheme: dark)",
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-} as unknown as MediaQueryList));
+vi.stubGlobal(
+  "matchMedia",
+  () =>
+    ({
+      matches: false,
+      media: "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }) as unknown as MediaQueryList,
+);
 
-import { initTheme, setThemePref, toggleTheme, currentResolved, currentThemePref } from "@/ui/theme";
+import {
+  initTheme,
+  setThemePref,
+  toggleTheme,
+  currentResolved,
+  currentThemePref,
+} from "@/ui/theme";
 
 describe("initTheme", () => {
   beforeEach(() => {

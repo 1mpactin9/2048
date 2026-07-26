@@ -142,14 +142,23 @@ describe("gridFromValues / gridToValues round-trip", () => {
   });
 
   it("id seed increments correctly", () => {
-    const g = gridFromValues([[2, 4], [8, 16]], 10);
+    const g = gridFromValues(
+      [
+        [2, 4],
+        [8, 16],
+      ],
+      10,
+    );
     // First tile id should be 10, last should be 13
     expect(g[0][0]!.id).toBe(10);
     expect(g[1][1]!.id).toBe(13);
   });
 
   it("zero values produce null cells", () => {
-    const g = gridFromValues([[0, 0], [0, 0]]);
+    const g = gridFromValues([
+      [0, 0],
+      [0, 0],
+    ]);
     expect(g[0][0]).toBeNull();
     expect(g[1][1]).toBeNull();
   });

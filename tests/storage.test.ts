@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { StoredData } from "../src/core/storage";
-import { load, save, getGame, putGame, clearGames, DEFAULT_SETTINGS } from "../src/core/storage";
+import {
+  load,
+  save,
+  getGame,
+  putGame,
+  clearGames,
+  DEFAULT_SETTINGS,
+} from "../src/core/storage";
 import { gameKey } from "../src/core/constants";
 import type { GameMode, GameState } from "../src/core/types";
 
@@ -26,7 +33,8 @@ function memoryStorage(): Storage {
 }
 
 beforeEach(() => {
-  (globalThis as unknown as { localStorage: Storage }).localStorage = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage =
+    memoryStorage();
 });
 
 describe("load — fresh data", () => {
@@ -45,18 +53,24 @@ describe("load — fresh data", () => {
   });
 
   it("returns fresh data on version mismatch", () => {
-    localStorage.setItem("2048:v1", JSON.stringify({ version: 99, settings: {}, games: {} }));
+    localStorage.setItem(
+      "2048:v1",
+      JSON.stringify({ version: 99, settings: {}, games: {} }),
+    );
     const loaded = load();
     expect(loaded.version).toBe(1);
     expect(loaded.games).toEqual({});
   });
 
   it("fills missing settings with defaults", () => {
-    localStorage.setItem("2048:v1", JSON.stringify({
-      version: 1,
-      settings: { theme: "dark" },
-      games: {},
-    }));
+    localStorage.setItem(
+      "2048:v1",
+      JSON.stringify({
+        version: 1,
+        settings: { theme: "dark" },
+        games: {},
+      }),
+    );
     const loaded = load();
     expect(loaded.settings.theme).toBe("dark");
     expect(loaded.settings.lastSize).toBe(DEFAULT_SETTINGS.lastSize);
@@ -66,11 +80,14 @@ describe("load — fresh data", () => {
 
 describe("load — partial data", () => {
   it("loads settings with defaults filled in for missing fields", () => {
-    localStorage.setItem("2048:v1", JSON.stringify({
-      version: 1,
-      settings: { theme: "dark", lastSize: 3 },
-      games: {},
-    }));
+    localStorage.setItem(
+      "2048:v1",
+      JSON.stringify({
+        version: 1,
+        settings: { theme: "dark", lastSize: 3 },
+        games: {},
+      }),
+    );
     const loaded = load();
     expect(loaded.settings.theme).toBe("dark");
     expect(loaded.settings.lastSize).toBe(3);
@@ -79,28 +96,43 @@ describe("load — partial data", () => {
 
   it("loads games dictionary correctly", () => {
     const state: GameState = {
-      size: 4, mode: "standard" as GameMode, grid: [], score: 100, best: 200,
-      powerups: { undo: 1, swap: 1, delete: 1 }, won: false, wonAcknowledged: false,
-      over: false, history: [], moveCount: 5, deltaHistory: [],
+      size: 4,
+      mode: "standard" as GameMode,
+      grid: [],
+      score: 100,
+      best: 200,
+      powerups: { undo: 1, swap: 1, delete: 1 },
+      won: false,
+      wonAcknowledged: false,
+      over: false,
+      history: [],
+      moveCount: 5,
+      deltaHistory: [],
     };
-    localStorage.setItem("2048:v1", JSON.stringify({
-      version: 1,
-      settings: DEFAULT_SETTINGS,
-      games: { "4:standard": state },
-      nextId: 10,
-    }));
+    localStorage.setItem(
+      "2048:v1",
+      JSON.stringify({
+        version: 1,
+        settings: DEFAULT_SETTINGS,
+        games: { "4:standard": state },
+        nextId: 10,
+      }),
+    );
     const loaded = load();
     expect(getGame(loaded, 4, "standard")).toBeDefined();
     expect(loaded.games["4:standard"]!.score).toBe(100);
   });
 
   it("sets nextId from stored value", () => {
-    localStorage.setItem("2048:v1", JSON.stringify({
-      version: 1,
-      settings: DEFAULT_SETTINGS,
-      games: {},
-      nextId: 42,
-    }));
+    localStorage.setItem(
+      "2048:v1",
+      JSON.stringify({
+        version: 1,
+        settings: DEFAULT_SETTINGS,
+        games: {},
+        nextId: 42,
+      }),
+    );
     const loaded = load();
     expect(loaded.nextId).toBe(42);
   });
@@ -110,7 +142,12 @@ describe("save / load round-trip", () => {
   it("saves and reloads settings correctly", () => {
     const data: StoredData = {
       version: 1,
-      settings: { ...DEFAULT_SETTINGS, theme: "dark", lastSize: 6, autoSpeed: 50 },
+      settings: {
+        ...DEFAULT_SETTINGS,
+        theme: "dark",
+        lastSize: 6,
+        autoSpeed: 50,
+      },
       games: {},
       nextId: 1,
     };
@@ -126,8 +163,34 @@ describe("save / load round-trip", () => {
       version: 1,
       settings: DEFAULT_SETTINGS,
       games: {
-        "4:standard": { size: 4, mode: "standard" as GameMode, grid: [], score: 100, best: 0, powerups: { undo: 0, swap: 0, delete: 0 }, won: false, wonAcknowledged: false, over: false, history: [], moveCount: 1, deltaHistory: [] },
-        "6:classic": { size: 6, mode: "classic" as GameMode, grid: [], score: 200, best: 0, powerups: { undo: 0, swap: 0, delete: 0 }, won: false, wonAcknowledged: false, over: false, history: [], moveCount: 2, deltaHistory: [] },
+        "4:standard": {
+          size: 4,
+          mode: "standard" as GameMode,
+          grid: [],
+          score: 100,
+          best: 0,
+          powerups: { undo: 0, swap: 0, delete: 0 },
+          won: false,
+          wonAcknowledged: false,
+          over: false,
+          history: [],
+          moveCount: 1,
+          deltaHistory: [],
+        },
+        "6:classic": {
+          size: 6,
+          mode: "classic" as GameMode,
+          grid: [],
+          score: 200,
+          best: 0,
+          powerups: { undo: 0, swap: 0, delete: 0 },
+          won: false,
+          wonAcknowledged: false,
+          over: false,
+          history: [],
+          moveCount: 2,
+          deltaHistory: [],
+        },
       },
       nextId: 5,
     };
@@ -138,7 +201,12 @@ describe("save / load round-trip", () => {
   });
 
   it("nextId round-trips when saved fresh", () => {
-    const data: StoredData = { version: 1, settings: DEFAULT_SETTINGS, games: {}, nextId: 1 };
+    const data: StoredData = {
+      version: 1,
+      settings: DEFAULT_SETTINGS,
+      games: {},
+      nextId: 1,
+    };
     save(data);
     const loaded = load();
     expect(loaded.version).toBe(1);
@@ -166,11 +234,14 @@ describe("Corrupted data handling", () => {
   });
 
   it("settings with wrong type returns defaults", () => {
-    localStorage.setItem("2048:v1", JSON.stringify({
-      version: 1,
-      settings: "not an object",
-      games: {},
-    }));
+    localStorage.setItem(
+      "2048:v1",
+      JSON.stringify({
+        version: 1,
+        settings: "not an object",
+        games: {},
+      }),
+    );
     const loaded = load();
     // settings spread with string should fall back to defaults
     expect(loaded.settings.theme).toBeDefined();
@@ -179,22 +250,50 @@ describe("Corrupted data handling", () => {
 
 describe("getGame / putGame", () => {
   it("putGame stores under correct gameKey", () => {
-    const data: StoredData = { version: 1, settings: DEFAULT_SETTINGS, games: {}, nextId: 1 };
+    const data: StoredData = {
+      version: 1,
+      settings: DEFAULT_SETTINGS,
+      games: {},
+      nextId: 1,
+    };
     const state: GameState = {
-      size: 4, mode: "standard" as GameMode, grid: [], score: 42, best: 0,
-      powerups: { undo: 0, swap: 0, delete: 0 }, won: false, wonAcknowledged: false,
-      over: false, history: [], moveCount: 0, deltaHistory: [],
+      size: 4,
+      mode: "standard" as GameMode,
+      grid: [],
+      score: 42,
+      best: 0,
+      powerups: { undo: 0, swap: 0, delete: 0 },
+      won: false,
+      wonAcknowledged: false,
+      over: false,
+      history: [],
+      moveCount: 0,
+      deltaHistory: [],
     };
     putGame(data, state);
     expect(getGame(data, 4, "standard")).toBeDefined();
   });
 
   it("getGame retrieves stored game", () => {
-    const data: StoredData = { version: 1, settings: DEFAULT_SETTINGS, games: {}, nextId: 1 };
+    const data: StoredData = {
+      version: 1,
+      settings: DEFAULT_SETTINGS,
+      games: {},
+      nextId: 1,
+    };
     const state: GameState = {
-      size: 4, mode: "standard" as GameMode, grid: [], score: 42, best: 0,
-      powerups: { undo: 0, swap: 0, delete: 0 }, won: false, wonAcknowledged: false,
-      over: false, history: [], moveCount: 0, deltaHistory: [],
+      size: 4,
+      mode: "standard" as GameMode,
+      grid: [],
+      score: 42,
+      best: 0,
+      powerups: { undo: 0, swap: 0, delete: 0 },
+      won: false,
+      wonAcknowledged: false,
+      over: false,
+      history: [],
+      moveCount: 0,
+      deltaHistory: [],
     };
     putGame(data, state);
     const retrieved = getGame(data, 4, "standard");
@@ -202,10 +301,29 @@ describe("getGame / putGame", () => {
   });
 
   it("multiple sizes/modes stored independently", () => {
-    const data: StoredData = { version: 1, settings: DEFAULT_SETTINGS, games: {}, nextId: 1 };
-    const makeState = (size: number, mode: GameMode, score: number): GameState => ({
-      size, mode, grid: [], score, best: 0, powerups: { undo: 0, swap: 0, delete: 0 },
-      won: false, wonAcknowledged: false, over: false, history: [], moveCount: 0, deltaHistory: [],
+    const data: StoredData = {
+      version: 1,
+      settings: DEFAULT_SETTINGS,
+      games: {},
+      nextId: 1,
+    };
+    const makeState = (
+      size: number,
+      mode: GameMode,
+      score: number,
+    ): GameState => ({
+      size,
+      mode,
+      grid: [],
+      score,
+      best: 0,
+      powerups: { undo: 0, swap: 0, delete: 0 },
+      won: false,
+      wonAcknowledged: false,
+      over: false,
+      history: [],
+      moveCount: 0,
+      deltaHistory: [],
     });
     putGame(data, makeState(4, "standard", 100));
     putGame(data, makeState(4, "classic", 200));
@@ -216,18 +334,37 @@ describe("getGame / putGame", () => {
   });
 
   it("getGame returns undefined for unstored combinations", () => {
-    const data: StoredData = { version: 1, settings: DEFAULT_SETTINGS, games: {}, nextId: 1 };
+    const data: StoredData = {
+      version: 1,
+      settings: DEFAULT_SETTINGS,
+      games: {},
+      nextId: 1,
+    };
     expect(getGame(data, 4, "standard")).toBeUndefined();
   });
 });
 
 describe("clearGames", () => {
   it("wipes all games", () => {
-    const data: StoredData = { version: 1, settings: DEFAULT_SETTINGS, games: {}, nextId: 1 };
+    const data: StoredData = {
+      version: 1,
+      settings: DEFAULT_SETTINGS,
+      games: {},
+      nextId: 1,
+    };
     const state: GameState = {
-      size: 4, mode: "standard" as GameMode, grid: [], score: 100, best: 0,
-      powerups: { undo: 0, swap: 0, delete: 0 }, won: false, wonAcknowledged: false,
-      over: false, history: [], moveCount: 0, deltaHistory: [],
+      size: 4,
+      mode: "standard" as GameMode,
+      grid: [],
+      score: 100,
+      best: 0,
+      powerups: { undo: 0, swap: 0, delete: 0 },
+      won: false,
+      wonAcknowledged: false,
+      over: false,
+      history: [],
+      moveCount: 0,
+      deltaHistory: [],
     };
     putGame(data, state);
     clearGames(data);
@@ -235,7 +372,12 @@ describe("clearGames", () => {
   });
 
   it("resets nextId via clearGames", () => {
-    const data: StoredData = { version: 1, settings: DEFAULT_SETTINGS, games: {}, nextId: 42 };
+    const data: StoredData = {
+      version: 1,
+      settings: DEFAULT_SETTINGS,
+      games: {},
+      nextId: 42,
+    };
     clearGames(data);
     // clearGames sets data.games = {} but does not modify data.nextId
     // The setNextId(1) call in clearGames affects the global counter, not data.nextId

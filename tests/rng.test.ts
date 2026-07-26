@@ -86,7 +86,10 @@ describe("SecureRng calls tracking", () => {
 
 describe("SecureRng block boundary crossing", () => {
   it("switches block after 16 values", () => {
-    const seed = [0xdeadc0de, 0xbeefcafe, 0x12345678, 0x9abcdef0, 0xfedcba98, 0x76543210, 0xdeadbeef, 0xcafebabe];
+    const seed = [
+      0xdeadc0de, 0xbeefcafe, 0x12345678, 0x9abcdef0, 0xfedcba98, 0x76543210,
+      0xdeadbeef, 0xcafebabe,
+    ];
     const gen = new SecureRng(seed, 0);
     // Values 0-15 are from block 0, values 16+ from block 1
     const beforeBoundary: number[] = [];
@@ -133,7 +136,13 @@ describe("SecureRng float range", () => {
   });
 
   it("values appear uniformly distributed (sanity check)", () => {
-    const gen = new SecureRng([0xABCDEF00, 0x11223344, 0x55667788, 0x99AABBCC, 0xDDEEFF00, 0x11111111, 0x22222222, 0x33333333], 0);
+    const gen = new SecureRng(
+      [
+        0xabcdef00, 0x11223344, 0x55667788, 0x99aabbcc, 0xddeeff00, 0x11111111,
+        0x22222222, 0x33333333,
+      ],
+      0,
+    );
     let sum = 0;
     const n = 10000;
     for (let i = 0; i < n; i++) {
