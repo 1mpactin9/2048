@@ -72,7 +72,6 @@ export class App {
   private currentOverlay: HTMLElement | null = null;
   private wasOver = false;
 
-  // DOM refs
   private scoreVal!: HTMLElement;
   private bestVal!: HTMLElement;
   private powerupsRow!: HTMLElement;
@@ -184,7 +183,6 @@ export class App {
     const shell = document.createElement("main");
     shell.className = "app";
 
-    // stage: board + hint + powerups
     const stage = document.createElement("div");
     stage.className = "stage";
     this.board = new BoardRenderer(stage);
@@ -365,8 +363,6 @@ export class App {
     );
     this.session.setRngManipulation(this.data.settings.rngManip);
     this.wasOver = false;
-    // Safety net: if the previous game was still in progress, don't overwrite
-    // the saved game until the first move - so Resume can bring it back.
     this.pendingNew = !prevOver;
     if (!this.pendingNew) this.saveCurrent();
     this.board.fullRender(this.session.state.grid, true);
@@ -454,8 +450,6 @@ export class App {
   private updateUI(): void {
     const s = this.session.state;
 
-    // Detect a mode / size switch so the odometer always rolls, and rolls in
-    // the direction that matches the navigation (forward/backward).
     const switched = this.lastSize !== this.size || this.lastMode !== this.mode;
     let dir: "down" | "up" = "down";
     if (switched) {
@@ -476,7 +470,6 @@ export class App {
     this.lastSize = this.size;
     this.lastMode = this.mode;
 
-    // Mode badge — animate the label on change, skip on initial load.
     if (this.lastBadgeMode !== this.mode) {
       if (this.lastBadgeMode === null) this.modeBadge.textContent = this.mode;
       else this.animateModeBadge(this.mode);
@@ -515,11 +508,10 @@ export class App {
 
   private bumpScore(): void {
     this.scoreVal.classList.remove("is-bump");
-    void this.scoreVal.offsetWidth; // restart animation
+    void this.scoreVal.offsetWidth;
     this.scoreVal.classList.add("is-bump");
   }
 
-  // Update score readout. force rolls regardless of direction (mode/size switch).
   private setScore(
     el: HTMLElement,
     value: number,
@@ -548,12 +540,10 @@ export class App {
     const top = document.createElement("span");
     const bottom = document.createElement("span");
     if (dir === "down") {
-      // new enters from below: [old, new], roll up
       top.textContent = prev;
       bottom.textContent = text;
       reel.style.transform = "translateY(0)";
     } else {
-      // new enters from above: [new, old], roll down
       top.textContent = text;
       bottom.textContent = prev;
       reel.style.transform = "translateY(-50%)";
@@ -576,23 +566,19 @@ export class App {
     const oldText = badge.textContent ?? "";
     if (oldText === newMode) return;
 
-    // Fade out → swap text → fade back in. Width transitions naturally
-    // because the element stays in the DOM — no inline style overrides.
     badge.classList.add("mode-badge--fading");
-    void badge.offsetWidth; // force reflow so the fade-out actually plays
+    void badge.offsetWidth;
 
     setTimeout(() => {
       badge.textContent = newMode;
       badge.classList.remove("mode-badge--fading");
     }, 120);
 
-    // Clean up any leftover inline width from previous runs
     setTimeout(() => {
       badge.style.width = "";
     }, 240);
   }
 
-  // Commit the pending new game (if any) and revert the button to New Game.
   private clearPendingNew(): void {
     if (!this.pendingNew) return;
     this.pendingNew = false;
@@ -615,8 +601,6 @@ export class App {
   private handleWinOver(): void {
     const s = this.session.state;
     if (s.over) {
-      // Show modal only at the instant the game ends and for human-driven play.
-      // Auto-play gets a frozen indicator instead of a blocking popup.
       if (!this.wasOver && !this.autoOn) {
         this.showOverlay({
           title: "Game over!",
@@ -628,7 +612,6 @@ export class App {
           ],
         });
       }
-      // During auto-loop, let autoTick decide whether to restart or stop.
       if (!this.autoLoopTarget) this.stopAuto();
     } else if (s.won && !s.wonAcknowledged) {
       if (this.autoOn) {
@@ -659,7 +642,6 @@ export class App {
     this.closeOverlay();
   }
 
-  // Toggle the frozen-board look and below-board game-over indicator.
   private setFrozen(frozen: boolean): void {
     this.board.el.classList.remove("is-frozen");
     this.gameOverBar.classList.toggle("is-visible", frozen);
@@ -732,7 +714,6 @@ export class App {
     }
   }
 
-  /** Small top-right auto-hiding toast. */
   private notify(message: string, icon?: string): void {
     this.notifications.show(message, { icon, duration: 3000 });
   }
@@ -768,9 +749,6 @@ export class App {
     this.updateUI();
   }
 
-  // Run the engine looping until the score reaches targetScore.
-  // Reuses the existing auto-play loop; stops when the target is hit.
-  // Exposed on window for dev-console usage.
   runAutoLoop(targetScore: number): void {
     if (this.session.state.over) return;
     if (this.autoOn) this.stopAuto();
@@ -786,12 +764,10 @@ export class App {
       if (!this.autoOn) return;
       const s = this.session.state;
       if (this.board.isSelecting || this.currentOverlay) {
-        // User is interacting — pause the loop.
         this.stopAuto();
         return;
       }
       if (s.over) {
-        // Auto-loop: restart the game when stuck so the engine keeps playing.
         if (this.autoLoopTarget !== null) {
           if (this.session.state.score >= this.autoLoopTarget) {
             const elapsed = this.autoLoopStart
@@ -819,11 +795,6 @@ export class App {
         depth: this.data.settings.autoDepth,
         usePowerups: this.data.settings.autoPowerups,
       };
-      // The engine now decides off the main thread (see WasmEngine), so a human
-      // move / undo / power-up / new game can change the board while we wait.
-      // Snapshot what we're deciding for; if it changed, the result was
-      // computed for a board that no longer exists, so discard it and re-tick
-      // instead of applying a stale (possibly illegal) action.
       const signature = this.boardSignature();
       const action = await WasmEngine.chooseAction(ctx);
       if (!this.autoOn) return;
@@ -832,7 +803,6 @@ export class App {
         return;
       }
       this.applyAutoAction(action);
-      // Auto-loop: when the engine hits game over mid-action, restart or stop.
       if (
         this.autoOn &&
         this.session.state.over &&
@@ -857,8 +827,6 @@ export class App {
     }, this.data.settings.autoSpeed);
   }
 
-  // Compact fingerprint of the live board + score + power-up charges. Used to
-  // detect that gameplay-relevant changed during an async engine decision.
   private boardSignature(): string {
     const s = this.session.state;
     const g = s.grid;
@@ -870,7 +838,6 @@ export class App {
     return out;
   }
 
-  // Apply one AI action (move, swap, delete, or stop) during auto-play.
   private applyAutoAction(action: AutoAction): void {
     switch (action.kind) {
       case "move":
@@ -912,8 +879,6 @@ export class App {
         break;
       }
       case "stop": {
-        // Engine returned stop = no legal moves. Force game-over state so the
-        // auto-loop can properly decide whether to restart or stop.
         this.session.state.over = true;
         this.handleWinOver();
         if (this.autoLoopTarget !== null) {
@@ -928,7 +893,6 @@ export class App {
             );
             this.stopAuto();
           } else {
-            // Auto-loop: always restart, regardless of current best score.
             this.newGame();
             if (this.autoOn) this.autoTick();
           }
@@ -958,9 +922,6 @@ export class App {
     this.popover.update({ autoPowerups: on });
   }
 
-  // RNG Manipulation toggle: biases tile spawns (via the same ChaCha20
-  // stream - see grid.ts) toward the player's favor. Takes effect
-  // immediately on the live session, no new game required.
   private onRngManip(on: boolean): void {
     this.data.settings.rngManip = on;
     this.session.setRngManipulation(on);
@@ -972,7 +933,6 @@ export class App {
     );
   }
 
-  // Backtrack toggle — enables/disables delta-encoded unlimited undo history.
   private onBacktrack(on: boolean): void {
     this.data.settings.backtrackEnabled = on;
     this.persist();
@@ -980,7 +940,6 @@ export class App {
     console.log(`[dev] Backtrack ${on ? "enabled" : "disabled"}`);
   }
 
-  // Show dialog when user tries to disable backtrack with data present.
   private showBacktrackDisableDialog(): void {
     const hasData = (this.session.state.deltaHistory?.length ?? 0) > 0;
     this.showOverlay({
@@ -1080,7 +1039,6 @@ export class App {
     save(this.data);
   }
 
-  // Tear down listeners (e.g. for hot-module reload during dev).
   destroy(): void {
     this.stopAuto();
     this.closeOverlay();
@@ -1088,13 +1046,9 @@ export class App {
     this.board.destroy();
   }
 
-  // Bypass-powerup undo: reverts up to `steps` past moves.
-  // Default 1 step. Negative values instead enable the auto-engine
-  // and run it for `Math.abs(steps)` moves.
   __undo(steps?: number): void {
     const n = steps ?? 1;
     if (n < 0) {
-      // Enable engine for |n| moves using current engine settings
       const count = Math.abs(n);
       this.data.settings.autoOn = true;
       let done = 0;
@@ -1136,20 +1090,17 @@ export class App {
       this.session.state.moveCount = snap.moveCount;
       this.session.state.powerups = { ...snap.powerups };
     }
-    // Fall through to delta history if regular history is exhausted
     if (n > this.session.state.history.length) {
       const remainingSteps = n - this.session.state.history.length;
       for (let i = 0; i < remainingSteps; i++) {
         if (!this.session.state.deltaHistory?.length) break;
         const step = this.session.state.deltaHistory!.pop()!;
-        // Restore anchor state
         this.session.state.grid = step.anchor.grid;
         this.session.state.score = step.anchor.score;
         this.session.state.won = step.anchor.won;
         this.session.state.wonAcknowledged = step.anchor.wonAcknowledged;
         this.session.state.moveCount = step.anchor.moveCount;
         this.session.state.powerups = { ...step.anchor.powerups };
-        // Reverse-apply deltas
         const deltas = step.deltas;
         for (let j = deltas.length - 1; j >= 0; j--) {
           const d = deltas[j];
@@ -1170,7 +1121,6 @@ export class App {
     );
   }
 
-  // Delete the tile at grid position [row, col].
   __delete(row: number, col: number): void {
     const g = this.session.state.grid;
     if (row < 0 || row >= g.length || col < 0 || col >= g[row].length) {
@@ -1189,7 +1139,6 @@ export class App {
     console.log("[dev] __delete → removed tile at", row, col);
   }
 
-  // Delete all tiles with value `n` from the board.
   __deleteValue(n: number): void {
     const g = this.session.state.grid;
     let count = 0;
@@ -1213,13 +1162,11 @@ export class App {
     console.log(`[dev] __deleteValue → removed ${count} tile(s) of value ${n}`);
   }
 
-  // Swap the tiles at [r1,c1] and [r2,c2]. At least one must be occupied.
   __swap(r1: number, c1: number, r2: number, c2: number): void {
     const g = this.session.state.grid;
     if (r1 === r2 && c1 === c2) return;
     const a = g[r1]?.[c1];
     const b = g[r2]?.[c2];
-    // Allow swapping with empty cell: at least one must be occupied
     if (!a && !b) {
       console.warn("[dev] __swap:", r1, c1, r2, c2, "both cells are empty");
       return;
@@ -1227,7 +1174,6 @@ export class App {
     this.clearPendingNew();
     g[r1][c1] = b ?? null;
     g[r2][c2] = a ?? null;
-    // Only animate if both were occupied (real swap); otherwise full render
     if (a && b) {
       this.board.animateSwap(a.id, b.id);
     } else {
@@ -1247,7 +1193,6 @@ export class App {
     );
   }
 
-  // Add n free tiles (value 2) at random empty cells.
   __addTiles(n = 1): void {
     const g = this.session.state.grid;
     const empties: { r: number; c: number }[] = [];
@@ -1255,7 +1200,6 @@ export class App {
       for (let c = 0; c < g[r].length; c++)
         if (!g[r][c]) empties.push({ r, c });
     const count = Math.min(n, empties.length);
-    // Fisher-Yates partial shuffle to pick `count` distinct spots
     for (let i = 0; i < count; i++) {
       const idx = i + Math.floor(Math.random() * (empties.length - i));
       [empties[idx], empties[i]] = [empties[i], empties[idx]];
@@ -1270,7 +1214,6 @@ export class App {
     console.log(`[dev] __addTiles → spawned ${count} tiles`);
   }
 
-  // Clear every tile from the board.
   __clear(): void {
     const g = this.session.state.grid;
     for (let r = 0; r < g.length; r++)
@@ -1281,7 +1224,6 @@ export class App {
     console.log("[dev] __clear → board emptied");
   }
 
-  // Fill the board with tiles of value `val` (default 2), one per cell.
   __fill(val = 2): void {
     const g = this.session.state.grid;
     let id = 1;
@@ -1293,7 +1235,6 @@ export class App {
     console.log(`[dev] __fill → ${val} everywhere`);
   }
 
-  // Set the score to `n`. Validates input to prevent NaN corruption of best.
   __score(n: number): void {
     if (typeof n !== "number" || !Number.isFinite(n) || n < 0) {
       console.warn(
@@ -1311,15 +1252,9 @@ export class App {
     console.log(`[dev] __score → set to ${n}`);
   }
 
-  // Place a tile on the board. Four signatures:
-  //   __add(val)         → place at first empty cell
-  //   __add(x, y)        → place a 2 at (x, y)
-  //   __add(val, x, y)   → place val at (x, y); error if occupied
-  //   __add(val, x, y, 1) → same but replace if occupied
   __add(a: number, b?: number, c?: number, _replace?: number): void {
     const g = this.session.state.grid;
 
-    // 4 args → __add(val, x, y, replaceFlag)
     if (b !== undefined && c !== undefined && _replace !== undefined) {
       const val = a as number;
       const x = b as number;
@@ -1344,7 +1279,6 @@ export class App {
       return;
     }
 
-    // 2 args → __add(x, y), place a 2
     if (b !== undefined && c === undefined) {
       const x = a as number;
       const y = b as number;
@@ -1364,7 +1298,6 @@ export class App {
       return;
     }
 
-    // 1 arg → __add(val), place at first empty cell
     {
       const val = a as number;
       for (let r = 0; r < g.length; r++) {
@@ -1385,7 +1318,6 @@ export class App {
     }
   }
 
-  // Place a single tile of value `val` at [row, col]. Overwrites if occupied.
   __max(row: number, col: number, val = 2048): void {
     const g = this.session.state.grid;
     if (row < 0 || row >= g.length || col < 0 || col >= g[row].length) {
@@ -1399,14 +1331,12 @@ export class App {
     console.log(`[dev] __max → placed ${val} at ${row},${col}`);
   }
 
-  // Set move count to `n`.
   __moves(n: number): void {
     this.session.state.moveCount = n;
     this.saveCurrent();
     console.log(`[dev] __moves → set to ${n}`);
   }
 
-  // Apply a directional move WITHOUT spawning a tile (free experiment).
   __cheat(dir: Direction): void {
     const { grid: next, transcript } = move(this.session.state.grid, dir);
     if (!transcript.moved) {
@@ -1422,7 +1352,6 @@ export class App {
     console.log(`[dev] __cheat → ${dir}, gained ${transcript.gained}`);
   }
 
-  // Max out all powerup charges.
   __fillPowerups(): void {
     this.session.state.powerups = { undo: 99, swap: 99, delete: 99 };
     this.saveCurrent();
@@ -1430,7 +1359,6 @@ export class App {
     console.log("[dev] __fillPowerups → 99 each");
   }
 
-  // Instantly win: place a 2048 tile on a random empty cell.
   __win(): void {
     const g = this.session.state.grid;
     const empties: { r: number; c: number }[] = [];
@@ -1451,10 +1379,6 @@ export class App {
     console.log(`[dev] __win → placed 2048 at ${spot.r},${spot.c}`);
   }
 
-  /**
-   * Start the engine with zero delay between moves for maximum speed.
-   * Equivalent to setting DELAY to 0 and enabling auto-play.
-   */
   __noDelay(): void {
     this.data.settings.autoSpeed = 0;
     this.persist();
@@ -1463,8 +1387,6 @@ export class App {
     console.log("[dev] __noDelay → engine started with zero delay");
   }
 
-  // Peek the next spawn value from the CSPRNG stream.
-  // Returns 2 or 4 (10% chance of 4), without advancing game state.
   __nextNumber(): number {
     const seed = this.session.state.rngSeed;
     const calls = this.session.state.rngCalls ?? 0;
@@ -1472,10 +1394,7 @@ export class App {
       console.warn("[dev] __nextNumber → no RNG seed available");
       return -1;
     }
-    // Clone the RNG to peek without consuming
     const gen = new SecureRng(seed, calls);
-    // Advance past all spawns that have already happened:
-    // Each move triggers exactly 1 spawn call. The session started with 2 spawns.
     const totalSpawns = 2 + this.session.state.moveCount;
     for (let i = 0; i < totalSpawns; i++) gen.next();
     const roll = gen.next();
@@ -1486,9 +1405,6 @@ export class App {
     return val;
   }
 
-  // Peek the next spawn location from the CSPRNG stream.
-  // Returns { row, col } of the cell the next tile will appear in,
-  // without advancing game state.
   __nextLocation(): { row: number; col: number } {
     const g = this.session.state.grid;
     const empties: { row: number; col: number }[] = [];
@@ -1510,8 +1426,8 @@ export class App {
     const gen = new SecureRng(seed, calls);
     const totalSpawns = 2 + this.session.state.moveCount;
     for (let i = 0; i < totalSpawns; i++) {
-      gen.next(); // advance past value roll
-      gen.next(); // advance past position roll
+      gen.next();
+      gen.next();
     }
     const posRoll = gen.next();
     const spot = empties[Math.floor(posRoll * empties.length)];
@@ -1521,9 +1437,6 @@ export class App {
     return spot;
   }
 
-  // Check whether the displayed score is consistent with the tiles on the board.
-  // Every tile of value V contributes a [min, max] score window (min if built
-  // from 4-spawns, max if from 2-spawns); the total window must contain the score.
   __validate(): ValidationResult {
     const r = validatePosition(
       this.session.state.grid,
@@ -1540,8 +1453,6 @@ export class App {
     return r;
   }
 
-  // Clamp the score into the board's valid window. A score below min is raised,
-  // above max is lowered, in-window is left alone. Mutates and persists state.
   __updatePosition(): {
     from: number;
     to: number;
@@ -1574,9 +1485,6 @@ export class App {
     return { from: r.from, to: r.to, min: r.min, max: r.max, changed };
   }
 
-  // Remove the fewest tiles (then least total value) so the remaining board
-  // is valid for the current score. Fixes hacked-in tiles the score cannot
-  // account for. A score above max cannot be fixed by removal alone.
   __bypassValidation(valueFirst = false): {
     feasible: boolean;
     removed: number;
@@ -1640,7 +1548,6 @@ export class App {
     };
   }
 
-  /** Comprehensive board / session / UI diagnostics dump. */
   __getStats(): {
     board: {
       type: string;
@@ -1724,7 +1631,6 @@ export class App {
     const g = s.grid;
     const size = s.size;
 
-    // --- Board analysis ---
     const values: number[] = [];
     const dist: Record<string, number> = {};
     let maxT = 0;
@@ -1750,14 +1656,12 @@ export class App {
         if (cell.value < minT) minT = cell.value;
         sumT += cell.value;
 
-        // Smoothness: sum of log2 differences between adjacent tiles
         const v = Math.log2(cell.value);
         const right = g[r][c + 1];
         if (right) smoothness += Math.abs(v - Math.log2(right.value));
         const down = g[r + 1]?.[c];
         if (down) smoothness += Math.abs(v - Math.log2(down.value));
 
-        // Mergeable pairs
         if (
           c + 1 < g[r].length &&
           g[r][c + 1] &&
@@ -1771,13 +1675,11 @@ export class App {
         )
           mergeable++;
 
-        // Open lines per row/col (consecutive empty cells at edges)
         if (c === 0 && !g[r][c]) openLines++;
         if (r === 0 && !g[r][c]) openLines++;
       }
     }
 
-    // Monotonicity: count decreasing adjacent pairs (rightward + downward)
     for (let r = 0; r < g.length; r++) {
       for (let c = 0; c < g[r].length; c++) {
         const val = g[r][c]?.value ?? 0;
@@ -1791,7 +1693,6 @@ export class App {
     const tileCount = values.length;
     const avgTile = tileCount > 0 ? sumT / tileCount : 0;
 
-    // Bitboard: each cell mapped to a bit position (r * size + c)
     const bitboard: number[][] = [];
     const idGrid: number[][] = [];
     const log2Grid: number[][] = [];
@@ -1810,10 +1711,8 @@ export class App {
       log2Grid.push(l2Row);
     }
 
-    // --- Validation ---
     const vr = validatePosition(g, s.score);
 
-    // --- RNG prediction ---
     const seed = s.rngSeed ?? null;
     const calls = s.rngCalls ?? 0;
     let predValue = -1;
@@ -1907,15 +1806,11 @@ export class App {
     };
   }
 
-  // Set the board to an arbitrary position from a values matrix or flat array.
-  // Signatures: __setBoard(values), __setBoard(size, values),
-  // __setBoard(flatArray), __setBoard(flatArray, size).
   __setBoard(a: number[][] | number[] | number, b?: number[][] | number): void {
     let grid: Grid;
     let size: number;
 
     if (Array.isArray(a)) {
-      // Flat array form: __setBoard(flat, size?)
       const flat = a;
       if (b !== undefined && typeof b === "number") {
         size = b;
@@ -1948,7 +1843,6 @@ export class App {
         }
       }
     } else if (Array.isArray(b)) {
-      // __setBoard(size, values)
       size = a as number;
       const vals = b as number[][];
       if (vals.length !== size || vals.some((row) => row.length !== size)) {
@@ -1966,7 +1860,6 @@ export class App {
         }
       }
     } else {
-      // __setBoard(values) — existing size (a is number[][], b is undefined)
       const vals = a as unknown as number[][];
       size = this.size;
       if (vals.length !== size || vals.some((row) => row.length !== size)) {
@@ -1985,7 +1878,6 @@ export class App {
       }
     }
 
-    // Clamp game-over state since we're fabricating a position
     const wasOver = this.session.state.over;
     this.clearPendingNew();
     this.session.state.grid = grid;
@@ -2007,7 +1899,6 @@ export class App {
       );
   }
 
-  // Evaluate the current position with heuristic scoring.
   __evalPosition(): {
     calcTimeMs: number;
     currentScore: number;
@@ -2092,7 +1983,6 @@ export class App {
     const totalCells = size * size;
     const emptyCells = totalCells - tileCount;
 
-    // Heuristic weights (tuned for 2048 strategy)
     const W_EMPTY = 1.0;
     const W_SMOOTH = 0.5;
     const W_MONO = 0.3;
@@ -2100,7 +1990,6 @@ export class App {
     const W_MAX_CORNER = 2.0;
     const W_SINGLE_CORNER = 0.5;
 
-    // Check if max tile is in a corner
     let maxCorner = false;
     let singleCorner = false;
     if (tileCount > 0) {
@@ -2119,7 +2008,6 @@ export class App {
       singleCorner = maxCorner;
     }
 
-    // Composite score
     const composite =
       emptyCells * W_EMPTY -
       smoothness * W_SMOOTH +
@@ -2128,14 +2016,12 @@ export class App {
       (maxCorner ? W_MAX_CORNER : 0) +
       (singleCorner ? W_SINGLE_CORNER : 0);
 
-    // Estimate highest possible tile: log2(maxT) + estimated merges possible
     const estMerges = emptyCells + mergeable;
     const estHighestTile = Math.pow(
       2,
       Math.log2(maxT) + Math.floor(estMerges / 2),
     );
 
-    // Predicted score range from tile composition
     const win = scoreWindow(g);
 
     const calcTimeMs = parseFloat((performance.now() - t0).toFixed(3));
@@ -2186,8 +2072,6 @@ export class App {
     return result;
   }
 
-  // Run the AI engine AFK until the best score is maintained 3 consecutive times.
-  // Sets autoSpeed to 0, uses current depth/manipulate settings. Fire-and-forget.
   async __afkHighScore(): Promise<void> {
     const s = this.session.state;
     const initialBest = s.best;
@@ -2199,7 +2083,6 @@ export class App {
       `[dev]   depth=${depth}, manipulate=${manipulate}, initialBest=${initialBest}`,
     );
 
-    // Set zero delay for max speed
     const prevSpeed = this.data.settings.autoSpeed;
     this.data.settings.autoSpeed = 0;
     this.persist();
@@ -2210,20 +2093,17 @@ export class App {
     let gamesPlayed = 0;
     const startTime = Date.now();
 
-    // We run in a loop: play until game over, check if best exceeded 3x, repeat
     const loop = async () => {
       if (this.session.state.over || this.session.state.moveCount === 0) {
         this.newGame();
         gamesPlayed++;
       }
 
-      // Start auto-play
       this.data.settings.autoOn = true;
       this.data.settings.autoDepth = depth;
       this.data.settings.rngManip = manipulate;
       this.startAuto();
 
-      // Wait for the engine to finish (game over or stop)
       await new Promise<void>((resolve) => {
         const check = () => {
           if (!this.autoOn || this.session.state.over) {
@@ -2243,18 +2123,15 @@ export class App {
           `[dev] __afkHighScore → new best: ${currentBest} (game #${gamesPlayed})`,
         );
       } else if (finishedBest >= currentBest) {
-        // Same best counts toward the 3x threshold
         exceedCount++;
         console.log(
           `[dev] __afkHighScore → best maintained: ${currentBest} (exceedCount=${exceedCount}/3)`,
         );
       } else {
-        // Score dropped below threshold — reset counter
         exceedCount = 0;
       }
 
       if (exceedCount >= 3) {
-        // Done!
         this.stopAuto();
         this.data.settings.autoSpeed = prevSpeed;
         this.persist();
@@ -2276,7 +2153,6 @@ export class App {
         return;
       }
 
-      // Continue: new game and loop
       if (!this.session.state.over) {
         this.newGame();
       }
@@ -2287,8 +2163,6 @@ export class App {
     loop();
   }
 
-  // Recover from a NaN best score. If best is already valid, does nothing.
-  // does nothing. Otherwise sets best to the current score.
   __fixBest(): void {
     const s = this.session.state;
     if (typeof s.best === "number" && !isNaN(s.best)) {
@@ -2301,8 +2175,6 @@ export class App {
     console.log(`[dev] __fixBest → recovered best from NaN to ${s.best}`);
   }
 
-  // Ensure the score matches the current position. Recalculates the score
-  // window from board tiles and clamps into the valid range. Fixes NaN best.
   __refreshScore(): {
     from: number;
     to: number;
@@ -2316,7 +2188,6 @@ export class App {
     const g = s.grid;
     const originalScore = s.score;
 
-    // Use the validation window as the source of truth for score consistency
     const vr = validatePosition(g, s.score);
     const clamped = clampScoreToWindow(g, s.score);
 
@@ -2346,7 +2217,6 @@ export class App {
     };
   }
 
-  // Explicitly refresh the Play Again bar visibility based on board dead state.
   __refreshPlayAgainStatus(): void {
     const isDead = !hasMoves(this.session.state.grid);
     this.gameOverBar.classList.toggle("is-visible", isDead);
@@ -2355,7 +2225,6 @@ export class App {
     );
   }
 
-  // Print usage info for the developer console.
   __help(): void {
     const lines = [
       "%c2048 Developer Console%c",
@@ -2406,7 +2275,6 @@ export class App {
   }
 }
 
-// Monotonic id counter for dev-console tile placement.
 let _devId = 1;
 function freshDevId(): number {
   return _devId++;

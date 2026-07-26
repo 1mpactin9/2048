@@ -2,7 +2,6 @@ import type { Direction } from "../core/types";
 
 export interface InputCallbacks {
   onMove: (dir: Direction) => void;
-  /** Optional: keyboard shortcuts for powerups (U=undo, S=swap, D=delete). */
   onShortcut?: (key: "undo" | "swap" | "delete") => void;
 }
 
@@ -21,12 +20,8 @@ const KEY_MAP: Record<string, Direction> = {
   D: "right",
 };
 
-const SWIPE_THRESHOLD = 24; // px
+const SWIPE_THRESHOLD = 24;
 
-/**
- * Wires keyboard arrows/WASD and touch swipes (on a target element) to a move
- * callback. The target is typically the board so swipes only count there.
- */
 export class Input {
   private cb: InputCallbacks;
   private target: HTMLElement;
@@ -44,7 +39,6 @@ export class Input {
   }
 
   private onKey = (e: KeyboardEvent): void => {
-    // Let users type in any future text fields.
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
 
@@ -56,7 +50,6 @@ export class Input {
     }
     if (e.key === "u" || e.key === "U") this.cb.onShortcut?.("undo");
     else if (e.key === "e" || e.key === "E") this.cb.onShortcut?.("delete");
-    // 's'/'d' already map to directions, so swap has no keyboard shortcut.
   };
 
   private onTouchStart = (e: TouchEvent): void => {

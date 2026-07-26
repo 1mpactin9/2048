@@ -38,8 +38,6 @@
   pointer-events: auto;
 }
 
-/* Frozen: game is over - the board is iced over and locked. The overlay is
-   pointer-events:none so it never blocks swap/delete selection. */
 .board.is-frozen .board__tiles {
   filter: saturate(0.82) brightness(0.97);
 }
@@ -89,7 +87,6 @@
   line-height: 1;
 }
 
-/* Digit-count font scaling */
 .tile__face--d1 {
   --ff: 0.45;
 }
@@ -137,7 +134,6 @@
   }
 }
 
-/* Highlight a tile while choosing swap/delete targets */
 .tile.is-targetable .tile__face {
   outline: 2px solid var(--accent);
   outline-offset: -3px;

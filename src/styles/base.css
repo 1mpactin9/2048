@@ -68,7 +68,7 @@ button:disabled {
   --btn-bg: #988a7a;
   --btn-bg-hover: #a5988a;
   --btn-text: #ffffff;
-  --btn-gobg: #988776; /* game-over bar primary (slightly darker than topbar) */
+  --btn-gobg: #988776;
   --btn-gobg-hover: #a5988a;
 
   /* score indicators */
@@ -135,25 +135,24 @@ button:disabled {
   --tile-1024-fg: #f9f6f2;
   --tile-2048-bg: #756452;
   --tile-2048-fg: #f9f6f2;
-
   --tile-4096-bg: #5f7868;
-  --tile-4096-fg: #f9f6f2; /* sage */
+  --tile-4096-fg: #f9f6f2;
   --tile-8192-bg: #4c7a87;
-  --tile-8192-fg: #f9f6f2; /* blue-gray */
+  --tile-8192-fg: #f9f6f2;
   --tile-16384-bg: #4e6798;
-  --tile-16384-fg: #f9f6f2; /* slate blue */
+  --tile-16384-fg: #f9f6f2;
   --tile-32768-bg: #66559b;
-  --tile-32768-fg: #f9f6f2; /* violet */
+  --tile-32768-fg: #f9f6f2;
   --tile-65536-bg: #824f8e;
-  --tile-65536-fg: #f9f6f2; /* purple */
+  --tile-65536-fg: #f9f6f2;
   --tile-131072-bg: #9d4f74;
-  --tile-131072-fg: #f9f6f2; /* mauve */
+  --tile-131072-fg: #f9f6f2;
   --tile-262144-bg: #b05b56;
-  --tile-262144-fg: #f9f6f2; /* brick */
+  --tile-262144-fg: #f9f6f2;
   --tile-524288-bg: #b87848;
-  --tile-524288-fg: #f9f6f2; /* copper */
+  --tile-524288-fg: #f9f6f2;
   --tile-1048576-bg: #8a8c46;
-  --tile-1048576-fg: #f9f6f2; /* olive */
+  --tile-1048576-fg: #f9f6f2;
   --tile-super-bg: #2f3638;
   --tile-super-fg: #f9f6f2;
 
@@ -184,7 +183,7 @@ button:disabled {
   --btn-bg: #6f5d4a;
   --btn-bg-hover: #7d6b58;
   --btn-text: #ffffff;
-  --btn-gobg: #5a4a3a; /* game-over bar primary (dark mode, slightly darker than topbar) */
+  --btn-gobg: #5a4a3a;
   --btn-gobg-hover: #6f5d4a;
 
   /* score indicators */
@@ -249,7 +248,6 @@ button:disabled {
   --tile-1024-fg: #f5efe6;
   --tile-2048-bg: #5a4d3e;
   --tile-2048-fg: #f5efe6;
-
   --tile-4096-bg: #48695a;
   --tile-4096-fg: #f5efe6;
   --tile-8192-bg: #3c6874;

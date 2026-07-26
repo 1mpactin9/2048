@@ -7,7 +7,6 @@ export interface SegOption {
   value: string;
 }
 
-/** Build a segmented toggle/radio group. Returns the element and an updater. */
 export function createSegmented(
   options: SegOption[],
   active: string,
@@ -34,7 +33,6 @@ export function createSegmented(
     el.appendChild(btn);
   }
 
-    // Position the sliding thumb over the active button.
   const position = (animate: boolean) => {
     let activeBtn: HTMLElement | undefined;
     for (const b of buttons.values()) {
@@ -48,7 +46,7 @@ export function createSegmented(
     thumb.style.width = `${activeBtn.offsetWidth}px`;
     thumb.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
     if (!animate) {
-      void thumb.offsetWidth; // commit the move before re-enabling transitions
+      void thumb.offsetWidth;
       el.classList.add("segmented--ready");
     }
   };
@@ -70,9 +68,7 @@ export interface PopoverOpts {
   autoSpeed: number;
   autoDepth: number;
   autoPowerups: boolean;
-  /** RNG Manipulation: biases tile spawns toward the player via the same CSPRNG stream. */
   rngManip: boolean;
-  /** Backtrack: stores delta-encoded history for unlimited __undo. */
   backtrackEnabled: boolean;
   onBacktrack: (on: boolean) => void;
   mode: "standard" | "classic";
@@ -88,7 +84,6 @@ export interface PopoverOpts {
   onClearAll: (isBacktrackPrompt?: boolean) => void;
 }
 
-/** The settings (gear) button + dropdown popover. */
 export class SettingsPopover {
   readonly el: HTMLElement;
   private popover: HTMLElement;
@@ -156,7 +151,6 @@ export class SettingsPopover {
   private buildContent(): void {
     this.popover.innerHTML = "";
 
-    // Game section: mode + size
     const gameGroup = document.createElement("div");
     gameGroup.className = "popover__group";
 
@@ -195,7 +189,6 @@ export class SettingsPopover {
     const divider1 = document.createElement("div");
     divider1.className = "popover__divider";
 
-    // Theme section
     const themeGroup = document.createElement("div");
     themeGroup.className = "popover__group";
     const themeLabel = document.createElement("div");
@@ -215,7 +208,6 @@ export class SettingsPopover {
     const dividerThemeAuto = document.createElement("div");
     dividerThemeAuto.className = "popover__divider";
 
-    // Engine section: auto-play toggle, AI depth, move delay, and power-up spending.
     const engineGroup = document.createElement("div");
     engineGroup.className = "popover__group";
 
@@ -236,10 +228,6 @@ export class SettingsPopover {
     this.autoSwitch = autoSwitch;
     autoRow.append(autoLabel, autoSwitch);
 
-    // RNG Manipulation toggle. Sits directly under the Engine toggle. Wired
-    // into every spawn (including a new game's opening tiles) via
-    // GameSession's `manipulate` flag - see grid.ts/spawnTile and
-    // session.ts/setRngManipulation.
     const rngRow = document.createElement("div");
     rngRow.className = "popover__row";
     const rngLabel = document.createElement("span");
@@ -270,7 +258,6 @@ export class SettingsPopover {
       String(this.opts.autoDepth),
       (v) => this.opts.onAutoDepth(Number(v)),
     );
-    // Short uniform labels — narrow the track to content width.
     this.depthSeg.el.classList.add("segmented--compact");
 
     const depthField = document.createElement("div");
@@ -294,7 +281,6 @@ export class SettingsPopover {
     delayField.className = "popover__field";
     delayField.append(delayLabel, this.delaySeg.el);
 
-    // Backtrack toggle — enables unlimited undo via delta-encoded history.
     const backtrackRow = document.createElement("div");
     backtrackRow.className = "popover__row";
     const backtrackLabel = document.createElement("span");
@@ -315,10 +301,9 @@ export class SettingsPopover {
     );
     backtrackSwitch.addEventListener("click", () => {
       if (this.opts.backtrackEnabled) {
-        // User wants to disable — prompt to clear or keep cache
         this.popover.hidden = true;
         this.open = false;
-        this.opts.onClearAll(true); // signal: need clear-backtrack dialog
+        this.opts.onClearAll(true);
       } else {
         this.opts.onBacktrack(true);
       }
@@ -400,7 +385,6 @@ export class SettingsPopover {
     this.popover.hidden = true;
   }
 
-  // Power-ups only exist in Standard mode; hide the toggle in Classic.
   private applyPowerupVisibility(): void {
     this.powerupRow.style.display = this.opts.mode === "classic" ? "none" : "";
   }

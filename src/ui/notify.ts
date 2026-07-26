@@ -1,10 +1,5 @@
-// Small, auto-hiding top-right notification stack. Non-blocking — never darkens
-// the board or waits for a click. Used only to report engine actions (e.g. spent
-// a power-up) so auto-play moves aren't confusing.
 export interface NotifyOptions {
-  // How long the card stays up, in ms, before auto-hiding.
   duration?: number;
-  // Inline SVG icon shown at the start of the card.
   icon?: string;
 }
 
@@ -64,7 +59,6 @@ export class NotificationCenter {
 
     closeBtn.addEventListener("click", dismiss);
 
-    // Enter animation, then start the depleting progress bar.
     requestAnimationFrame(() => {
       card.classList.add("is-visible");
       fill.style.transitionDuration = `${duration}ms`;
