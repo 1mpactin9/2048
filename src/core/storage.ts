@@ -13,6 +13,7 @@ export interface Settings {
   autoDepth: number;
   autoPowerups: boolean;
   rngManip: boolean;
+  deterministic: boolean;
   backtrackEnabled: boolean;
 }
 
@@ -35,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoDepth: 0,
   autoPowerups: true,
   rngManip: false,
+  deterministic: false,
   backtrackEnabled: true,
 };
 

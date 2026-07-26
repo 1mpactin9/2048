@@ -1,7 +1,24 @@
 use rand::Rng;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 
 const SEARCH_NODE_BUDGET: u64 = 150_000;
+const ENDGAME_EMPTY_THRESHOLD: usize = 2;
+const ENDGAME_EXTRA_DEPTH: usize = 30;
+
+thread_local! {
+    static TT: RefCell<HashMap<(u64, usize), f64>> = RefCell::new(HashMap::new());
+}
+
+fn board_hash(board: &[u32]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for &v in board {
+        h ^= v as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;
@@ -382,8 +399,17 @@ impl Engine {
     pub fn suggest_move(&self, depth: Option<usize>) -> Option<Direction> {
         Self::suggest_move_for(&self.grid, depth)
     }
+    fn endgame_depth(grid: &Vec<Vec<u32>>, depth: usize) -> usize {
+        let empties = grid.iter().flatten().filter(|&&v| v == 0).count();
+        if empties <= ENDGAME_EMPTY_THRESHOLD {
+            depth.max(ENDGAME_EXTRA_DEPTH)
+        } else {
+            depth
+        }
+    }
+
     pub fn suggest_move_for(grid: &Vec<Vec<u32>>, depth: Option<usize>) -> Option<Direction> {
-        let search_depth = depth.unwrap_or_else(|| Self::auto_depth(grid));
+        let search_depth = Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
         let mut budget = Self::budget_for_depth(search_depth);
         Self::best_move(grid, search_depth, &mut budget).0
     }
@@ -398,6 +424,7 @@ impl Engine {
     }
 
     fn best_move(grid: &Vec<Vec<u32>>, depth: usize, budget: &mut u64) -> (Option<Direction>, f64) {
+        TT.with(|c| c.borrow_mut().clear());
         let n = grid.len();
         let board = Self::flatten(grid);
         let mut best_dir = None;
@@ -608,6 +635,10 @@ impl Engine {
         if depth == 0 || *budget == 0 {
             return Self::heuristic_flat(board, n);
         }
+        let key = (board_hash(board), depth);
+        if let Some(cached) = TT.with(|c| c.borrow().get(&key).copied()) {
+            return cached;
+        }
         *budget -= 1;
         let mut best = f64::NEG_INFINITY;
         let mut any_move = false;
@@ -617,16 +648,15 @@ impl Engine {
                 continue;
             }
             any_move = true;
-            let v =
-                gained as f64 + Self::expectimax_chance_flat(&mut new_board, n, depth - 1, budget);
+            let v = gained as f64
+                + Self::expectimax_chance_flat(&mut new_board, n, depth.saturating_sub(1), budget);
             if v > best {
                 best = v;
             }
         }
-        if !any_move {
-            return -200000.0;
-        }
-        best
+        let result = if !any_move { -200000.0 } else { best };
+        TT.with(|c| c.borrow_mut().insert(key, result));
+        result
     }
 
     fn expectimax_chance_flat(
@@ -647,6 +677,10 @@ impl Engine {
         if empties.is_empty() || depth == 0 {
             return Self::heuristic_flat(&*board, n);
         }
+        let key = (board_hash(board), depth);
+        if let Some(cached) = TT.with(|c| c.borrow().get(&key).copied()) {
+            return cached;
+        }
         *budget -= 1;
 
         const MAX_CELLS: usize = 6;
@@ -661,15 +695,17 @@ impl Engine {
 
         let mut total = 0.0;
         let weight_each = 1.0 / sampled.len() as f64;
+        let next_depth = depth.saturating_sub(1);
         for &idx in &sampled {
             board[idx] = 2;
-            let v2 = Self::expectimax_max_flat(&*board, n, depth - 1, budget);
+            let v2 = Self::expectimax_max_flat(&*board, n, next_depth, budget);
             board[idx] = 4;
-            let v4 = Self::expectimax_max_flat(&*board, n, depth - 1, budget);
+            let v4 = Self::expectimax_max_flat(&*board, n, next_depth, budget);
             board[idx] = 0;
 
             total += weight_each * (0.9 * v2 + 0.1 * v4);
         }
+        TT.with(|c| c.borrow_mut().insert(key, total));
         total
     }
 
@@ -890,7 +926,7 @@ impl Engine {
                 + Self::expectimax_chance_flat_det(
                     &mut new_board,
                     n,
-                    depth - 1,
+                    depth.saturating_sub(1),
                     budget,
                     key,
                     calls,
@@ -918,8 +954,8 @@ impl Engine {
         if *budget == 0 {
             return Self::heuristic_flat(&*board, n);
         }
-        let has_empty = board.iter().any(|&v| v == 0);
-        if !has_empty || depth == 0 {
+        let empties = board.iter().filter(|&&v| v == 0).count();
+        if empties == 0 || depth == 0 {
             return Self::heuristic_flat(&*board, n);
         }
         *budget -= 1;
@@ -930,7 +966,7 @@ impl Engine {
         let v = Self::expectimax_max_flat_det(
             board,
             n,
-            depth - 1,
+            depth.saturating_sub(1),
             budget,
             key,
             calls + draws,
@@ -987,7 +1023,7 @@ impl Engine {
         calls: u64,
         manipulate: bool,
     ) -> Option<Direction> {
-        let search_depth = depth.unwrap_or_else(|| Self::auto_depth(grid));
+        let search_depth = Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
         let mut budget = Self::budget_for_depth(search_depth);
         Self::best_move_det(grid, search_depth, &mut budget, key, calls, manipulate).0
     }
@@ -1675,5 +1711,33 @@ mod tests {
         board[2] = 256;
         let h = Engine::heuristic_flat(&board, 4);
         assert!(h > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod endgame_checks {
+    use super::*;
+
+    #[test]
+    fn endgame_boost_applies_when_few_empties() {
+        let mut grid = vec![vec![0u32; 4]; 4];
+        let mut v = 2u32;
+        for r in 0..4 {
+            for c in 0..4 {
+                if !(r == 3 && c == 3) {
+                    grid[r][c] = v;
+                    v = if v == 2048 { 2 } else { v * 2 };
+                }
+            }
+        }
+        let depth = Engine::endgame_depth(&grid, 6);
+        assert!(depth >= 30);
+    }
+
+    #[test]
+    fn endgame_boost_not_applied_on_open_board() {
+        let grid = vec![vec![0u32; 4]; 4];
+        let depth = Engine::endgame_depth(&grid, 6);
+        assert_eq!(depth, 6);
     }
 }

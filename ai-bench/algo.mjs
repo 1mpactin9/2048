@@ -1,7 +1,3 @@
-// Faithful JS port of engine/src/lib.rs's expectimax AI, with tunable knobs.
-// Board = flat array length n*n, index r*n+c, 0 = empty.
-// Direction: 0=Up,1=Down,2=Left,3=Right (matches Direction::ALL order in Rust).
-
 export function makeParams(overrides = {}) {
   return Object.assign(
     {
@@ -11,10 +7,8 @@ export function makeParams(overrides = {}) {
       W_SNAKE: 46.0,
       SNAKE_RATIO: 0.5,
       MAX_CELLS: 6,
-      // default_depth(size) schedule, keyed by size
       defaultDepth: { 3: 5, 4: 5, 5: 3, 6: 2 },
       defaultDepthFallback: 1,
-      // dynamic_depth bonus thresholds (fractions of area) -> bonus
       dynamicBonus: [
         { fracDenom: 16, minEmpty: 1, bonus: 3 },
         { fracDenom: 8, minEmpty: 2, bonus: 2 },
@@ -30,7 +24,6 @@ function log2(v) {
 }
 
 function slideLine(values, n) {
-  // values: array of nonzero tile values in order from "near" to "far" edge.
   const merged = [];
   let gained = 0;
   let i = 0;
@@ -49,34 +42,29 @@ function slideLine(values, n) {
   return { merged, gained };
 }
 
-// dir: 0 Up, 1 Down, 2 Left, 3 Right
 export function slideGrid(grid, n, dir) {
   const result = new Array(n * n).fill(0);
   let gained = 0;
   const lines = [];
   if (dir === 2) {
-    // Left
     for (let r = 0; r < n; r++) {
       const line = [];
       for (let c = 0; c < n; c++) line.push(r * n + c);
       lines.push(line);
     }
   } else if (dir === 3) {
-    // Right
     for (let r = 0; r < n; r++) {
       const line = [];
       for (let c = n - 1; c >= 0; c--) line.push(r * n + c);
       lines.push(line);
     }
   } else if (dir === 0) {
-    // Up
     for (let c = 0; c < n; c++) {
       const line = [];
       for (let r = 0; r < n; r++) line.push(r * n + c);
       lines.push(line);
     }
   } else {
-    // Down
     for (let c = 0; c < n; c++) {
       const line = [];
       for (let r = n - 1; r >= 0; r--) line.push(r * n + c);
@@ -170,7 +158,6 @@ function snakeScore(grid, n, P) {
     const out = new Array(n * n).fill(0);
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
-        // out[c][n-1-r] = wgt[r][c]
         out[c * n + (n - 1 - r)] = wgt[r * n + c];
       }
     }
@@ -249,9 +236,6 @@ function expectimaxChance(grid, n, depth, P) {
   let total = 0;
   const weightEach = 1.0 / sampled.length;
   for (const idx of sampled) {
-    // Mutate-in-place + restore instead of cloning: `grid` here is a local,
-    // caller-owned buffer (produced fresh by slideGrid per direction) that
-    // nothing else reads concurrently, so this is safe and allocation-free.
     grid[idx] = 2;
     const v2 = expectimaxMax(grid, n, depth - 1, P);
     grid[idx] = 4;

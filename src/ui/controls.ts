@@ -69,6 +69,7 @@ export interface PopoverOpts {
   autoDepth: number;
   autoPowerups: boolean;
   rngManip: boolean;
+  deterministic: boolean;
   backtrackEnabled: boolean;
   onBacktrack: (on: boolean) => void;
   mode: "standard" | "classic";
@@ -79,6 +80,7 @@ export interface PopoverOpts {
   onAutoDepth: (depth: number) => void;
   onAutoPowerups: (on: boolean) => void;
   onRngManip: (on: boolean) => void;
+  onDeterministic: (on: boolean) => void;
   onMode: (mode: "standard" | "classic") => void;
   onSize: (size: number) => void;
   onClearAll: (isBacktrackPrompt?: boolean) => void;
@@ -89,6 +91,7 @@ export class SettingsPopover {
   private popover: HTMLElement;
   private autoSwitch!: HTMLElement;
   private rngSwitch!: HTMLElement;
+  private detSwitch!: HTMLElement;
   private backtrackSwitch!: HTMLElement;
   private powerupSwitch!: HTMLElement;
   private powerupRow!: HTMLElement;
@@ -245,6 +248,23 @@ export class SettingsPopover {
     this.rngSwitch = rngSwitch;
     rngRow.append(rngLabel, rngSwitch);
 
+    const detRow = document.createElement("div");
+    detRow.className = "popover__row";
+    const detLabel = document.createElement("span");
+    detLabel.textContent = "Deterministic Algorithm";
+    detLabel.style.fontWeight = "600";
+    detLabel.style.fontSize = "13px";
+    const detSwitch = document.createElement("button");
+    detSwitch.type = "button";
+    detSwitch.className = "switch" + (this.opts.deterministic ? " is-on" : "");
+    detSwitch.setAttribute("aria-label", "Toggle deterministic algorithm");
+    detSwitch.setAttribute("aria-pressed", String(this.opts.deterministic));
+    detSwitch.addEventListener("click", () =>
+      this.opts.onDeterministic(!this.opts.deterministic),
+    );
+    this.detSwitch = detSwitch;
+    detRow.append(detLabel, detSwitch);
+
     const depthLabel = document.createElement("div");
     depthLabel.className = "popover__label";
     depthLabel.textContent = "DEPTH";
@@ -333,6 +353,7 @@ export class SettingsPopover {
     engineGroup.append(
       autoRow,
       rngRow,
+      detRow,
       depthField,
       delayField,
       backtrackRow,
@@ -415,6 +436,10 @@ export class SettingsPopover {
     if (opts.rngManip !== undefined) {
       this.rngSwitch.classList.toggle("is-on", opts.rngManip);
       this.rngSwitch.setAttribute("aria-pressed", String(opts.rngManip));
+    }
+    if (opts.deterministic !== undefined) {
+      this.detSwitch.classList.toggle("is-on", opts.deterministic);
+      this.detSwitch.setAttribute("aria-pressed", String(opts.deterministic));
     }
     if (opts.backtrackEnabled !== undefined) {
       this.backtrackSwitch.classList.toggle("is-on", opts.backtrackEnabled);

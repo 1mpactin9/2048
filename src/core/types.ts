@@ -89,6 +89,7 @@ export interface EngineContext {
   depth: number;
   usePowerups: boolean;
   manipulate?: boolean;
+  deterministic?: boolean;
   rngSeed?: number[];
   rngCalls?: number;
 }

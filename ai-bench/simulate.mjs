@@ -111,7 +111,6 @@ export function runBatch({ games = 10, n = 4, depth, P, seedStart = 1, fourProb 
   return { results, scores, avg, min, max, median, totalMs, avgDecisionMs, maxTiles };
 }
 
-// CLI usage: node simulate.mjs [games] [depthBase] [maxCells] [--verbose]
 if (import.meta.url === `file://${process.argv[1]}`) {
   const games = parseInt(process.argv[2] || "8", 10);
   const depth = process.argv[3] ? parseInt(process.argv[3], 10) : undefined;

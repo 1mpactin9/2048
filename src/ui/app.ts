@@ -116,6 +116,7 @@ export class App {
       autoDepth: this.data.settings.autoDepth,
       autoPowerups: this.data.settings.autoPowerups,
       rngManip: this.data.settings.rngManip,
+      deterministic: this.data.settings.deterministic,
       backtrackEnabled: this.data.settings.backtrackEnabled,
       onBacktrack: (on) => this.onBacktrack(on),
       mode: this.mode,
@@ -126,6 +127,7 @@ export class App {
       onAutoDepth: (d) => this.onAutoDepth(d),
       onAutoPowerups: (on) => this.onAutoPowerups(on),
       onRngManip: (on) => this.onRngManip(on),
+      onDeterministic: (on) => this.onDeterministic(on),
       onMode: (m) => this.switchTo(this.size, m),
       onSize: (s) => this.switchTo(s, this.mode),
       onClearAll: (isBacktrackPrompt?) => {
@@ -794,6 +796,7 @@ export class App {
         ...this.session.toContext(),
         depth: this.data.settings.autoDepth,
         usePowerups: this.data.settings.autoPowerups,
+        deterministic: this.data.settings.deterministic,
       };
       const signature = this.boardSignature();
       const action = await WasmEngine.chooseAction(ctx);
@@ -929,6 +932,16 @@ export class App {
     this.popover.update({ rngManip: on });
     this.notify(
       on ? "RNG Manipulation enabled" : "RNG Manipulation disabled",
+      Icons.dice,
+    );
+  }
+
+  private onDeterministic(on: boolean): void {
+    this.data.settings.deterministic = on;
+    this.persist();
+    this.popover.update({ deterministic: on });
+    this.notify(
+      on ? "Deterministic Algorithm enabled" : "Deterministic Algorithm disabled",
       Icons.dice,
     );
   }
