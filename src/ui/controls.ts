@@ -34,9 +34,7 @@ export function createSegmented(
     el.appendChild(btn);
   }
 
-  // Position the sliding thumb over the active button. When `animate` is false
-  // the move is committed without a transition (used on first layout / open so
-  // the thumb doesn't slide in from the edge).
+    // Position the sliding thumb over the active button.
   const position = (animate: boolean) => {
     let activeBtn: HTMLElement | undefined;
     for (const b of buttons.values()) {
@@ -217,9 +215,7 @@ export class SettingsPopover {
     const dividerThemeAuto = document.createElement("div");
     dividerThemeAuto.className = "popover__divider";
 
-    // Engine section: auto-play toggle plus AI search depth, move delay, and
-    // whether the AI may spend power-ups. Each writes straight to the settings
-    // the loop reads, so changes take effect on the next tick (no restart).
+    // Engine section: auto-play toggle, AI depth, move delay, and power-up spending.
     const engineGroup = document.createElement("div");
     engineGroup.className = "popover__group";
 
@@ -274,10 +270,7 @@ export class SettingsPopover {
       String(this.opts.autoDepth),
       (v) => this.opts.onAutoDepth(Number(v)),
     );
-    // All four labels are now short single words (previously "Advanced" was
-    // the long pole), so the segmented control no longer needs the full
-    // popover width - narrow it to fit its content instead of stretching edge
-    // to edge.
+    // Short uniform labels — narrow the track to content width.
     this.depthSeg.el.classList.add("segmented--compact");
 
     const depthField = document.createElement("div");
@@ -407,7 +400,7 @@ export class SettingsPopover {
     this.popover.hidden = true;
   }
 
-  /** Power-ups only exist in Standard mode; hide the toggle in Classic. */
+  // Power-ups only exist in Standard mode; hide the toggle in Classic.
   private applyPowerupVisibility(): void {
     this.powerupRow.style.display = this.opts.mode === "classic" ? "none" : "";
   }

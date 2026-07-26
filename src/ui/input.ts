@@ -56,8 +56,7 @@ export class Input {
     }
     if (e.key === "u" || e.key === "U") this.cb.onShortcut?.("undo");
     else if (e.key === "e" || e.key === "E") this.cb.onShortcut?.("delete");
-    // 's'/'d' already map to move directions, so powerup swap shortcut uses no
-    // single-letter key to avoid collisions; expose via UI only.
+    // 's'/'d' already map to directions, so swap has no keyboard shortcut.
   };
 
   private onTouchStart = (e: TouchEvent): void => {
@@ -67,7 +66,7 @@ export class Input {
   };
 
   private onTouchMove = (e: TouchEvent): void => {
-    if (this.touchStart) e.preventDefault(); // stop the page from scrolling
+    if (this.touchStart) e.preventDefault();
   };
 
   private onTouchEnd = (e: TouchEvent): void => {

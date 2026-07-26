@@ -1,15 +1,10 @@
-/**
- * Small, auto-hiding top-right notification stack. Visually a scaled-down
- * cousin of the overlay/modal (same rounded-card language) but non-blocking:
- * it never darkens the board or waits for a click. Used sparingly - only to
- * tell the player what the engine just did on its own (e.g. spent a
- * power-up), since that's the one moment a silent auto-played move could be
- * confusing.
- */
+// Small, auto-hiding top-right notification stack. Non-blocking — never darkens
+// the board or waits for a click. Used only to report engine actions (e.g. spent
+// a power-up) so auto-play moves aren't confusing.
 export interface NotifyOptions {
-  /** How long the card stays up, in ms, before it auto-hides. */
+  // How long the card stays up, in ms, before auto-hiding.
   duration?: number;
-  /** Inline SVG icon shown at the start of the card. */
+  // Inline SVG icon shown at the start of the card.
   icon?: string;
 }
 

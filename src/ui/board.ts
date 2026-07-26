@@ -15,11 +15,9 @@ export interface SelectResult {
   id: number;
 }
 
-/**
- * Renders a 2048 board to the DOM and animates moves using stable tile ids.
- * Layout is pixel-driven (ResizeObserver) so every board size looks right and
- * tiles slide via GPU-friendly transform transitions.
- */
+// Renders a 2048 board to the DOM and animates moves using stable tile ids.
+// Layout is pixel-driven (ResizeObserver) so every board size looks right and
+// tiles slide via GPU-friendly transform transitions.
 export class BoardRenderer {
   readonly el: HTMLElement;
   private grid: HTMLElement;
@@ -73,7 +71,7 @@ export class BoardRenderer {
   private layout(): void {
     const w = this.el.clientWidth;
     if (w === 0) return;
-    // For 8×8 boards the border feels proportionally too thick — dial it down.
+    // For 8x8 boards the border feels proportionally too thick.
     const ratio = this.size >= 8 ? 0.015 : 0.026;
     const minGap = this.size >= 8 ? 5 : 6;
     this.gap = Math.max(minGap, Math.round(w * ratio));
@@ -143,7 +141,7 @@ export class BoardRenderer {
     this.tiles.clear();
   }
 
-  /** Full rebuild from a grid (new game / undo / swap / delete / load). */
+  // Full rebuild from a grid (new game / undo / swap / delete / load).
   fullRender(grid: Grid, spawn = false): void {
     this.clearTiles();
     for (let r = 0; r < grid.length; r++) {
@@ -155,7 +153,7 @@ export class BoardRenderer {
     this.layout();
   }
 
-  /** Animate a move transcript (slides + merges + spawn). */
+  // Animate a move transcript (slides + merges + spawn).
   animateMove(transcript: MoveTranscript): void {
     const removeIds = new Set<number>();
     const survivorUpdates: { id: number; value: number }[] = [];
@@ -197,7 +195,7 @@ export class BoardRenderer {
     }, SLIDE_MS);
   }
 
-  /** Animate two tiles trading places (swap powerup). Both slide simultaneously. */
+  // Animate two tiles trading places (swap powerup). Both slide simultaneously.
   animateSwap(idA: number, idB: number): void {
     const a = this.tiles.get(idA);
     const b = this.tiles.get(idB);
@@ -212,7 +210,6 @@ export class BoardRenderer {
     this.positionTile(b);
   }
 
-  // ---------- Select mode (swap / delete) ----------
   enterSelectMode(
     max: number,
     onSelected: (cells: SelectResult[]) => void,

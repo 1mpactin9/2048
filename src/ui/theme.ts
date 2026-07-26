@@ -39,7 +39,7 @@ export function currentThemePref(): ThemePref {
   return currentPref;
 }
 
-/** Quick toggle used by the nav button: cycles light <-> dark. */
+// Quick toggle used by the nav button: cycles light <-> dark.
 export function toggleTheme(): ThemePref {
   const next: ThemePref = resolved(currentPref) === "dark" ? "light" : "dark";
   apply(next);

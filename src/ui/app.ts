@@ -2303,14 +2303,8 @@ export class App {
     console.log(`[dev] __fixBest → recovered best from NaN to ${s.best}`);
   }
 
-  /**
-   * Ensure the score correctly matches the latest position.
-   * Recalculates the score window from the board tiles and clamps the
-   * displayed score into the valid range. Updates UI and persists state.
-   * Also fixes NaN best scores if present.
-   *
-   * Returns the adjustment details.
-   */
+  // Ensure the score matches the current position. Recalculates the score
+  // window from board tiles and clamps into the valid range. Fixes NaN best.
   __refreshScore(): {
     from: number;
     to: number;
@@ -2354,11 +2348,7 @@ export class App {
     };
   }
 
-  /**
-   * Explicitly refresh the Play Again bar visibility based on whether the
-   * board is dead (no legal moves left). Only shows when the board has no
-   * remaining moves.
-   */
+  // Explicitly refresh the Play Again bar visibility based on board dead state.
   __refreshPlayAgainStatus(): void {
     const isDead = !hasMoves(this.session.state.grid);
     this.gameOverBar.classList.toggle("is-visible", isDead);
@@ -2367,7 +2357,7 @@ export class App {
     );
   }
 
-  /** Print usage info for the developer console. */
+  // Print usage info for the developer console.
   __help(): void {
     const lines = [
       "%c2048 Developer Console%c",
@@ -2418,7 +2408,7 @@ export class App {
   }
 }
 
-/** Monotonic id counter for dev-console tile placement (avoids collisions). */
+// Monotonic id counter for dev-console tile placement.
 let _devId = 1;
 function freshDevId(): number {
   return _devId++;
