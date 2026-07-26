@@ -58,13 +58,19 @@
   line-height: 1.2;
   overflow: hidden;
   white-space: nowrap;
-  transition: width 0.22s ease, opacity 0.12s ease;
+  transition:
+    width 0.22s ease,
+    opacity 0.12s ease;
   opacity: 1;
 }
 
 @keyframes mode-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .mode-badge--fading {
@@ -83,7 +89,10 @@
   font-size: 14px;
   color: var(--btn-text);
   background: var(--btn-bg);
-  transition: background-color 0.15s ease, transform 0.06s ease, opacity 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    transform 0.06s ease,
+    opacity 0.15s ease;
   white-space: nowrap;
 }
 
@@ -131,7 +140,9 @@
   border-radius: 10px;
   color: var(--menu-icon);
   background: transparent;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .icon-btn:hover:not(:disabled) {
@@ -188,7 +199,9 @@
 }
 
 .segmented--ready .segmented__thumb {
-  transition: transform 0.18s ease, width 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    width 0.18s ease;
 }
 
 .segmented__btn {
@@ -344,7 +357,11 @@
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
-  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease, color 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.12s ease,
+    color 0.18s ease;
 }
 
 .powerup-btn:hover:not(:disabled) {
@@ -427,7 +444,9 @@
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 
 .powerup-btn:hover .powerup-btn__tooltip,
@@ -486,7 +505,11 @@
   padding: 9px 14px;
   height: 3rem;
   color: var(--btn-text);
-  background: linear-gradient(to bottom, var(--btn-gobg), color-mix(in srgb, var(--btn-gobg) 85%, black));
+  background: linear-gradient(
+    to bottom,
+    var(--btn-gobg),
+    color-mix(in srgb, var(--btn-gobg) 85%, black)
+  );
   box-shadow:
     0 5px 15px 0 rgba(140, 100, 60, 0.12),
     0 2px 3px 0 rgba(140, 100, 60, 0.09),
@@ -496,7 +519,11 @@
 }
 
 .game-over-bar__action:hover:not(:disabled) {
-  background: linear-gradient(to bottom, var(--btn-gobg-hover), color-mix(in srgb, var(--btn-gobg-hover) 85%, black));
+  background: linear-gradient(
+    to bottom,
+    var(--btn-gobg-hover),
+    color-mix(in srgb, var(--btn-gobg-hover) 85%, black)
+  );
 }
 
 .game-over-bar__action:active:not(:disabled) {
@@ -599,7 +626,7 @@
   color: #c0392b;
 }
 
-:root[data-theme='dark'] .popover__danger {
+:root[data-theme="dark"] .popover__danger {
   color: #ff6b5e;
 }
 
@@ -618,7 +645,7 @@
 }
 
 .switch::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 2px;
   left: 2px;
@@ -686,7 +713,9 @@
   border-radius: 8px;
   background: var(--modal-btn-bg);
   color: var(--modal-btn-text);
-  transition: background-color 0.15s ease, transform 0.12s ease;
+  transition:
+    background-color 0.15s ease,
+    transform 0.12s ease;
 }
 
 .overlay__close:hover {
@@ -736,7 +765,9 @@
 
 /* Danger tone for destructive confirmations (Clear all progress). */
 .overlay__card--danger {
-  box-shadow: 0 0 0 1px rgba(192, 57, 43, 0.3), var(--shadow-board);
+  box-shadow:
+    0 0 0 1px rgba(192, 57, 43, 0.3),
+    var(--shadow-board);
 }
 
 .overlay__actions .btn--danger {
@@ -748,11 +779,11 @@
   background: #a93226;
 }
 
-:root[data-theme='dark'] .overlay__actions .btn--danger {
+:root[data-theme="dark"] .overlay__actions .btn--danger {
   background: #d9453a;
 }
 
-:root[data-theme='dark'] .overlay__actions .btn--danger:hover:not(:disabled) {
+:root[data-theme="dark"] .overlay__actions .btn--danger:hover:not(:disabled) {
   background: #c0392b;
 }
 
@@ -848,7 +879,9 @@
   overflow: hidden;
   opacity: 0;
   transform: translateX(12px) scale(0.98);
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
 }
 
 .notify-card.is-visible {

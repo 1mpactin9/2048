@@ -289,11 +289,7 @@ impl Engine {
     }
 
     /// Swap the values of two tiles (both must be occupied). Consumes one swap charge.
-    pub fn swap_tiles(
-        &mut self,
-        a: (usize, usize),
-        b: (usize, usize),
-    ) -> Result<(), EngineError> {
+    pub fn swap_tiles(&mut self, a: (usize, usize), b: (usize, usize)) -> Result<(), EngineError> {
         if a == b {
             return Err(EngineError::SamePosition);
         }
@@ -496,7 +492,11 @@ impl Engine {
                 best_dir = Some(dir);
             }
         }
-        let val = if best_dir.is_none() { -200_000.0 } else { best_val };
+        let val = if best_dir.is_none() {
+            -200_000.0
+        } else {
+            best_val
+        };
         (best_dir, val)
     }
 
@@ -697,11 +697,15 @@ impl Engine {
         let mut gained: u64 = 0;
 
         let lines: Vec<Vec<usize>> = match dir {
-            Direction::Left => (0..n).map(|r| (0..n).map(|c| r * n + c).collect()).collect(),
+            Direction::Left => (0..n)
+                .map(|r| (0..n).map(|c| r * n + c).collect())
+                .collect(),
             Direction::Right => (0..n)
                 .map(|r| (0..n).rev().map(|c| r * n + c).collect())
                 .collect(),
-            Direction::Up => (0..n).map(|c| (0..n).map(|r| r * n + c).collect()).collect(),
+            Direction::Up => (0..n)
+                .map(|c| (0..n).map(|r| r * n + c).collect())
+                .collect(),
             Direction::Down => (0..n)
                 .map(|c| (0..n).rev().map(|r| r * n + c).collect())
                 .collect(),
@@ -753,8 +757,8 @@ impl Engine {
                 continue;
             }
             any_move = true;
-            let v = gained as f64
-                + Self::expectimax_chance_flat(&mut new_board, n, depth - 1, budget);
+            let v =
+                gained as f64 + Self::expectimax_chance_flat(&mut new_board, n, depth - 1, budget);
             if v > best {
                 best = v;
             }
@@ -774,7 +778,12 @@ impl Engine {
     // this call chain - nothing else reads it concurrently - so skipping the
     // clone removes what used to be the single biggest allocation cost in the
     // whole search (up to `MAX_CELLS * 2` clones per node, at every node).
-    fn expectimax_chance_flat(board: &mut Vec<u32>, n: usize, depth: usize, budget: &mut u64) -> f64 {
+    fn expectimax_chance_flat(
+        board: &mut Vec<u32>,
+        n: usize,
+        depth: usize,
+        budget: &mut u64,
+    ) -> f64 {
         if *budget == 0 {
             return Self::heuristic_flat(&*board, n);
         }
@@ -1114,8 +1123,9 @@ impl Engine {
             return Self::heuristic_flat(&*board, n);
         }
         *budget -= 1;
-        let (idx, value, draws) = Self::predict_spawn_flat(&mut board[..], n, key, calls, manipulate)
-            .expect("non-empty board has a spawn");
+        let (idx, value, draws) =
+            Self::predict_spawn_flat(&mut board[..], n, key, calls, manipulate)
+                .expect("non-empty board has a spawn");
         board[idx] = value;
         let v = Self::expectimax_max_flat_det(
             board,
@@ -1164,7 +1174,11 @@ impl Engine {
                 best_dir = Some(dir);
             }
         }
-        let val = if best_dir.is_none() { -200_000.0 } else { best_val };
+        let val = if best_dir.is_none() {
+            -200_000.0
+        } else {
+            best_val
+        };
         (best_dir, val)
     }
 
@@ -1199,7 +1213,8 @@ impl Engine {
         let d = depth.unwrap_or_else(|| Self::auto_depth(grid));
         let mut budget = Self::budget_for_depth(d);
 
-        let (best_dir, move_val) = Self::best_move_det(grid, d, &mut budget, key, calls, manipulate);
+        let (best_dir, move_val) =
+            Self::best_move_det(grid, d, &mut budget, key, calls, manipulate);
 
         let stuck = best_dir.is_none();
         if !stuck && !Self::is_dangerous(grid) {
@@ -1271,7 +1286,11 @@ fn sampled_pairs(occ: &[(usize, usize)], max: usize) -> Vec<((usize, usize), (us
         return Vec::new();
     }
     let total: usize = n * (n - 1) / 2;
-    let step = if total <= max { 1 } else { (total + max - 1) / max };
+    let step = if total <= max {
+        1
+    } else {
+        (total + max - 1) / max
+    };
     let mut out: Vec<((usize, usize), (usize, usize))> = Vec::with_capacity(total.min(max));
     let mut count = 0usize;
     for i in 0..n {
@@ -1613,14 +1632,22 @@ mod tests {
                 Engine::predict_spawn_flat(&mut board, n, &key, 0, manipulate).unwrap();
             // Board is restored after probing, so the predicted cell is still empty.
             assert_eq!(board[idx], 0, "predicted cell must be empty after probe");
-            assert!(value == 2 || value == 4, "value must be 2 or 4, got {}", value);
+            assert!(
+                value == 2 || value == 4,
+                "value must be 2 or 4, got {}",
+                value
+            );
             let empties = board.iter().filter(|&&v| v == 0).count();
             let expected = if manipulate && empties > 1 {
                 2 * 5_usize.min(empties)
             } else {
                 2
             };
-            assert_eq!(draws, expected as u64, "draws for manipulate={}", manipulate);
+            assert_eq!(
+                draws, expected as u64,
+                "draws for manipulate={}",
+                manipulate
+            );
         }
     }
 
@@ -1703,5 +1730,40 @@ mod tests {
             Engine::suggest_action_det_for(&grid, 0, 0, None, &key, 0, true),
             Action::None
         );
+    }
+
+    #[test]
+    fn game_over_detected_on_locked_board() {
+        // Board full, no adjacent equal tiles in any direction -> game over.
+        let mut engine = Engine::with_size(3).unwrap();
+        engine.grid = vec![vec![2, 4, 2], vec![4, 2, 4], vec![2, 4, 8]];
+        assert!(engine.is_game_over());
+    }
+
+    #[test]
+    fn undo_respects_max_history() {
+        let mut engine = Engine::new(Config {
+            size: 4,
+            max_undo_history: 2,
+            ..Config::default()
+        })
+        .unwrap();
+
+        // Make 5 moves, only 2 undos should be kept.
+        for _ in 0..5 {
+            for &dir in Direction::ALL.iter() {
+                if engine.make_move(dir).unwrap().moved {
+                    break;
+                }
+            }
+        }
+        assert_eq!(engine.undo_available(), 2);
+
+        // Undo twice should work.
+        engine.undo().unwrap();
+        engine.undo().unwrap();
+
+        // Third undo should fail.
+        assert_eq!(engine.undo(), Err(EngineError::NothingToUndo));
     }
 }

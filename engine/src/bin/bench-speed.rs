@@ -27,12 +27,7 @@ const DEPTHS: [(usize, &'static str); 4] = [
 /// Number of decisions to average per configuration.
 const DECISIONS_PER_CONFIG: usize = 20;
 
-fn run_phase(
-    _label: &str,
-    grid: Vec<Vec<u32>>,
-    _size: usize,
-    _state: &str,
-) -> u128 {
+fn run_phase(_label: &str, grid: Vec<Vec<u32>>, _size: usize, _state: &str) -> u128 {
     let t0 = Instant::now();
     for _ in 0..DECISIONS_PER_CONFIG {
         let _dir = Engine::suggest_move_for(&grid, None);
@@ -42,31 +37,49 @@ fn run_phase(
 }
 
 fn main() {
-    let filter_size: Option<usize> = env::args()
-        .nth(1)
-        .and_then(|s| s.parse().ok());
+    let filter_size: Option<usize> = env::args().nth(1).and_then(|s| s.parse().ok());
 
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    writeln!(out, "═══════════════════════════════════════════════════════════").unwrap();
-    writeln!(out, "  2048 AI Speed Benchmarks  ({} decisions per config)", DECISIONS_PER_CONFIG).unwrap();
-    writeln!(out, "═══════════════════════════════════════════════════════════").unwrap();
+    writeln!(
+        out,
+        "═══════════════════════════════════════════════════════════"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  2048 AI Speed Benchmarks  ({} decisions per config)",
+        DECISIONS_PER_CONFIG
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "═══════════════════════════════════════════════════════════"
+    )
+    .unwrap();
     writeln!(out).unwrap();
 
     // Phase 1: Directional move, plain expectimax
-    writeln!(out, "── Phase 1: Directional moves only (plain expectimax) ──").unwrap();
+    writeln!(
+        out,
+        "── Phase 1: Directional moves only (plain expectimax) ──"
+    )
+    .unwrap();
     writeln!(
         out,
         "{:<8} {:<12} {:<18} {:>10} {:>10}",
         "Size", "State", "Depth", "μs/move", "ratio"
-    ).unwrap();
+    )
+    .unwrap();
     writeln!(out, "{}", "─".repeat(62)).unwrap();
     out.flush().unwrap();
 
     for &size in &SIZES {
         if let Some(f) = filter_size {
-            if size != f { continue; }
+            if size != f {
+                continue;
+            }
         }
 
         let opening = build_opening_board(size);
@@ -78,15 +91,21 @@ fn main() {
             out,
             "{:<8} {:<12} {:<18} {:>10} {:>10}",
             size, "opening", "auto", base_us, "1.0x"
-        ).unwrap();
+        )
+        .unwrap();
 
         // Danger with auto
         let danger_us = run_phase("danger", danger.clone(), size, "danger");
         writeln!(
             out,
             "{:<8} {:<12} {:<18} {:>10} {:>10.2}",
-            size, "danger", "auto", danger_us, danger_us as f64 / base_us as f64
-        ).unwrap();
+            size,
+            "danger",
+            "auto",
+            danger_us,
+            danger_us as f64 / base_us as f64
+        )
+        .unwrap();
 
         // Fixed depths on danger
         for (_depth, name) in &DEPTHS[1..] {
@@ -94,8 +113,13 @@ fn main() {
             writeln!(
                 out,
                 "{:<8} {:<12} {:<18} {:>10} {:>10.2}",
-                size, "danger", name, us, us as f64 / base_us as f64
-            ).unwrap();
+                size,
+                "danger",
+                name,
+                us,
+                us as f64 / base_us as f64
+            )
+            .unwrap();
         }
         out.flush().unwrap();
     }
@@ -104,12 +128,17 @@ fn main() {
 
     // Phase 2: Full action (with power-up evaluation)
     // Use a stuck board so power-up evaluation is always triggered.
-    writeln!(out, "── Phase 2: Full action (move + power-up eval, stuck board) ──").unwrap();
+    writeln!(
+        out,
+        "── Phase 2: Full action (move + power-up eval, stuck board) ──"
+    )
+    .unwrap();
     writeln!(
         out,
         "{:<8} {:<18} {:>10} {:>10}",
         "Size", "Depth", "μs/action", "ratio"
-    ).unwrap();
+    )
+    .unwrap();
     writeln!(out, "{}", "─".repeat(50)).unwrap();
     out.flush().unwrap();
 
@@ -123,7 +152,9 @@ fn main() {
 
     for &size in &SIZES {
         if let Some(f) = filter_size {
-            if size != f { continue; }
+            if size != f {
+                continue;
+            }
         }
 
         // Base: plain directional move on the same stuck board
@@ -144,8 +175,12 @@ fn main() {
             writeln!(
                 out,
                 "{:<8} {:<18} {:>10} {:>10.2}",
-                size, name, elapsed, elapsed as f64 / base_us.max(1) as f64
-            ).unwrap();
+                size,
+                name,
+                elapsed,
+                elapsed as f64 / base_us.max(1) as f64
+            )
+            .unwrap();
         }
         out.flush().unwrap();
     }
@@ -158,13 +193,16 @@ fn main() {
         out,
         "{:<8} {:<12} {:>12} {:>12} {:>8}",
         "Size", "State", "plain μs", "det μs", "ratio"
-    ).unwrap();
+    )
+    .unwrap();
     writeln!(out, "{}", "─".repeat(56)).unwrap();
     out.flush().unwrap();
 
     for &size in &SIZES {
         if let Some(f) = filter_size {
-            if size != f { continue; }
+            if size != f {
+                continue;
+            }
         }
         for state_name in ["opening", "danger"] {
             let grid = if state_name == "opening" {
@@ -190,14 +228,23 @@ fn main() {
             writeln!(
                 out,
                 "{:<8} {:<12} {:>12} {:>12} {:>7.2}x",
-                size, state_name, plain, det, det as f64 / plain as f64
-            ).unwrap();
+                size,
+                state_name,
+                plain,
+                det,
+                det as f64 / plain as f64
+            )
+            .unwrap();
         }
         out.flush().unwrap();
     }
 
     writeln!(out).unwrap();
-    writeln!(out, "═══════════════════════════════════════════════════════════").unwrap();
+    writeln!(
+        out,
+        "═══════════════════════════════════════════════════════════"
+    )
+    .unwrap();
     out.flush().unwrap();
 }
 
@@ -217,7 +264,9 @@ fn build_opening_board(size: usize) -> Vec<Vec<u32>> {
 /// Build a dangerous, nearly-full board with high tiles.
 fn build_danger_board(size: usize) -> Vec<Vec<u32>> {
     let mut grid = vec![vec![0u32; size]; size];
-    let values: Vec<u32> = (1..=(size * size - 3)).map(|i| 2u32.pow(i.min(12) as u32)).collect();
+    let values: Vec<u32> = (1..=(size * size - 3))
+        .map(|i| 2u32.pow(i.min(12) as u32))
+        .collect();
     let mut vi = 0;
     for r in 0..size {
         let forward = r % 2 == 0;

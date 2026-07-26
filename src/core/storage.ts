@@ -1,8 +1,8 @@
-import type { GameMode, GameState } from './types';
-import { DEFAULT_MODE, DEFAULT_SIZE, gameKey } from './constants';
-import { peekNextId, setNextId } from './grid';
+import type { GameMode, GameState } from "./types";
+import { DEFAULT_MODE, DEFAULT_SIZE, gameKey } from "./constants";
+import { peekNextId, setNextId } from "./grid";
 
-export type ThemePref = 'light' | 'dark' | 'system';
+export type ThemePref = "light" | "dark" | "system";
 
 export interface Settings {
   theme: ThemePref;
@@ -10,21 +10,13 @@ export interface Settings {
   lastMode: GameMode;
   autoOn: boolean;
   autoSpeed: number; // ms between auto moves
-  /** AI search depth override (0 = engine's adaptive default per board size). */
+  /** AI search depth override (0 = adaptive). */
   autoDepth: number;
-  /** Whether auto-play may spend swap/delete charges to avoid game over. */
+  /** Whether auto-play may spend swap/delete charges. */
   autoPowerups: boolean;
-  /**
-   * RNG Manipulation: when on, tile spawns are chosen from several genuine
-   * draws of the same ChaCha20 stream (see grid.ts/spawnTile), keeping
-   * whichever leaves the board in the strongest position. Off by default.
-   */
+  /** RNG Manipulation: biases spawns via the same CSPRNG stream. */
   rngManip: boolean;
-  /**
-   * Backtrack: when on, stores a delta-encoded history of every move so
-   * __undo can step back far beyond the 16-snapshot powerup undo limit.
-   * Default true.
-   */
+  /** Backtrack: delta-encoded history for unlimited __undo. */
   backtrackEnabled: boolean;
 }
 
@@ -35,11 +27,11 @@ export interface StoredData {
   nextId: number;
 }
 
-const KEY = '2048:v1';
+const KEY = "2048:v1";
 const VERSION = 1;
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: 'system',
+  theme: "system",
   lastSize: DEFAULT_SIZE,
   lastMode: DEFAULT_MODE,
   autoOn: false,
@@ -66,7 +58,12 @@ export function load(): StoredData {
 }
 
 function freshData(): StoredData {
-  return { version: VERSION, settings: { ...DEFAULT_SETTINGS }, games: {}, nextId: 0 };
+  return {
+    version: VERSION,
+    settings: { ...DEFAULT_SETTINGS },
+    games: {},
+    nextId: 0,
+  };
 }
 
 export function save(data: StoredData): void {
@@ -79,12 +76,15 @@ export function save(data: StoredData): void {
     };
     localStorage.setItem(KEY, JSON.stringify(payload));
   } catch {
-    // Storage full or unavailable (private mode) - fail silently; the game
-    // still plays, it just won't persist.
+    // Fail silently — game still plays, just won't persist.
   }
 }
 
-export function getGame(data: StoredData, size: number, mode: GameMode): GameState | undefined {
+export function getGame(
+  data: StoredData,
+  size: number,
+  mode: GameMode,
+): GameState | undefined {
   return data.games[gameKey(size, mode)];
 }
 

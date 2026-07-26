@@ -28,7 +28,11 @@ fn grid_from_flat(flat: &[u32], size: usize) -> Option<Vec<Vec<u32>>> {
     if size < 2 || flat.len() != size * size {
         return None;
     }
-    Some((0..size).map(|r| flat[r * size..(r + 1) * size].to_vec()).collect())
+    Some(
+        (0..size)
+            .map(|r| flat[r * size..(r + 1) * size].to_vec())
+            .collect(),
+    )
 }
 
 /// Suggest the best move for a board given as a flat, row-major `u32` array
@@ -164,7 +168,13 @@ pub fn suggest_action_det(
 /// to confirm the Rust predictor matches `spawnTile` bit-for-bit; also lets the
 /// UI surface the predicted spawn as a hint if desired.
 #[wasm_bindgen]
-pub fn predict_spawn(flat: &[u32], size: usize, seed: &[u32], calls: f64, manipulate: bool) -> Vec<u32> {
+pub fn predict_spawn(
+    flat: &[u32],
+    size: usize,
+    seed: &[u32],
+    calls: f64,
+    manipulate: bool,
+) -> Vec<u32> {
     let grid = match grid_from_flat(flat, size) {
         Some(g) => g,
         None => return vec![u32::MAX],

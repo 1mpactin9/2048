@@ -7,7 +7,7 @@ declare global {
   interface Window {
     __app?: App;
     __runAutoLoop: (score: number) => void;
-    /** Developer console — call from browser DevTools. */
+    /** Call from browser DevTools. */
     __dev: {
       undo(steps?: number): void;
       delete(row: number, col: number): void;
@@ -32,15 +32,15 @@ declare global {
       help(): void;
       /** Recover from NaN best score. */
       fixBest(): void;
-      /** Ensure score matches current position (also fixes NaN best). */
+      /** Clamp score into valid window. Also fixes NaN best. */
       refreshScore(): { from: number; to: number; min: number; max: number; changed: boolean; tileCount: number; scoreFromMerges: number } | undefined;
-      /** Explicitly toggle Play Again bar visibility based on board dead state. */
+      /** Toggle Play Again bar visibility based on board dead state. */
       refreshPlayAgainStatus(): void;
-      /** Periodic logger — executes a function/expression at an interval and logs results. Returns an ID for later cancellation. */
+      /** Periodic logger — executes a function at an interval. Returns ID for cancellation. */
       log(fn: (...args: unknown[]) => unknown, intervalMs?: number): number;
-      /** Stop a specific or all periodic loggers. Pass an ID to stop one, omit to stop all. */
+      /** Stop a specific or all periodic loggers. */
       stopLog(id?: number): void;
-      /** Execute a dev method by name with arbitrary arguments. Enables programmatic access to all built-in cheats. */
+      /** Execute a dev method by name with arbitrary arguments. */
       callNative(methodName: string, ...args: unknown[]): unknown;
       /** Internal: timer registry for log/stopLog (not part of public API). */
       _timers: Map<number, ReturnType<typeof setInterval>>;
@@ -51,7 +51,7 @@ declare global {
 }
 
 function boot(): App {
-  // Clear any DOM from a previous instance (HMR) before rebuilding.
+  // Clear stale DOM from HMR before rebuilding.
   document.getElementById('app')!.innerHTML = '';
   const app = new App();
   app.start();
@@ -66,7 +66,7 @@ window.__runAutoLoop = (score: number) => {
   window.__app.runAutoLoop(score);
 };
 
-/** Developer console — call from browser DevTools or bookmarklet. */
+/** DevTools console — proxied to window.__app methods. */
 window.__dev = {
   undo: (steps?: number) => window.__app?.__undo(steps),
   delete: (r: number, c: number) => window.__app?.__delete(r, c),
@@ -92,14 +92,14 @@ window.__dev = {
   fixBest: () => window.__app?.__fixBest(),
   refreshScore: () => window.__app?.__refreshScore(),
   refreshPlayAgainStatus: () => window.__app?.__refreshPlayAgainStatus(),
-  // ---------- Periodic logger ----------
+  // Periodic logger
   _timers: new Map<number, ReturnType<typeof setInterval>>(),
   _nextId: 1,
   log: function (fn: (...args: unknown[]) => unknown, intervalMs = 1000): number {
     const app = window.__app;
     if (!app) { console.warn('[2048] App not ready for __dev.log'); return -1; }
     const id = this._nextId++;
-    // Log immediately on first call
+  // Log immediately on first call
     try { console.log(`[dev.log#${id}]`, fn()); } catch (e) { console.error(`[dev.log#${id}]`, e); }
     const timer = setInterval(() => {
       try { console.log(`[dev.log#${id}]`, fn()); } catch (e) { console.error(`[dev.log#${id}]`, e); }
@@ -120,7 +120,7 @@ window.__dev = {
       console.log('[dev.log] stopped all loggers');
     }
   },
-  // ---------- Native caller ----------
+  // Native caller
   callNative: function (methodName: string, ...args: unknown[]): unknown {
     const app = window.__app;
     if (!app) { console.warn('[2048] App not ready for __dev.callNative'); return undefined; }
@@ -139,7 +139,7 @@ window.__dev = {
   },
 };
 
-// Dispose the old instance on hot reload so its timers/listeners don't linger.
+// Cleanup old instance on hot reload.
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     app.destroy();

@@ -6,15 +6,7 @@ import { PlaceholderEngine } from './engine';
 // "no legal move" (the AI returns u32::MAX when the board is stuck).
 const DIR_BY_CODE: readonly Direction[] = ['up', 'down', 'left', 'right'];
 
-/**
- * Hard wall-clock cap on a single AI decision. The Rust engine already bounds
- * the *computation* per decision by a node budget (see `SEARCH_NODE_BUDGET` /
- * `budget_for_depth` in engine/src/lib.rs), so this is purely a safety net: if
- * something pathological ever hangs the search past this many milliseconds, the
- * worker is terminated (freeing the core it was pinned to) and the caller falls
- * back to a random legal move for that one tick. Generous enough that a
- * legitimate deep search on a large, congested board never trips it.
- */
+/** Hard wall-clock cap on a single AI decision. */
 const DECISION_TIMEOUT_MS = 2000;
 
 interface WorkerRequest {
@@ -43,11 +35,7 @@ interface WorkerReply {
   error?: string;
 }
 
-// One long-lived worker handles every decision. Idle between auto-play ticks
-// (negligible cost) and reused across auto-play sessions so the WASM module
-// only loads once. `workerDead` is set only when the worker can't be created at
-// all (e.g. an environment without `Worker`); transient errors drop the worker
-// and let a fresh one spin up on the next request.
+// One long-lived worker handles every decision. Idle between ticks; reused across sessions.
 let worker: Worker | null = null;
 let workerDead = false;
 let nextRequestId = 1;
@@ -72,9 +60,6 @@ function getWorker(): Worker | null {
       entry.resolve(reply);
     };
     w.onerror = (): void => {
-      // Fatal worker error: fail every in-flight request, then drop the worker
-      // so a fresh one is created next time (transient errors don't permanently
-      // disable the AI).
       failAllPending('worker error');
       if (worker) {
         worker.terminate();
@@ -97,12 +82,7 @@ function failAllPending(error: string): void {
   pending.clear();
 }
 
-/**
- * Post one search request to the worker and await its reply. Resolves with
- * `{ ok: false }` (never rejects) if the worker is unavailable, errors, or
- * exceeds the hard time cap - the caller then falls back. The timeout
- * terminates the stuck worker so it can't keep a core busy.
- */
+/** Post one search request to the worker and await its reply. Resolves with `{ ok: false }` on failure. */
 function request(req: Omit<WorkerRequest, 'id'>): Promise<WorkerReply> {
   return new Promise((resolve) => {
     const w = getWorker();
@@ -114,8 +94,7 @@ function request(req: Omit<WorkerRequest, 'id'>): Promise<WorkerReply> {
     const timer = setTimeout(() => {
       if (!pending.has(id)) return;
       pending.delete(id);
-      // Hard cap: kill the stuck worker so it can't hog a core. A fresh one is
-      // spun up on the next decision.
+      // Kill stuck worker to free the core.
       if (worker) {
         worker.terminate();
         worker = null;
@@ -127,31 +106,12 @@ function request(req: Omit<WorkerRequest, 'id'>): Promise<WorkerReply> {
   });
 }
 
-/**
- * Auto-play engine backed by the Rust expectimax AI, compiled to WebAssembly
- * and run on a dedicated Web Worker.
- *
- * The browser keeps full ownership of game state (grid, score, powerups,
- * history, animations); this only decides the next action. Running the search
- * off the main thread is what keeps the UI responsive and animations smooth
- * while the engine thinks at full depth - the synchronous WASM call used to
- * block the event loop, freezing input and delaying the merge pop. The live
- * board size is forwarded so the AI's search depth auto-adapts (deeper on small
- * boards, shallower on large ones); a non-zero `ctx.depth` overrides that.
- *
- * When `ctx.usePowerups` is set, the AI may spend swap/delete charges to escape
- * a congested or stuck board (it won't waste them in the comfortable midgame).
- * Otherwise it only ever returns directional moves. If the worker can't be
- * loaded or a decision times out, it falls back to a random legal move so
- * auto-play never stalls.
- */
+/** Auto-play engine backed by Rust expectimax AI via WASM on a dedicated Web Worker. */
 export const WasmEngine: Engine = {
   name: 'Expectimax AI (Rust -> WASM, worker)',
   async chooseAction(ctx: EngineContext): Promise<AutoAction> {
     const { size, grid, depth, usePowerups, powerups } = ctx;
-    // Snapshot the board synchronously, before any await, so the worker always
-    // searches exactly what was on screen at decision time (the caller also
-    // guards against the board changing while we wait - see App.autoTick).
+    // Snapshot the board before any await so the worker searches exactly what was on screen.
     const flat = new Uint32Array(size * size);
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
@@ -159,10 +119,7 @@ export const WasmEngine: Engine = {
       }
     }
 
-    // Predictive "cheat" mode is on only when manipulation is enabled AND we
-    // have a usable seed. Without a seed (e.g. the legacy/injected-RNG test
-    // path) the stream can't be reproduced, so fall back to the fair averaging
-    // search rather than predicting from a bogus stream.
+    // Predictive search only when manipulation is enabled with a valid seed.
     const seedArr = ctx.rngSeed;
     const manipulate = ctx.manipulate === true && Array.isArray(seedArr) && seedArr.length === 8;
     const seed = manipulate ? new Uint32Array(seedArr as number[]) : new Uint32Array(0);
@@ -205,11 +162,7 @@ export const WasmEngine: Engine = {
   },
 };
 
-/**
- * Decode the flat `u32` action array returned by `suggest_action`:
- * `[0, dir]` = move, `[1, r, c]` = delete, `[2, r1, c1, r2, c2]` = swap,
- * anything else (incl. `[3]`) = stop.
- */
+/** Decode flat u32 action array from WASM. */
 function decodeAction(out: Uint32Array): AutoAction {
   const kind = out[0];
   if (kind === 0) {

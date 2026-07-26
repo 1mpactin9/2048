@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap");
 
 *,
 *::before,
@@ -13,7 +13,7 @@ body {
 }
 
 body {
-  font-family: 'Rubik', Arial, system-ui, sans-serif;
+  font-family: "Rubik", Arial, system-ui, sans-serif;
   font-size: 16px;
   font-weight: 400;
   line-height: 24px;
@@ -44,7 +44,7 @@ button:disabled {
 
 /* ---------- Theme tokens ---------- */
 :root,
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   /* core surfaces */
   --bg: #faf8f0;
   --bg-elev: #ffffff;
@@ -57,7 +57,9 @@ button:disabled {
   /* board */
   --board-outer: #9b8775;
   --board-inner: #bdac97;
-  --board-inner-shadow: inset 0 2px 6px rgba(90, 74, 58, 0.35), inset 0 -1px 2px rgba(255, 255, 255, 0.15);
+  --board-inner-shadow:
+    inset 0 2px 6px rgba(90, 74, 58, 0.35),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.15);
   --cell-bg: var(--board-inner);
 
   /* buttons */
@@ -107,36 +109,58 @@ button:disabled {
 
   --shadow: 0 10px 28px rgba(117, 100, 82, 0.22);
   --shadow-tile: 0 1px 2px rgba(117, 100, 82, 0.25);
-  --shadow-board: 0 6px 16px rgba(117, 100, 82, 0.14), 0 1px 3px rgba(117, 100, 82, 0.08);
+  --shadow-board:
+    0 6px 16px rgba(117, 100, 82, 0.14), 0 1px 3px rgba(117, 100, 82, 0.08);
 
   /* tile colors */
-  --tile-2-bg: #eee4da; --tile-2-fg: #756452;
-  --tile-4-bg: #ede0c8; --tile-4-fg: #756452;
-  --tile-8-bg: #f2b179; --tile-8-fg: #f9f6f2;
-  --tile-16-bg: #f59563; --tile-16-fg: #f9f6f2;
-  --tile-32-bg: #f67c5f; --tile-32-fg: #f9f6f2;
-  --tile-64-bg: #f65e3b; --tile-64-fg: #f9f6f2;
-  --tile-128-bg: #edcf72; --tile-128-fg: #f9f6f2;
-  --tile-256-bg: #edcc61; --tile-256-fg: #f9f6f2;
-  --tile-512-bg: #baac9a; --tile-512-fg: #f9f6f2;
-  --tile-1024-bg: #988776; --tile-1024-fg: #f9f6f2;
-  --tile-2048-bg: #756452; --tile-2048-fg: #f9f6f2;
+  --tile-2-bg: #eee4da;
+  --tile-2-fg: #756452;
+  --tile-4-bg: #ede0c8;
+  --tile-4-fg: #756452;
+  --tile-8-bg: #f2b179;
+  --tile-8-fg: #f9f6f2;
+  --tile-16-bg: #f59563;
+  --tile-16-fg: #f9f6f2;
+  --tile-32-bg: #f67c5f;
+  --tile-32-fg: #f9f6f2;
+  --tile-64-bg: #f65e3b;
+  --tile-64-fg: #f9f6f2;
+  --tile-128-bg: #edcf72;
+  --tile-128-fg: #f9f6f2;
+  --tile-256-bg: #edcc61;
+  --tile-256-fg: #f9f6f2;
+  --tile-512-bg: #baac9a;
+  --tile-512-fg: #f9f6f2;
+  --tile-1024-bg: #988776;
+  --tile-1024-fg: #f9f6f2;
+  --tile-2048-bg: #756452;
+  --tile-2048-fg: #f9f6f2;
 
-  --tile-4096-bg: #5f7868; --tile-4096-fg: #f9f6f2;   /* sage */
-  --tile-8192-bg: #4c7a87; --tile-8192-fg: #f9f6f2;   /* blue-gray */
-  --tile-16384-bg: #4e6798; --tile-16384-fg: #f9f6f2; /* slate blue */
-  --tile-32768-bg: #66559b; --tile-32768-fg: #f9f6f2; /* violet */
-  --tile-65536-bg: #824f8e; --tile-65536-fg: #f9f6f2; /* purple */
-  --tile-131072-bg: #9d4f74; --tile-131072-fg: #f9f6f2; /* mauve */
-  --tile-262144-bg: #b05b56; --tile-262144-fg: #f9f6f2; /* brick */
-  --tile-524288-bg: #b87848; --tile-524288-fg: #f9f6f2; /* copper */
-  --tile-1048576-bg: #8a8c46; --tile-1048576-fg: #f9f6f2; /* olive */
-  --tile-super-bg: #2f3638; --tile-super-fg: #f9f6f2;
+  --tile-4096-bg: #5f7868;
+  --tile-4096-fg: #f9f6f2; /* sage */
+  --tile-8192-bg: #4c7a87;
+  --tile-8192-fg: #f9f6f2; /* blue-gray */
+  --tile-16384-bg: #4e6798;
+  --tile-16384-fg: #f9f6f2; /* slate blue */
+  --tile-32768-bg: #66559b;
+  --tile-32768-fg: #f9f6f2; /* violet */
+  --tile-65536-bg: #824f8e;
+  --tile-65536-fg: #f9f6f2; /* purple */
+  --tile-131072-bg: #9d4f74;
+  --tile-131072-fg: #f9f6f2; /* mauve */
+  --tile-262144-bg: #b05b56;
+  --tile-262144-fg: #f9f6f2; /* brick */
+  --tile-524288-bg: #b87848;
+  --tile-524288-fg: #f9f6f2; /* copper */
+  --tile-1048576-bg: #8a8c46;
+  --tile-1048576-fg: #f9f6f2; /* olive */
+  --tile-super-bg: #2f3638;
+  --tile-super-fg: #f9f6f2;
 
   color-scheme: light;
 }
 
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   /* core surfaces */
   --bg: #17140f;
   --bg-elev: #211d17;
@@ -149,7 +173,9 @@ button:disabled {
   /* board */
   --board-outer: #322a22;
   --board-inner: #443a2f;
-  --board-inner-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55), inset 0 -1px 2px rgba(255, 255, 255, 0.04);
+  --board-inner-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.04);
   --cell-bg: var(--board-inner);
 
   /* buttons */
@@ -201,28 +227,49 @@ button:disabled {
   --shadow-tile: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-board: 0 6px 16px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
 
-  --tile-2-bg: #443a30; --tile-2-fg: #d9cdbd;
-  --tile-4-bg: #5a4c3e; --tile-4-fg: #f1e6d8;
-  --tile-8-bg: #e09050; --tile-8-fg: #f5efe6;
-  --tile-16-bg: #c47040; --tile-16-fg: #f5efe6;
-  --tile-32-bg: #c45535; --tile-32-fg: #f5efe6;
-  --tile-64-bg: #b84528; --tile-64-fg: #f5efe6;
-  --tile-128-bg: #c4a530; --tile-128-fg: #f5efe6;
-  --tile-256-bg: #bfa028; --tile-256-fg: #f5efe6;
-  --tile-512-bg: #9a8870; --tile-512-fg: #f5efe6;
-  --tile-1024-bg: #7a6a58; --tile-1024-fg: #f5efe6;
-  --tile-2048-bg: #5a4d3e; --tile-2048-fg: #f5efe6;
+  --tile-2-bg: #443a30;
+  --tile-2-fg: #d9cdbd;
+  --tile-4-bg: #5a4c3e;
+  --tile-4-fg: #f1e6d8;
+  --tile-8-bg: #e09050;
+  --tile-8-fg: #f5efe6;
+  --tile-16-bg: #c47040;
+  --tile-16-fg: #f5efe6;
+  --tile-32-bg: #c45535;
+  --tile-32-fg: #f5efe6;
+  --tile-64-bg: #b84528;
+  --tile-64-fg: #f5efe6;
+  --tile-128-bg: #c4a530;
+  --tile-128-fg: #f5efe6;
+  --tile-256-bg: #bfa028;
+  --tile-256-fg: #f5efe6;
+  --tile-512-bg: #9a8870;
+  --tile-512-fg: #f5efe6;
+  --tile-1024-bg: #7a6a58;
+  --tile-1024-fg: #f5efe6;
+  --tile-2048-bg: #5a4d3e;
+  --tile-2048-fg: #f5efe6;
 
-  --tile-4096-bg: #48695a; --tile-4096-fg: #f5efe6;
-  --tile-8192-bg: #3c6874; --tile-8192-fg: #f5efe6;
-  --tile-16384-bg: #43598b; --tile-16384-fg: #f5efe6;
-  --tile-32768-bg: #5b4c8c; --tile-32768-fg: #f5efe6;
-  --tile-65536-bg: #744681; --tile-65536-fg: #f5efe6;
-  --tile-131072-bg: #8d4569; --tile-131072-fg: #f5efe6;
-  --tile-262144-bg: #9c504b; --tile-262144-fg: #f5efe6;
-  --tile-524288-bg: #9f6a3f; --tile-524288-fg: #f5efe6;
-  --tile-1048576-bg: #787a3d; --tile-1048576-fg: #f5efe6;
-  --tile-super-bg: #2a3133; --tile-super-fg: #f5efe6;
+  --tile-4096-bg: #48695a;
+  --tile-4096-fg: #f5efe6;
+  --tile-8192-bg: #3c6874;
+  --tile-8192-fg: #f5efe6;
+  --tile-16384-bg: #43598b;
+  --tile-16384-fg: #f5efe6;
+  --tile-32768-bg: #5b4c8c;
+  --tile-32768-fg: #f5efe6;
+  --tile-65536-bg: #744681;
+  --tile-65536-fg: #f5efe6;
+  --tile-131072-bg: #8d4569;
+  --tile-131072-fg: #f5efe6;
+  --tile-262144-bg: #9c504b;
+  --tile-262144-fg: #f5efe6;
+  --tile-524288-bg: #9f6a3f;
+  --tile-524288-fg: #f5efe6;
+  --tile-1048576-bg: #787a3d;
+  --tile-1048576-fg: #f5efe6;
+  --tile-super-bg: #2a3133;
+  --tile-super-fg: #f5efe6;
 
   color-scheme: dark;
 }

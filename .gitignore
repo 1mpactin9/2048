@@ -1,5 +1,8 @@
 dist/
 node_modules/
+
 .claude/
 .codegraph/
+
 engine/pkg/
+engine/target/

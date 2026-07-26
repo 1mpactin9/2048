@@ -1,5 +1,5 @@
-import type { Cell, Direction, Grid, MoveTranscript, TileMove } from './types';
-import { cloneGrid, gridsEqual } from './grid';
+import type { Cell, Direction, Grid, MoveTranscript, TileMove } from "./types";
+import { cloneGrid, gridsEqual } from "./grid";
 
 interface LineEntry {
   cell: Cell | null;
@@ -21,12 +21,7 @@ interface Coord {
   col: number;
 }
 
-/**
- * Slide + merge one line toward index 0 (the destination edge).
- * `entries` is ordered destination-first; `destAt(i)` maps a placed index back
- * to absolute grid coordinates. Returns the compacted values, per-tile move
- * transcripts, and score gained from merges.
- */
+// Slide + merge one line toward index 0 (destination edge).
 function slideLine(
   entries: LineEntry[],
   destAt: (i: number) => Coord,
@@ -39,7 +34,7 @@ function slideLine(
     if (!e.cell) continue;
     const top = placed[placed.length - 1];
     if (top && top.value === e.cell.value && !top.merged) {
-      // Merge the incoming tile into the one nearer the edge (top survives).
+      // Merge incoming tile into the one nearer the edge.
       top.merged = true;
       top.newValue = top.value * 2;
       top.value = top.newValue;
@@ -83,26 +78,35 @@ function slideLine(
   return { result, moves, gained };
 }
 
-function buildLines(grid: Grid, dir: Direction): { entries: LineEntry[]; destAt: (i: number) => Coord }[] {
+function buildLines(
+  grid: Grid,
+  dir: Direction,
+): { entries: LineEntry[]; destAt: (i: number) => Coord }[] {
   const n = grid.length;
   const lines: { entries: LineEntry[]; destAt: (i: number) => Coord }[] = [];
 
   for (let i = 0; i < n; i++) {
-    if (dir === 'left' || dir === 'right') {
+    if (dir === "left" || dir === "right") {
       const r = i;
       const entries: LineEntry[] = [];
-      for (let c = 0; c < n; c++) entries.push({ cell: grid[r][c], row: r, col: c });
-      if (dir === 'right') entries.reverse();
+      for (let c = 0; c < n; c++)
+        entries.push({ cell: grid[r][c], row: r, col: c });
+      if (dir === "right") entries.reverse();
       const destAt =
-        dir === 'left' ? (k: number) => ({ row: r, col: k }) : (k: number) => ({ row: r, col: n - 1 - k });
+        dir === "left"
+          ? (k: number) => ({ row: r, col: k })
+          : (k: number) => ({ row: r, col: n - 1 - k });
       lines.push({ entries, destAt });
     } else {
       const c = i;
       const entries: LineEntry[] = [];
-      for (let r = 0; r < n; r++) entries.push({ cell: grid[r][c], row: r, col: c });
-      if (dir === 'down') entries.reverse();
+      for (let r = 0; r < n; r++)
+        entries.push({ cell: grid[r][c], row: r, col: c });
+      if (dir === "down") entries.reverse();
       const destAt =
-        dir === 'up' ? (k: number) => ({ row: k, col: c }) : (k: number) => ({ row: n - 1 - k, col: c });
+        dir === "up"
+          ? (k: number) => ({ row: k, col: c })
+          : (k: number) => ({ row: n - 1 - k, col: c });
       lines.push({ entries, destAt });
     }
   }
@@ -110,19 +114,22 @@ function buildLines(grid: Grid, dir: Direction): { entries: LineEntry[]; destAt:
   return lines;
 }
 
-/**
- * Pure move: returns the resulting grid and a transcript describing tile
- * movements. Does NOT spawn a tile or mutate the input grid. `moved` is false
- * when the move had no effect (caller should treat it as invalid).
- */
-export function move(grid: Grid, dir: Direction): { grid: Grid; transcript: MoveTranscript } {
+// Pure move: returns resulting grid and transcript. Does not spawn or mutate input.
+export function move(
+  grid: Grid,
+  dir: Direction,
+): { grid: Grid; transcript: MoveTranscript } {
   const n = grid.length;
   const next = cloneGrid(grid);
   const moves: TileMove[] = [];
   let gained = 0;
 
   for (const { entries, destAt } of buildLines(grid, dir)) {
-    const { result, moves: lineMoves, gained: lineGained } = slideLine(entries, destAt);
+    const {
+      result,
+      moves: lineMoves,
+      gained: lineGained,
+    } = slideLine(entries, destAt);
     moves.push(...lineMoves);
     gained += lineGained;
     for (let k = 0; k < n; k++) {
@@ -132,10 +139,13 @@ export function move(grid: Grid, dir: Direction): { grid: Grid; transcript: Move
   }
 
   const moved = !gridsEqual(grid, next);
-  return { grid: next, transcript: { moved, moves, gained, spawned: undefined } };
+  return {
+    grid: next,
+    transcript: { moved, moves, gained, spawned: undefined },
+  };
 }
 
-/** True if a move in this direction would change the board. */
+// True if a move in this direction would change the board.
 export function canMove(grid: Grid, dir: Direction): boolean {
   return move(grid, dir).transcript.moved;
 }

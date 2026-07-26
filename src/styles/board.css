@@ -47,11 +47,15 @@
 }
 
 .board.is-frozen::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(170, 200, 255, 0.18), rgba(220, 235, 255, 0.05));
+  background: linear-gradient(
+    135deg,
+    rgba(170, 200, 255, 0.18),
+    rgba(220, 235, 255, 0.05)
+  );
   backdrop-filter: blur(1.5px) saturate(0.85);
   -webkit-backdrop-filter: blur(1.5px) saturate(0.85);
   pointer-events: none;
@@ -78,7 +82,7 @@
   align-items: center;
   justify-content: center;
   border-radius: calc(var(--gap, 10px) * 0.7);
-  font-family: 'Rubik', Arial, system-ui, sans-serif;
+  font-family: "Rubik", Arial, system-ui, sans-serif;
   font-weight: 510;
   font-size: calc(var(--cell, 20px) * var(--ff, 0.46));
   box-shadow: var(--shadow-tile);
@@ -88,12 +92,24 @@
 }
 
 /* digit-count font scaling */
-.tile__face--d1 { --ff: 0.45; }
-.tile__face--d2 { --ff: 0.42; }
-.tile__face--d3 { --ff: 0.34; }
-.tile__face--d4 { --ff: 0.25; }
-.tile__face--d5 { --ff: 0.20; }
-.tile__face--d6 { --ff: 0.16; }
+.tile__face--d1 {
+  --ff: 0.45;
+}
+.tile__face--d2 {
+  --ff: 0.42;
+}
+.tile__face--d3 {
+  --ff: 0.34;
+}
+.tile__face--d4 {
+  --ff: 0.25;
+}
+.tile__face--d5 {
+  --ff: 0.2;
+}
+.tile__face--d6 {
+  --ff: 0.16;
+}
 
 .tile__face.is-spawn {
   animation: tile-spawn 0.14s ease-out;

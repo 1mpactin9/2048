@@ -1,5 +1,13 @@
-import type { AutoAction, Direction, EngineContext, GameMode, GameState, Powerups, Grid } from '../core/types';
-import { DEFAULT_MODE, DEFAULT_SIZE, MAX_HISTORY } from '../core/constants';
+import type {
+  AutoAction,
+  Direction,
+  EngineContext,
+  GameMode,
+  GameState,
+  Powerups,
+  Grid,
+} from "../core/types";
+import { DEFAULT_MODE, DEFAULT_SIZE, MAX_HISTORY } from "../core/constants";
 import {
   type StoredData,
   clearGames,
@@ -7,36 +15,31 @@ import {
   load,
   putGame,
   save,
-} from '../core/storage';
-import { GameSession, restoreSession } from '../core/session';
-import { hasMoves, emptyCells, createGrid } from '../core/grid';
-import { move } from '../core/move';
+} from "../core/storage";
+import { GameSession, restoreSession } from "../core/session";
+import { hasMoves, emptyCells, createGrid } from "../core/grid";
+import { move } from "../core/move";
 import {
   clampScoreToWindow,
   planBypass,
   scoreWindow,
   validatePosition,
   type ValidationResult,
-} from '../core/validate';
-import { SecureRng } from '../core/rng';
-import { SPAWN_PROB_4 } from '../core/constants';
-import { WasmEngine } from '../core/wasm-engine';
-import { BoardRenderer } from './board';
-import { Input } from './input';
-import { SettingsPopover } from './controls';
-import { NotificationCenter } from './notify';
-import { Icons } from './icons';
-import {
-  currentResolved,
-  initTheme,
-  setThemePref,
-  toggleTheme,
-} from './theme';
+} from "../core/validate";
+import { SecureRng } from "../core/rng";
+import { SPAWN_PROB_4 } from "../core/constants";
+import { WasmEngine } from "../core/wasm-engine";
+import { BoardRenderer } from "./board";
+import { Input } from "./input";
+import { SettingsPopover } from "./controls";
+import { NotificationCenter } from "./notify";
+import { Icons } from "./icons";
+import { currentResolved, initTheme, setThemePref, toggleTheme } from "./theme";
 
-type Armed = 'none' | 'swap' | 'delete';
+type Armed = "none" | "swap" | "delete";
 
 function modeOrder(m: GameMode): number {
-  return m === 'standard' ? 0 : 1;
+  return m === "standard" ? 0 : 1;
 }
 
 interface OverlayAction {
@@ -56,7 +59,7 @@ export class App {
   private size: number;
   private mode: GameMode;
   private pendingNew = false;
-  private armed: Armed = 'none';
+  private armed: Armed = "none";
   private autoOn = false;
   private autoLoopTarget: number | null = null;
   private lastScore = 0;
@@ -97,16 +100,15 @@ export class App {
     if (this.data.settings.autoOn) this.startAuto();
   }
 
-  // ---------- DOM ----------
   private buildDOM(): void {
-    const app = document.getElementById('app')!;
+    const app = document.getElementById("app")!;
     this.notifications = new NotificationCenter(app);
 
-    const topbar = document.createElement('header');
-    topbar.className = 'topbar';
+    const topbar = document.createElement("header");
+    topbar.className = "topbar";
 
-    const left = document.createElement('div');
-    left.className = 'topbar__left';
+    const left = document.createElement("div");
+    left.className = "topbar__left";
 
     this.popover = new SettingsPopover({
       theme: this.data.settings.theme,
@@ -136,42 +138,42 @@ export class App {
       },
     });
 
-    const logoBlock = document.createElement('div');
-    logoBlock.className = 'logo-block';
-    const logo = document.createElement('div');
-    logo.className = 'logo';
-    logo.textContent = '2048';
-    const modeBadge = document.createElement('div');
-    modeBadge.className = 'mode-badge';
+    const logoBlock = document.createElement("div");
+    logoBlock.className = "logo-block";
+    const logo = document.createElement("div");
+    logo.className = "logo";
+    logo.textContent = "2048";
+    const modeBadge = document.createElement("div");
+    modeBadge.className = "mode-badge";
     modeBadge.textContent = this.mode;
     logoBlock.append(logo, modeBadge);
     this.modeBadge = modeBadge;
 
     left.append(this.popover.el, logoBlock);
 
-    const actions = document.createElement('div');
-    actions.className = 'topbar__actions';
+    const actions = document.createElement("div");
+    actions.className = "topbar__actions";
 
-    const scores = document.createElement('div');
-    scores.className = 'scores';
-    const scoreBox = this.makeScoreBox('Score');
-    const bestBox = this.makeScoreBox('Best');
+    const scores = document.createElement("div");
+    scores.className = "scores";
+    const scoreBox = this.makeScoreBox("Score");
+    const bestBox = this.makeScoreBox("Best");
     this.scoreVal = scoreBox.value;
     this.bestVal = bestBox.value;
     scores.append(scoreBox.box, bestBox.box);
 
-    const themeBtn = document.createElement('button');
-    themeBtn.type = 'button';
-    themeBtn.className = 'icon-btn icon-btn--theme';
-    themeBtn.setAttribute('aria-label', 'Toggle theme');
-    themeBtn.innerHTML = currentResolved() === 'dark' ? Icons.sun : Icons.moon;
-    themeBtn.addEventListener('click', () => this.onThemeToggle());
+    const themeBtn = document.createElement("button");
+    themeBtn.type = "button";
+    themeBtn.className = "icon-btn icon-btn--theme";
+    themeBtn.setAttribute("aria-label", "Toggle theme");
+    themeBtn.innerHTML = currentResolved() === "dark" ? Icons.sun : Icons.moon;
+    themeBtn.addEventListener("click", () => this.onThemeToggle());
 
-    const newGameBtn = document.createElement('button');
-    newGameBtn.type = 'button';
-    newGameBtn.className = 'btn btn--primary topbar__primary';
-    newGameBtn.textContent = 'New Game';
-    newGameBtn.addEventListener('click', () => {
+    const newGameBtn = document.createElement("button");
+    newGameBtn.type = "button";
+    newGameBtn.className = "btn btn--primary topbar__primary";
+    newGameBtn.textContent = "New Game";
+    newGameBtn.addEventListener("click", () => {
       if (this.pendingNew) this.resumeGame();
       else this.confirmNewGame();
     });
@@ -179,42 +181,42 @@ export class App {
     actions.append(scores, themeBtn, newGameBtn);
     topbar.append(left, actions);
 
-    const shell = document.createElement('main');
-    shell.className = 'app';
+    const shell = document.createElement("main");
+    shell.className = "app";
 
     // stage: board + hint + powerups
-    const stage = document.createElement('div');
-    stage.className = 'stage';
+    const stage = document.createElement("div");
+    stage.className = "stage";
     this.board = new BoardRenderer(stage);
 
-    const hintEl = document.createElement('div');
-    hintEl.className = 'hint';
-    hintEl.style.display = 'none';
-    const hintText = document.createElement('span');
-    hintText.className = 'hint__text';
-    const hintCancel = document.createElement('button');
-    hintCancel.type = 'button';
-    hintCancel.className = 'hint__cancel';
-    hintCancel.textContent = 'cancel';
-    hintCancel.addEventListener('click', () => this.cancelPowerup());
+    const hintEl = document.createElement("div");
+    hintEl.className = "hint";
+    hintEl.style.display = "none";
+    const hintText = document.createElement("span");
+    hintText.className = "hint__text";
+    const hintCancel = document.createElement("button");
+    hintCancel.type = "button";
+    hintCancel.className = "hint__cancel";
+    hintCancel.textContent = "cancel";
+    hintCancel.addEventListener("click", () => this.cancelPowerup());
     hintEl.append(hintText, hintCancel);
     this.hintEl = hintEl;
 
-    const powerups = document.createElement('div');
-    powerups.className = 'powerups';
-    this.undoBtn = this.makePowerupBtn(Icons.undo, 'Undo', 'undo');
-    this.swapBtn = this.makePowerupBtn(Icons.swap, 'Swap', 'swap');
-    this.deleteBtn = this.makePowerupBtn(Icons.delete, 'Delete', 'delete');
+    const powerups = document.createElement("div");
+    powerups.className = "powerups";
+    this.undoBtn = this.makePowerupBtn(Icons.undo, "Undo", "undo");
+    this.swapBtn = this.makePowerupBtn(Icons.swap, "Swap", "swap");
+    this.deleteBtn = this.makePowerupBtn(Icons.delete, "Delete", "delete");
     powerups.append(this.undoBtn, this.swapBtn, this.deleteBtn);
     this.powerupsRow = powerups;
 
-    const gameOverBar = document.createElement('div');
-    gameOverBar.className = 'game-over-bar';
-    const goBtn = document.createElement('button');
-    goBtn.type = 'button';
-    goBtn.className = 'game-over-bar__action btn btn--primary';
-    goBtn.textContent = 'Play Again';
-    goBtn.addEventListener('click', () => this.confirmNewGame());
+    const gameOverBar = document.createElement("div");
+    gameOverBar.className = "game-over-bar";
+    const goBtn = document.createElement("button");
+    goBtn.type = "button";
+    goBtn.className = "game-over-bar__action btn btn--primary";
+    goBtn.textContent = "Play Again";
+    goBtn.addEventListener("click", () => this.confirmNewGame());
     gameOverBar.append(goBtn);
     this.gameOverBar = gameOverBar;
 
@@ -229,50 +231,56 @@ export class App {
     this.input = new Input(this.board.el, {
       onMove: (d) => this.doMove(d),
       onShortcut: (k) => {
-        if (k === 'undo') this.powerupUndo();
-        else if (k === 'delete') this.powerupDelete();
+        if (k === "undo") this.powerupUndo();
+        else if (k === "delete") this.powerupDelete();
       },
     });
   }
 
-  private makeScoreBox(label: string): { box: HTMLElement; value: HTMLElement } {
-    const box = document.createElement('div');
-    box.className = 'score-box' + (label === 'Best' ? ' score-box--best' : '');
-    const lab = document.createElement('div');
-    lab.className = 'score-box__label';
+  private makeScoreBox(label: string): {
+    box: HTMLElement;
+    value: HTMLElement;
+  } {
+    const box = document.createElement("div");
+    box.className = "score-box" + (label === "Best" ? " score-box--best" : "");
+    const lab = document.createElement("div");
+    lab.className = "score-box__label";
     lab.textContent = label;
-    const val = document.createElement('div');
-    val.className = 'score-box__value';
-    val.textContent = '0';
+    const val = document.createElement("div");
+    val.className = "score-box__value";
+    val.textContent = "0";
     box.append(lab, val);
     return { box, value: val };
   }
 
-  private makePowerupBtn(icon: string, label: string, kind: 'undo' | 'swap' | 'delete'): HTMLElement {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'powerup-btn';
-    btn.setAttribute('aria-label', label);
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'powerup-btn__icon';
+  private makePowerupBtn(
+    icon: string,
+    label: string,
+    kind: "undo" | "swap" | "delete",
+  ): HTMLElement {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "powerup-btn";
+    btn.setAttribute("aria-label", label);
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "powerup-btn__icon";
     iconSpan.innerHTML = icon;
-    const tooltip = document.createElement('span');
-    tooltip.className = 'powerup-btn__tooltip';
+    const tooltip = document.createElement("span");
+    tooltip.className = "powerup-btn__tooltip";
     tooltip.textContent = label;
-    const count = document.createElement('span');
-    count.className = 'powerup-btn__count';
-    count.textContent = '0';
+    const count = document.createElement("span");
+    count.className = "powerup-btn__count";
+    count.textContent = "0";
     btn.append(iconSpan, count, tooltip);
-    btn.addEventListener('click', () => {
-      if (kind === 'undo') this.powerupUndo();
-      else if (kind === 'swap') this.powerupSwap();
+    btn.addEventListener("click", () => {
+      if (kind === "undo") this.powerupUndo();
+      else if (kind === "swap") this.powerupSwap();
       else this.powerupDelete();
     });
     btn.dataset.kind = kind;
     return btn;
   }
 
-  // ---------- Game loading ----------
   private loadGame(size: number, mode: GameMode): void {
     this.size = size;
     this.mode = mode;
@@ -282,7 +290,13 @@ export class App {
       state = saved;
       this.session = restoreSession(state);
     } else {
-      this.session = GameSession.newGame(size, mode, 0, undefined, this.data.settings.rngManip);
+      this.session = GameSession.newGame(
+        size,
+        mode,
+        0,
+        undefined,
+        this.data.settings.rngManip,
+      );
       putGame(this.data, this.session.state);
       this.persist();
     }
@@ -307,7 +321,6 @@ export class App {
     this.popover.update({ size, mode });
   }
 
-  // ---------- Moves ----------
   private doMove(dir: Direction): void {
     if (this.board.isSelecting) return;
     if (this.session.state.over) return;
@@ -321,17 +334,16 @@ export class App {
     this.handleWinOver();
   }
 
-  // ---------- New / Resume ----------
   private confirmNewGame(): void {
     const s = this.session.state;
     const inProgress = !s.over && s.moveCount > 0 && !this.pendingNew;
     if (inProgress) {
       this.showOverlay({
-        title: 'Start a new game?',
-        message: 'Your current game will be replaced.',
+        title: "Start a new game?",
+        message: "Your current game will be replaced.",
         actions: [
-          { label: 'Cancel', onClick: () => this.closeOverlay() },
-          { label: 'New Game', primary: true, onClick: () => this.newGame() },
+          { label: "Cancel", onClick: () => this.closeOverlay() },
+          { label: "New Game", primary: true, onClick: () => this.newGame() },
         ],
       });
     } else {
@@ -344,7 +356,13 @@ export class App {
     this.cancelPowerup();
     const prevOver = this.session.state.over;
     const best = this.session.state.best;
-    this.session = GameSession.newGame(this.size, this.mode, best, undefined, this.data.settings.rngManip);
+    this.session = GameSession.newGame(
+      this.size,
+      this.mode,
+      best,
+      undefined,
+      this.data.settings.rngManip,
+    );
     this.session.setRngManipulation(this.data.settings.rngManip);
     this.wasOver = false;
     // Safety net: if the previous game was still in progress, don't overwrite
@@ -371,7 +389,6 @@ export class App {
     this.updateUI();
   }
 
-  // ---------- Powerups ----------
   private powerupUndo(): void {
     if (!this.session.canUndo) return;
     this.clearPendingNew();
@@ -389,14 +406,19 @@ export class App {
     }
     this.stopAuto();
     this.clearPendingNew();
-    this.armed = 'swap';
+    this.armed = "swap";
     this.board.enterSelectMode(2, (cells) => {
       if (cells.length === 2) {
-        this.session.swap(cells[0].row, cells[0].col, cells[1].row, cells[1].col);
+        this.session.swap(
+          cells[0].row,
+          cells[0].col,
+          cells[1].row,
+          cells[1].col,
+        );
         this.saveCurrent();
         this.board.animateSwap(cells[0].id, cells[1].id);
       }
-      this.armed = 'none';
+      this.armed = "none";
       this.updateUI();
     });
     this.updateUI();
@@ -409,43 +431,42 @@ export class App {
     }
     this.stopAuto();
     this.clearPendingNew();
-    this.armed = 'delete';
+    this.armed = "delete";
     this.board.enterSelectMode(1, (cells) => {
       if (cells.length === 1) {
         this.session.deleteTile(cells[0].row, cells[0].col);
         this.saveCurrent();
         this.board.fullRender(this.session.state.grid);
       }
-      this.armed = 'none';
+      this.armed = "none";
       this.updateUI();
     });
     this.updateUI();
   }
 
   private cancelPowerup(): void {
-    if (this.armed === 'none' && !this.board.isSelecting) return;
+    if (this.armed === "none" && !this.board.isSelecting) return;
     this.board.exitSelectMode();
-    this.armed = 'none';
+    this.armed = "none";
     this.updateUI();
   }
 
-  // ---------- UI sync ----------
   private updateUI(): void {
     const s = this.session.state;
 
     // Detect a mode / size switch so the odometer always rolls, and rolls in
     // the direction that matches the navigation (forward/backward).
     const switched = this.lastSize !== this.size || this.lastMode !== this.mode;
-    let dir: 'down' | 'up' = 'down';
+    let dir: "down" | "up" = "down";
     if (switched) {
       dir =
         this.size !== this.lastSize
           ? this.size > this.lastSize
-            ? 'down'
-            : 'up'
+            ? "down"
+            : "up"
           : modeOrder(this.mode) > modeOrder(this.lastMode)
-            ? 'down'
-            : 'up';
+            ? "down"
+            : "up";
     }
     const anim = switched ? { force: true, dir } : undefined;
     this.setScore(this.scoreVal, s.score, this.lastScore, anim);
@@ -464,82 +485,85 @@ export class App {
 
     this.updatePrimaryButton();
 
-    const isStandard = this.mode === 'standard';
-    this.powerupsRow.style.display = isStandard ? '' : 'none';
+    const isStandard = this.mode === "standard";
+    this.powerupsRow.style.display = isStandard ? "" : "none";
 
     this.setFrozen(s.over);
 
     const setPower = (btn: HTMLElement, count: number, enabled: boolean) => {
-      btn.querySelector('.powerup-btn__count')!.textContent = String(count);
+      btn.querySelector(".powerup-btn__count")!.textContent = String(count);
       (btn as HTMLButtonElement).disabled = !enabled;
     };
     setPower(this.undoBtn, s.powerups.undo, this.session.canUndo);
     setPower(this.swapBtn, s.powerups.swap, this.session.canSwap);
     setPower(this.deleteBtn, s.powerups.delete, this.session.canDelete);
 
-    this.swapBtn.classList.toggle('is-armed', this.armed === 'swap');
-    this.deleteBtn.classList.toggle('is-armed', this.armed === 'delete');
+    this.swapBtn.classList.toggle("is-armed", this.armed === "swap");
+    this.deleteBtn.classList.toggle("is-armed", this.armed === "delete");
 
-    if (this.armed === 'none') {
-      this.hintEl.style.display = 'none';
+    if (this.armed === "none") {
+      this.hintEl.style.display = "none";
     } else {
-      this.hintEl.style.display = '';
-      const text = this.hintEl.querySelector('.hint__text')!;
+      this.hintEl.style.display = "";
+      const text = this.hintEl.querySelector(".hint__text")!;
       text.textContent =
-        this.armed === 'swap' ? 'Select two tiles to swap.' : 'Select a tile to delete.';
+        this.armed === "swap"
+          ? "Select two tiles to swap."
+          : "Select a tile to delete.";
     }
   }
 
   private bumpScore(): void {
-    this.scoreVal.classList.remove('is-bump');
+    this.scoreVal.classList.remove("is-bump");
     void this.scoreVal.offsetWidth; // restart animation
-    this.scoreVal.classList.add('is-bump');
+    this.scoreVal.classList.add("is-bump");
   }
 
-  /**
-   * Update a score readout. When `anim.force` is set (mode/size switch) the
-   * odometer rolls regardless of direction. Without `anim.force` it only rolls
-   * on decreases — so normal play (score only goes up) is never disturbed.
-   */
+  // Update score readout. force rolls regardless of direction (mode/size switch).
   private setScore(
     el: HTMLElement,
     value: number,
     prev: number,
-    anim?: { force?: boolean; dir?: 'down' | 'up' },
+    anim?: { force?: boolean; dir?: "down" | "up" },
   ): void {
     const text = String(value);
     if (anim?.force) {
-      this.scrollScoreTo(el, text, anim.dir ?? 'down');
+      this.scrollScoreTo(el, text, anim.dir ?? "down");
     } else if (value < prev) {
-      this.scrollScoreTo(el, text, 'down');
+      this.scrollScoreTo(el, text, "down");
     } else {
       el.textContent = text;
     }
   }
 
-  private scrollScoreTo(el: HTMLElement, text: string, dir: 'down' | 'up'): void {
-    const prev = el.textContent ?? '';
-    el.textContent = '';
-    const reel = document.createElement('span');
-    reel.className = 'score-reel';
-    const top = document.createElement('span');
-    const bottom = document.createElement('span');
-    if (dir === 'down') {
+  private scrollScoreTo(
+    el: HTMLElement,
+    text: string,
+    dir: "down" | "up",
+  ): void {
+    const prev = el.textContent ?? "";
+    el.textContent = "";
+    const reel = document.createElement("span");
+    reel.className = "score-reel";
+    const top = document.createElement("span");
+    const bottom = document.createElement("span");
+    if (dir === "down") {
       // new enters from below: [old, new], roll up
       top.textContent = prev;
       bottom.textContent = text;
-      reel.style.transform = 'translateY(0)';
+      reel.style.transform = "translateY(0)";
     } else {
       // new enters from above: [new, old], roll down
       top.textContent = text;
       bottom.textContent = prev;
-      reel.style.transform = 'translateY(-50%)';
+      reel.style.transform = "translateY(-50%)";
     }
     reel.append(top, bottom);
     el.appendChild(reel);
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        reel.style.transform = dir === 'down' ? 'translateY(-50%)' : 'translateY(0)';
+        reel.style.transform =
+          dir === "down" ? "translateY(-50%)" : "translateY(0)";
       }),
     );
     window.setTimeout(() => {
@@ -547,42 +571,28 @@ export class App {
     }, 420);
   }
 
-  // ---------- Mode badge crossfade ----------
   private animateModeBadge(newMode: string): void {
     const badge = this.modeBadge;
-    const oldText = badge.textContent ?? '';
+    const oldText = badge.textContent ?? "";
     if (oldText === newMode) return;
 
     // Fade out → swap text → fade back in. Width transitions naturally
     // because the element stays in the DOM — no inline style overrides.
-    badge.classList.add('mode-badge--fading');
+    badge.classList.add("mode-badge--fading");
     void badge.offsetWidth; // force reflow so the fade-out actually plays
 
     setTimeout(() => {
       badge.textContent = newMode;
-      badge.classList.remove('mode-badge--fading');
+      badge.classList.remove("mode-badge--fading");
     }, 120);
 
     // Clean up any leftover inline width from previous runs
     setTimeout(() => {
-      badge.style.width = '';
+      badge.style.width = "";
     }, 240);
   }
 
-  // ---------- Primary button toggle (New Game / Resume) ----------
-  private updatePrimaryButton(): void {
-    if (this.pendingNew) {
-      this.newGameBtn.textContent = 'Resume';
-      this.newGameBtn.classList.remove('btn--primary');
-      this.newGameBtn.classList.add('btn--ghost');
-    } else {
-      this.newGameBtn.textContent = 'New Game';
-      this.newGameBtn.classList.add('btn--primary');
-      this.newGameBtn.classList.remove('btn--ghost');
-    }
-  }
-
-  /** Commit the pending new game (if any) and revert the button to New Game. */
+  // Commit the pending new game (if any) and revert the button to New Game.
   private clearPendingNew(): void {
     if (!this.pendingNew) return;
     this.pendingNew = false;
@@ -590,23 +600,31 @@ export class App {
     this.updatePrimaryButton();
   }
 
+  private updatePrimaryButton(): void {
+    if (this.pendingNew) {
+      this.newGameBtn.textContent = "Resume";
+      this.newGameBtn.classList.remove("btn--primary");
+      this.newGameBtn.classList.add("btn--ghost");
+    } else {
+      this.newGameBtn.textContent = "New Game";
+      this.newGameBtn.classList.add("btn--primary");
+      this.newGameBtn.classList.remove("btn--ghost");
+    }
+  }
+
   private handleWinOver(): void {
     const s = this.session.state;
     if (s.over) {
-      // Show the modal only at the instant the game ends (false -> over),
-      // and only for human-driven play. When the engine is auto-playing, a
-      // blocking "you lost" popup reads as the game accusing the player of
-      // losing something they weren't even steering - so we skip it and
-      // just leave the below-board frozen indicator (setFrozen, called from
-      // updateUI) to communicate the same thing without interrupting.
+      // Show modal only at the instant the game ends and for human-driven play.
+      // Auto-play gets a frozen indicator instead of a blocking popup.
       if (!this.wasOver && !this.autoOn) {
         this.showOverlay({
-          title: 'Game over!',
-          message: 'No moves left.',
+          title: "Game over!",
+          message: "No moves left.",
           score: s.score,
           actions: [
-            { label: 'Keep board', onClick: () => this.closeOverlay() },
-            { label: 'New Game', primary: true, onClick: () => this.newGame() },
+            { label: "Keep board", onClick: () => this.closeOverlay() },
+            { label: "New Game", primary: true, onClick: () => this.newGame() },
           ],
         });
       }
@@ -618,12 +636,16 @@ export class App {
         this.saveCurrent();
       } else {
         this.showOverlay({
-          title: 'You win!',
-          titleClass: 'overlay__title--win',
-          message: 'You reached 2048!',
+          title: "You win!",
+          titleClass: "overlay__title--win",
+          message: "You reached 2048!",
           actions: [
-            { label: 'Keep going', primary: true, onClick: () => this.acknowledgeWin() },
-            { label: 'New Game', onClick: () => this.newGame() },
+            {
+              label: "Keep going",
+              primary: true,
+              onClick: () => this.acknowledgeWin(),
+            },
+            { label: "New Game", onClick: () => this.newGame() },
           ],
         });
       }
@@ -637,15 +659,12 @@ export class App {
     this.closeOverlay();
   }
 
-  /** Toggle the frozen-board look + below-board game-over indicator. */
+  // Toggle the frozen-board look and below-board game-over indicator.
   private setFrozen(frozen: boolean): void {
-    // Strip all effects from the board itself; only the below-board panel
-    // communicates game over state. No icy overlay, no saturation shift.
-    this.board.el.classList.remove('is-frozen');
-    this.gameOverBar.classList.toggle('is-visible', frozen);
+    this.board.el.classList.remove("is-frozen");
+    this.gameOverBar.classList.toggle("is-visible", frozen);
   }
 
-  // ---------- Overlays ----------
   private showOverlay(opts: {
     title: string;
     titleClass?: string;
@@ -655,43 +674,49 @@ export class App {
     actions: OverlayAction[];
   }): void {
     this.closeOverlay();
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    const card = document.createElement('div');
-    card.className = 'overlay__card' + (opts.danger ? ' overlay__card--danger' : '');
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'overlay__close';
-    closeBtn.setAttribute('aria-label', 'Close');
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
+    const card = document.createElement("div");
+    card.className =
+      "overlay__card" + (opts.danger ? " overlay__card--danger" : "");
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "overlay__close";
+    closeBtn.setAttribute("aria-label", "Close");
     closeBtn.innerHTML = Icons.close;
-    closeBtn.addEventListener('click', () => this.closeOverlay());
+    closeBtn.addEventListener("click", () => this.closeOverlay());
     card.appendChild(closeBtn);
-    const title = document.createElement('div');
-    title.className = 'overlay__title' + (opts.titleClass ? ` ${opts.titleClass}` : '');
+    const title = document.createElement("div");
+    title.className =
+      "overlay__title" + (opts.titleClass ? ` ${opts.titleClass}` : "");
     title.textContent = opts.title;
     card.appendChild(title);
     if (opts.score !== undefined) {
-      const sc = document.createElement('div');
-      sc.className = 'overlay__score';
+      const sc = document.createElement("div");
+      sc.className = "overlay__score";
       sc.textContent = String(opts.score);
       card.appendChild(sc);
     }
     if (opts.message) {
-      const msg = document.createElement('div');
-      msg.className = 'overlay__msg';
+      const msg = document.createElement("div");
+      msg.className = "overlay__msg";
       msg.textContent = opts.message;
       card.appendChild(msg);
     }
-    const actWrap = document.createElement('div');
-    actWrap.className = 'overlay__actions';
+    const actWrap = document.createElement("div");
+    actWrap.className = "overlay__actions";
     for (const a of opts.actions) {
-      const b = document.createElement('button');
-      b.type = 'button';
+      const b = document.createElement("button");
+      b.type = "button";
       b.className =
-        'btn' +
-        (a.primary ? (opts.danger ? ' btn--danger' : ' btn--primary') : ' btn--ghost');
+        "btn" +
+        (a.primary
+          ? opts.danger
+            ? " btn--danger"
+            : " btn--primary"
+          : " btn--ghost");
       b.textContent = a.label;
-      b.addEventListener('click', () => a.onClick());
+      b.addEventListener("click", () => a.onClick());
       actWrap.appendChild(b);
     }
     card.appendChild(actWrap);
@@ -707,12 +732,11 @@ export class App {
     }
   }
 
-  /** Small top-right auto-hiding toast (see notify.ts). */
+  /** Small top-right auto-hiding toast. */
   private notify(message: string, icon?: string): void {
     this.notifications.show(message, { icon, duration: 3000 });
   }
 
-  // ---------- Auto-play ----------
   private toggleAuto(force?: boolean): void {
     this.clearPendingNew();
     const next = force ?? !this.autoOn;
@@ -744,14 +768,9 @@ export class App {
     this.updateUI();
   }
 
-  /**
-   * Start the engine looping until the score reaches `targetScore`.
-   * Reuses the existing auto-play loop; stops and turns off the engine
-   * toggle when the target is hit (or at game-over / engine stop).
-   *
-   * Exposed on `window` for dev-console usage:
-   *   __runAutoLoop(5000)  // plays until score >= 5000
-   */
+  // Run the engine looping until the score reaches targetScore.
+  // Reuses the existing auto-play loop; stops when the target is hit.
+  // Exposed on window for dev-console usage.
   runAutoLoop(targetScore: number): void {
     if (this.session.state.over) return;
     if (this.autoOn) this.stopAuto();
@@ -775,8 +794,14 @@ export class App {
         // Auto-loop: restart the game when stuck so the engine keeps playing.
         if (this.autoLoopTarget !== null) {
           if (this.session.state.score >= this.autoLoopTarget) {
-            const elapsed = this.autoLoopStart ? ((Date.now() - this.autoLoopStart) / 1000 | 0) : 0;
-            this.notify(`Engine completed ${this.session.state.score}` + (elapsed > 0 ? ` in ${elapsed}s` : ''), Icons.engine);
+            const elapsed = this.autoLoopStart
+              ? ((Date.now() - this.autoLoopStart) / 1000) | 0
+              : 0;
+            this.notify(
+              `Engine completed ${this.session.state.score}` +
+                (elapsed > 0 ? ` in ${elapsed}s` : ""),
+              Icons.engine,
+            );
             this.stopAuto();
             return;
           }
@@ -808,10 +833,19 @@ export class App {
       }
       this.applyAutoAction(action);
       // Auto-loop: when the engine hits game over mid-action, restart or stop.
-      if (this.autoOn && this.session.state.over && this.autoLoopTarget !== null) {
+      if (
+        this.autoOn &&
+        this.session.state.over &&
+        this.autoLoopTarget !== null
+      ) {
         if (this.session.state.score >= this.autoLoopTarget) {
-          const elapsed = this.autoLoopStart ? ((Date.now() - this.autoLoopStart) / 1000 | 0) : 0;
-          this.notify(`Engine completed ${this.session.state.score} in ${elapsed}s`, Icons.engine);
+          const elapsed = this.autoLoopStart
+            ? ((Date.now() - this.autoLoopStart) / 1000) | 0
+            : 0;
+          this.notify(
+            `Engine completed ${this.session.state.score} in ${elapsed}s`,
+            Icons.engine,
+          );
           this.stopAuto();
         } else {
           this.newGame();
@@ -823,31 +857,26 @@ export class App {
     }, this.data.settings.autoSpeed);
   }
 
-  /**
-   * Compact fingerprint of the live board + score + power-up charges. Used only
-   * to detect that *something* gameplay-relevant changed during an async engine
-   * decision - the exact value is irrelevant, only equality is. Cheap (boards
-   * are at most 8x8) and self-contained, so it needs no hooks in every mutation
-   * site.
-   */
+  // Compact fingerprint of the live board + score + power-up charges. Used to
+  // detect that gameplay-relevant changed during an async engine decision.
   private boardSignature(): string {
     const s = this.session.state;
     const g = s.grid;
     let out = `${s.size}:${s.score}:${s.powerups.undo}:${s.powerups.swap}:${s.powerups.delete}:`;
     for (let r = 0; r < g.length; r++) {
       const row = g[r];
-      for (let c = 0; c < row.length; c++) out += (row[c]?.value ?? 0) + ',';
+      for (let c = 0; c < row.length; c++) out += (row[c]?.value ?? 0) + ",";
     }
     return out;
   }
 
-  /** Apply one AI action (move, swap, delete, or stop) during auto-play. */
+  // Apply one AI action (move, swap, delete, or stop) during auto-play.
   private applyAutoAction(action: AutoAction): void {
     switch (action.kind) {
-      case 'move':
+      case "move":
         this.doMove(action.dir);
         break;
-      case 'delete': {
+      case "delete": {
         if (!this.session.canDelete) {
           this.stopAuto();
           return;
@@ -857,11 +886,11 @@ export class App {
         this.saveCurrent();
         this.board.fullRender(this.session.state.grid);
         this.updateUI();
-        this.notify('Engine used Delete', Icons.delete);
+        this.notify("Engine used Delete", Icons.delete);
         this.handleWinOver();
         break;
       }
-      case 'swap': {
+      case "swap": {
         if (!this.session.canSwap) {
           this.stopAuto();
           return;
@@ -878,19 +907,25 @@ export class App {
         this.saveCurrent();
         this.board.animateSwap(a.id, b.id);
         this.updateUI();
-        this.notify('Engine used Swap', Icons.swap);
+        this.notify("Engine used Swap", Icons.swap);
         this.handleWinOver();
         break;
       }
-      case 'stop': {
+      case "stop": {
         // Engine returned stop = no legal moves. Force game-over state so the
         // auto-loop can properly decide whether to restart or stop.
         this.session.state.over = true;
         this.handleWinOver();
         if (this.autoLoopTarget !== null) {
           if (this.session.state.score >= this.autoLoopTarget) {
-            const elapsed = this.autoLoopStart ? ((Date.now() - this.autoLoopStart) / 1000 | 0) : 0;
-            this.notify(`Engine completed ${this.session.state.score}` + (elapsed > 0 ? ` in ${elapsed}s` : ''), Icons.engine);
+            const elapsed = this.autoLoopStart
+              ? ((Date.now() - this.autoLoopStart) / 1000) | 0
+              : 0;
+            this.notify(
+              `Engine completed ${this.session.state.score}` +
+                (elapsed > 0 ? ` in ${elapsed}s` : ""),
+              Icons.engine,
+            );
             this.stopAuto();
           } else {
             // Auto-loop: always restart, regardless of current best score.
@@ -905,7 +940,6 @@ export class App {
     }
   }
 
-  // ---------- Auto-play settings ----------
   private onAutoSpeed(ms: number): void {
     this.data.settings.autoSpeed = ms;
     this.persist();
@@ -932,7 +966,10 @@ export class App {
     this.session.setRngManipulation(on);
     this.persist();
     this.popover.update({ rngManip: on });
-    this.notify(on ? 'RNG Manipulation enabled' : 'RNG Manipulation disabled', Icons.dice);
+    this.notify(
+      on ? "RNG Manipulation enabled" : "RNG Manipulation disabled",
+      Icons.dice,
+    );
   }
 
   // Backtrack toggle — enables/disables delta-encoded unlimited undo history.
@@ -940,27 +977,38 @@ export class App {
     this.data.settings.backtrackEnabled = on;
     this.persist();
     this.popover.update({ backtrackEnabled: on });
-    console.log(`[dev] Backtrack ${on ? 'enabled' : 'disabled'}`);
+    console.log(`[dev] Backtrack ${on ? "enabled" : "disabled"}`);
   }
 
-  /** Show dialog when user tries to disable backtrack with data present. */
+  // Show dialog when user tries to disable backtrack with data present.
   private showBacktrackDisableDialog(): void {
     const hasData = (this.session.state.deltaHistory?.length ?? 0) > 0;
     this.showOverlay({
-      title: 'Disable backtrack?',
+      title: "Disable backtrack?",
       danger: true,
       message: hasData
-        ? 'You have backtrack data stored. Do you want to keep it or clear it?'
-        : 'Backtrack data will be cleared.',
+        ? "You have backtrack data stored. Do you want to keep it or clear it?"
+        : "Backtrack data will be cleared.",
       actions: [
-        { label: 'Cancel', onClick: () => this.closeOverlay() },
+        { label: "Cancel", onClick: () => this.closeOverlay() },
         ...(hasData
           ? [
-              { label: 'Keep & Disable', onClick: () => this.disableBacktrack(false) },
-              { label: 'Clear & Disable', primary: true, onClick: () => this.disableBacktrack(true) },
+              {
+                label: "Keep & Disable",
+                onClick: () => this.disableBacktrack(false),
+              },
+              {
+                label: "Clear & Disable",
+                primary: true,
+                onClick: () => this.disableBacktrack(true),
+              },
             ]
           : [
-              { label: 'Disable', primary: true, onClick: () => this.disableBacktrack(false) },
+              {
+                label: "Disable",
+                primary: true,
+                onClick: () => this.disableBacktrack(false),
+              },
             ]),
       ],
     });
@@ -974,38 +1022,43 @@ export class App {
     this.persist();
     this.popover.update({ backtrackEnabled: false });
     this.closeOverlay();
-    console.log('[dev] Backtrack disabled' + (clearCache ? ' (cache cleared)' : ' (cache kept)'));
+    console.log(
+      "[dev] Backtrack disabled" +
+        (clearCache ? " (cache cleared)" : " (cache kept)"),
+    );
   }
 
-  // ---------- Theme & settings ----------
   private onThemeToggle(): void {
     this.clearPendingNew();
     const pref = toggleTheme();
     this.data.settings.theme = pref;
     this.persist();
-    this.themeBtn.innerHTML = currentResolved() === 'dark' ? Icons.sun : Icons.moon;
+    this.themeBtn.innerHTML =
+      currentResolved() === "dark" ? Icons.sun : Icons.moon;
     this.popover.update({ theme: pref });
   }
 
-  private onThemePref(pref: 'light' | 'dark' | 'system'): void {
+  private onThemePref(pref: "light" | "dark" | "system"): void {
     this.clearPendingNew();
     setThemePref(pref);
     this.data.settings.theme = pref;
     this.persist();
-    this.themeBtn.innerHTML = currentResolved() === 'dark' ? Icons.sun : Icons.moon;
+    this.themeBtn.innerHTML =
+      currentResolved() === "dark" ? Icons.sun : Icons.moon;
     this.popover.update({ theme: pref });
   }
 
   private confirmClearAll(): void {
     this.popover.close();
     this.showOverlay({
-      title: 'Clear all progress?',
+      title: "Clear all progress?",
       danger: true,
-      message: 'Every saved game and best score, across all sizes and modes, will be erased.',
+      message:
+        "Every saved game and best score, across all sizes and modes, will be erased.",
       actions: [
-        { label: 'Cancel', onClick: () => this.closeOverlay() },
+        { label: "Cancel", onClick: () => this.closeOverlay() },
         {
-          label: 'Clear everything',
+          label: "Clear everything",
           primary: true,
           onClick: () => {
             clearGames(this.data);
@@ -1018,7 +1071,6 @@ export class App {
     });
   }
 
-  // ---------- Persistence ----------
   private saveCurrent(): void {
     putGame(this.data, this.session.state);
     this.persist();
@@ -1028,7 +1080,7 @@ export class App {
     save(this.data);
   }
 
-  /** Tear down listeners (e.g. for hot-module reload during dev). */
+  // Tear down listeners (e.g. for hot-module reload during dev).
   destroy(): void {
     this.stopAuto();
     this.closeOverlay();
@@ -1038,9 +1090,9 @@ export class App {
 
   // ---------- Developer console helpers ----------
 
-  /** Bypass-powerup undo: reverts up to `steps` past moves.
-   * Default 1 step. Negative values instead enable the auto-engine
-   * and run it for `Math.abs(steps)` moves. */
+  // Bypass-powerup undo: reverts up to `steps` past moves.
+  // Default 1 step. Negative values instead enable the auto-engine
+  // and run it for `Math.abs(steps)` moves.
   __undo(steps?: number): void {
     const n = steps ?? 1;
     if (n < 0) {
@@ -1049,7 +1101,12 @@ export class App {
       this.data.settings.autoOn = true;
       let done = 0;
       const tick = () => {
-        if (done >= count || this.session.state.over || !this.data.settings.autoOn) return;
+        if (
+          done >= count ||
+          this.session.state.over ||
+          !this.data.settings.autoOn
+        )
+          return;
         const ctx: EngineContext = {
           ...this.session.toContext(),
           depth: this.data.settings.autoDepth,
@@ -1058,7 +1115,7 @@ export class App {
         (async () => {
           const raw = await WasmEngine.chooseAction(ctx);
           const action: AutoAction = raw instanceof Promise ? await raw : raw;
-          if (action.kind === 'stop' || this.session.state.over) {
+          if (action.kind === "stop" || this.session.state.over) {
             this.data.settings.autoOn = false;
             return;
           }
@@ -1107,26 +1164,34 @@ export class App {
     this.board.fullRender(this.session.state.grid);
     this.updateUI();
     this.handleWinOver();
-    console.log('[dev] __undo →', n, 'step(s), score', this.session.state.score);
+    console.log(
+      "[dev] __undo →",
+      n,
+      "step(s), score",
+      this.session.state.score,
+    );
   }
 
-  /** Delete the tile at grid position [row, col]. */
+  // Delete the tile at grid position [row, col].
   __delete(row: number, col: number): void {
     const g = this.session.state.grid;
     if (row < 0 || row >= g.length || col < 0 || col >= g[row].length) {
       console.warn(`[dev] __delete → out of bounds (${row},${col})`);
       return;
     }
-    if (!g[row][col]) { console.warn('[dev] __delete:', row, col, 'is empty'); return; }
+    if (!g[row][col]) {
+      console.warn("[dev] __delete:", row, col, "is empty");
+      return;
+    }
     this.clearPendingNew();
     g[row][col] = null;
     this.saveCurrent();
     this.board.fullRender(g);
     this.updateUI();
-    console.log('[dev] __delete → removed tile at', row, col);
+    console.log("[dev] __delete → removed tile at", row, col);
   }
 
-  /** Delete all tiles with value `n` from the board. */
+  // Delete all tiles with value `n` from the board.
   __deleteValue(n: number): void {
     const g = this.session.state.grid;
     let count = 0;
@@ -1139,7 +1204,10 @@ export class App {
         }
       }
     }
-    if (count === 0) { console.warn(`[dev] __deleteValue → no ${n}-tiles found`); return; }
+    if (count === 0) {
+      console.warn(`[dev] __deleteValue → no ${n}-tiles found`);
+      return;
+    }
     this.clearPendingNew();
     this.saveCurrent();
     this.board.fullRender(g);
@@ -1147,14 +1215,17 @@ export class App {
     console.log(`[dev] __deleteValue → removed ${count} tile(s) of value ${n}`);
   }
 
-  /** Swap the tiles at [r1,c1] and [r2,c2]. At least one must be occupied. */
+  // Swap the tiles at [r1,c1] and [r2,c2]. At least one must be occupied.
   __swap(r1: number, c1: number, r2: number, c2: number): void {
     const g = this.session.state.grid;
     if (r1 === r2 && c1 === c2) return;
     const a = g[r1]?.[c1];
     const b = g[r2]?.[c2];
     // Allow swapping with empty cell: at least one must be occupied
-    if (!a && !b) { console.warn('[dev] __swap:', r1, c1, r2, c2, 'both cells are empty'); return; }
+    if (!a && !b) {
+      console.warn("[dev] __swap:", r1, c1, r2, c2, "both cells are empty");
+      return;
+    }
     this.clearPendingNew();
     g[r1][c1] = b ?? null;
     g[r2][c2] = a ?? null;
@@ -1166,10 +1237,19 @@ export class App {
     }
     this.saveCurrent();
     this.updateUI();
-    console.log('[dev] __swap →', r1, c1, '<->', r2, c2, a ? `(tile ${a.value})` : '(empty)', b ? `(tile ${b.value})` : '(empty)');
+    console.log(
+      "[dev] __swap →",
+      r1,
+      c1,
+      "<->",
+      r2,
+      c2,
+      a ? `(tile ${a.value})` : "(empty)",
+      b ? `(tile ${b.value})` : "(empty)",
+    );
   }
 
-  /** Add n free tiles (value 2) at random empty cells. */
+  // Add n free tiles (value 2) at random empty cells.
   __addTiles(n = 1): void {
     const g = this.session.state.grid;
     const empties: { r: number; c: number }[] = [];
@@ -1192,7 +1272,7 @@ export class App {
     console.log(`[dev] __addTiles → spawned ${count} tiles`);
   }
 
-  /** Clear every tile from the board. */
+  // Clear every tile from the board.
   __clear(): void {
     const g = this.session.state.grid;
     for (let r = 0; r < g.length; r++)
@@ -1200,31 +1280,32 @@ export class App {
     this.saveCurrent();
     this.board.fullRender(g);
     this.updateUI();
-    console.log('[dev] __clear → board emptied');
+    console.log("[dev] __clear → board emptied");
   }
 
-  /** Fill the board with tiles of value `val` (default 2), one per cell. */
+  // Fill the board with tiles of value `val` (default 2), one per cell.
   __fill(val = 2): void {
     const g = this.session.state.grid;
     let id = 1;
     for (let r = 0; r < g.length; r++)
-      for (let c = 0; c < g[r].length; c++)
-        g[r][c] = { id: id++, value: val };
+      for (let c = 0; c < g[r].length; c++) g[r][c] = { id: id++, value: val };
     this.saveCurrent();
     this.board.fullRender(g);
     this.updateUI();
     console.log(`[dev] __fill → ${val} everywhere`);
   }
 
-  /** Set the score to `n`. Validates input to prevent NaN corruption of best. */
+  // Set the score to `n`. Validates input to prevent NaN corruption of best.
   __score(n: number): void {
-    if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) {
-      console.warn(`[dev] __score → invalid value: ${n} (must be a non-negative finite number)`);
+    if (typeof n !== "number" || !Number.isFinite(n) || n < 0) {
+      console.warn(
+        `[dev] __score → invalid value: ${n} (must be a non-negative finite number)`,
+      );
       return;
     }
     this.session.state.score = n;
     const curBest = this.session.state.best;
-    if (typeof curBest !== 'number' || isNaN(curBest) || n > curBest) {
+    if (typeof curBest !== "number" || isNaN(curBest) || n > curBest) {
       this.session.state.best = n;
     }
     this.saveCurrent();
@@ -1232,16 +1313,11 @@ export class App {
     console.log(`[dev] __score → set to ${n}`);
   }
 
-  /**
-   * Place a tile on the board. Four signatures:
-   *
-   * | Call | Meaning |
-   * |------|---------|
-   * | `__add(val)` | Place `val` at first empty cell (smallest row, then col). |
-   * | `__add(x, y)` | Place a **2** at grid position `(x, y)`. |
-   * | `__add(val, x, y)` | Place `val` at `(x, y)`. Fails if occupied. |
-   * | `__add(val, x, y, 1)` | Same as above but **replace** if occupied. |
-   */
+  // Place a tile on the board. Four signatures:
+  //   __add(val)         → place at first empty cell
+  //   __add(x, y)        → place a 2 at (x, y)
+  //   __add(val, x, y)   → place val at (x, y); error if occupied
+  //   __add(val, x, y, 1) → same but replace if occupied
   __add(a: number, b?: number, c?: number, _replace?: number): void {
     const g = this.session.state.grid;
 
@@ -1255,14 +1331,18 @@ export class App {
         return;
       }
       if (g[x][y] && !_replace) {
-        console.warn(`[dev] __add → cell (${x},${y}) already occupied — pass 1 as 4th arg to force-replace`);
+        console.warn(
+          `[dev] __add → cell (${x},${y}) already occupied — pass 1 as 4th arg to force-replace`,
+        );
         return;
       }
       g[x][y] = { id: freshDevId(), value: val };
       this.saveCurrent();
       this.board.fullRender(g);
       this.updateUI();
-      console.log(`[dev] __add → placed ${val} at ${x},${y}${_replace ? ' (replaced)' : ''}`);
+      console.log(
+        `[dev] __add → placed ${val} at ${x},${y}${_replace ? " (replaced)" : ""}`,
+      );
       return;
     }
 
@@ -1296,16 +1376,18 @@ export class App {
             this.saveCurrent();
             this.board.fullRender(g);
             this.updateUI();
-            console.log(`[dev] __add → placed ${val} at first empty cell (${r},${c})`);
+            console.log(
+              `[dev] __add → placed ${val} at first empty cell (${r},${c})`,
+            );
             return;
           }
         }
       }
-      console.warn('[dev] __add → board is full');
+      console.warn("[dev] __add → board is full");
     }
   }
 
-  /** Place a single tile of value `val` at [row, col]. Overwrites if occupied. */
+  // Place a single tile of value `val` at [row, col]. Overwrites if occupied.
   __max(row: number, col: number, val = 2048): void {
     const g = this.session.state.grid;
     if (row < 0 || row >= g.length || col < 0 || col >= g[row].length) {
@@ -1319,17 +1401,20 @@ export class App {
     console.log(`[dev] __max → placed ${val} at ${row},${col}`);
   }
 
-  /** Set move count to `n`. */
+  // Set move count to `n`.
   __moves(n: number): void {
     this.session.state.moveCount = n;
     this.saveCurrent();
     console.log(`[dev] __moves → set to ${n}`);
   }
 
-  /** Apply a directional move WITHOUT spawning a tile (free experiment). */
+  // Apply a directional move WITHOUT spawning a tile (free experiment).
   __cheat(dir: Direction): void {
     const { grid: next, transcript } = move(this.session.state.grid, dir);
-    if (!transcript.moved) { console.warn('[dev] __cheat:', dir, 'had no effect'); return; }
+    if (!transcript.moved) {
+      console.warn("[dev] __cheat:", dir, "had no effect");
+      return;
+    }
     this.clearPendingNew();
     this.session.state.grid = next;
     this.session.state.score += transcript.gained;
@@ -1339,22 +1424,25 @@ export class App {
     console.log(`[dev] __cheat → ${dir}, gained ${transcript.gained}`);
   }
 
-  /** Max out all powerup charges. */
+  // Max out all powerup charges.
   __fillPowerups(): void {
     this.session.state.powerups = { undo: 99, swap: 99, delete: 99 };
     this.saveCurrent();
     this.updateUI();
-    console.log('[dev] __fillPowerups → 99 each');
+    console.log("[dev] __fillPowerups → 99 each");
   }
 
-  /** Instantly win: place a 2048 tile on a random empty cell. */
+  // Instantly win: place a 2048 tile on a random empty cell.
   __win(): void {
     const g = this.session.state.grid;
     const empties: { r: number; c: number }[] = [];
     for (let r = 0; r < g.length; r++)
       for (let c = 0; c < g[r].length; c++)
         if (!g[r][c]) empties.push({ r, c });
-    if (empties.length === 0) { console.warn('[dev] __win → board is full'); return; }
+    if (empties.length === 0) {
+      console.warn("[dev] __win → board is full");
+      return;
+    }
     const spot = empties[Math.floor(Math.random() * empties.length)];
     g[spot.r][spot.c] = { id: freshDevId(), value: 2048 };
     this.session.state.won = true;
@@ -1374,18 +1462,16 @@ export class App {
     this.persist();
     if (!this.autoOn) this.startAuto();
     this.popover.update({ autoSpeed: 0 });
-    console.log('[dev] __noDelay → engine started with zero delay');
+    console.log("[dev] __noDelay → engine started with zero delay");
   }
 
-  /**
-   * Peek the next spawn value from the CSPRNG stream.
-   * Returns 2 or 4 (10% chance of 4), without advancing game state.
-   */
+  // Peek the next spawn value from the CSPRNG stream.
+  // Returns 2 or 4 (10% chance of 4), without advancing game state.
   __nextNumber(): number {
     const seed = this.session.state.rngSeed;
     const calls = this.session.state.rngCalls ?? 0;
     if (!seed || seed.length < 8) {
-      console.warn('[dev] __nextNumber → no RNG seed available');
+      console.warn("[dev] __nextNumber → no RNG seed available");
       return -1;
     }
     // Clone the RNG to peek without consuming
@@ -1396,27 +1482,30 @@ export class App {
     for (let i = 0; i < totalSpawns; i++) gen.next();
     const roll = gen.next();
     const val = roll < SPAWN_PROB_4 ? 4 : 2;
-    console.log(`[dev] __nextNumber → ${val} (rng=${roll.toFixed(4)}, p(4)=${SPAWN_PROB_4})`);
+    console.log(
+      `[dev] __nextNumber → ${val} (rng=${roll.toFixed(4)}, p(4)=${SPAWN_PROB_4})`,
+    );
     return val;
   }
 
-  /**
-   * Peek the next spawn location from the CSPRNG stream.
-   * Returns { row, col } of the cell the next tile will appear in,
-   * without advancing game state.
-   */
+  // Peek the next spawn location from the CSPRNG stream.
+  // Returns { row, col } of the cell the next tile will appear in,
+  // without advancing game state.
   __nextLocation(): { row: number; col: number } {
     const g = this.session.state.grid;
     const empties: { row: number; col: number }[] = [];
     for (let r = 0; r < g.length; r++)
       for (let c = 0; c < g[r].length; c++)
         if (!g[r][c]) empties.push({ row: r, col: c });
-    if (empties.length === 0) { console.warn('[dev] __nextLocation → board is full'); return { row: -1, col: -1 }; }
+    if (empties.length === 0) {
+      console.warn("[dev] __nextLocation → board is full");
+      return { row: -1, col: -1 };
+    }
 
     const seed = this.session.state.rngSeed;
     const calls = this.session.state.rngCalls ?? 0;
     if (!seed || seed.length < 8) {
-      console.warn('[dev] __nextLocation → no RNG seed available');
+      console.warn("[dev] __nextLocation → no RNG seed available");
       return { row: -1, col: -1 };
     }
 
@@ -1428,21 +1517,22 @@ export class App {
     }
     const posRoll = gen.next();
     const spot = empties[Math.floor(posRoll * empties.length)];
-    console.log(`[dev] __nextLocation → ${spot.row},${spot.col} (rng=${posRoll.toFixed(4)}, empties=${empties.length})`);
+    console.log(
+      `[dev] __nextLocation → ${spot.row},${spot.col} (rng=${posRoll.toFixed(4)}, empties=${empties.length})`,
+    );
     return spot;
   }
 
-  /**
-   * Check whether the displayed score is consistent with the tiles on the
-   * board. Every tile of value V contributes a [min, max] score window (min if
-   * it was built purely from 4-spawns, max if purely from 2-spawns); the board's
-   * total window must contain the score. Logs the window and verdict, returns
-   * the full result.
-   */
+  // Check whether the displayed score is consistent with the tiles on the board.
+  // Every tile of value V contributes a [min, max] score window (min if built
+  // from 4-spawns, max if from 2-spawns); the total window must contain the score.
   __validate(): ValidationResult {
-    const r = validatePosition(this.session.state.grid, this.session.state.score);
+    const r = validatePosition(
+      this.session.state.grid,
+      this.session.state.score,
+    );
     const tag = r.valid
-      ? 'VALID'
+      ? "VALID"
       : r.score < r.min
         ? `BELOW MIN by ${r.min - r.score}`
         : `ABOVE MAX by ${r.score - r.max}`;
@@ -1452,38 +1542,43 @@ export class App {
     return r;
   }
 
-  /**
-   * Clamp the score into the board's valid window so it matches a hacked
-   * position. A score below the minimum is raised to it; a score above the
-   * maximum is lowered to it; an in-window score is left alone. Mutates and
-   * persists state.
-   */
-  __updatePosition(): { from: number; to: number; min: number; max: number; changed: boolean } {
-    const r = clampScoreToWindow(this.session.state.grid, this.session.state.score);
+  // Clamp the score into the board's valid window. A score below min is raised,
+  // above max is lowered, in-window is left alone. Mutates and persists state.
+  __updatePosition(): {
+    from: number;
+    to: number;
+    min: number;
+    max: number;
+    changed: boolean;
+  } {
+    const r = clampScoreToWindow(
+      this.session.state.grid,
+      this.session.state.score,
+    );
     const changed = r.to !== r.from;
     if (changed) {
       this.session.state.score = r.to;
       const curBest = this.session.state.best;
-      if (typeof curBest !== 'number' || isNaN(curBest) || r.to > curBest) {
+      if (typeof curBest !== "number" || isNaN(curBest) || r.to > curBest) {
         this.session.state.best = r.to;
       }
       this.clearPendingNew();
       this.saveCurrent();
       this.updateUI();
-      console.log(`[dev] __updatePosition -> score ${r.from} -> ${r.to} (window [${r.min}, ${r.max}])`);
+      console.log(
+        `[dev] __updatePosition -> score ${r.from} -> ${r.to} (window [${r.min}, ${r.max}])`,
+      );
     } else {
-      console.log(`[dev] __updatePosition -> already valid (score ${r.from} in [${r.min}, ${r.max}])`);
+      console.log(
+        `[dev] __updatePosition -> already valid (score ${r.from} in [${r.min}, ${r.max}])`,
+      );
     }
     return { from: r.from, to: r.to, min: r.min, max: r.max, changed };
   }
 
-  /**
-   * Remove the fewest tiles (then the least total value) so the remaining board
-   * is valid for the current score. Fixes hacked-in tiles that the score cannot
-   * account for (e.g. a 32768 dropped onto a near-zero board). A score above the
-   * maximum cannot be fixed by removal and is reported infeasible. Mutates and
-   * persists state.
-   */
+  // Remove the fewest tiles (then least total value) so the remaining board
+  // is valid for the current score. Fixes hacked-in tiles the score cannot
+  // account for. A score above max cannot be fixed by removal alone.
   __bypassValidation(valueFirst = false): {
     feasible: boolean;
     removed: number;
@@ -1495,14 +1590,28 @@ export class App {
     const score = this.session.state.score;
     const plan = planBypass(g, score, valueFirst);
     if (plan.alreadyValid) {
-      console.log('[dev] __bypassValidation -> position already valid, nothing removed');
-      return { feasible: true, removed: 0, totalValue: 0, heuristic: false, valid: true };
+      console.log(
+        "[dev] __bypassValidation -> position already valid, nothing removed",
+      );
+      return {
+        feasible: true,
+        removed: 0,
+        totalValue: 0,
+        heuristic: false,
+        valid: true,
+      };
     }
     if (!plan.feasible) {
       console.warn(
         `[dev] __bypassValidation -> cannot make valid by removing tiles (score ${score} is outside every subset's window)`,
       );
-      return { feasible: false, removed: 0, totalValue: 0, heuristic: plan.heuristic, valid: false };
+      return {
+        feasible: false,
+        removed: 0,
+        totalValue: 0,
+        heuristic: plan.heuristic,
+        valid: false,
+      };
     }
     this.clearPendingNew();
     let totalValue = 0;
@@ -1516,10 +1625,12 @@ export class App {
     this.updateUI();
     this.handleWinOver();
     const after = validatePosition(g, score);
-    const note = plan.heuristic ? ' (heuristic - may not be perfectly minimal)' : '';
+    const note = plan.heuristic
+      ? " (heuristic - may not be perfectly minimal)"
+      : "";
     console.log(
       `[dev] __bypassValidation -> removed ${plan.remove.length} tile(s) totalling ${totalValue}${note}; ` +
-        `priority=${valueFirst ? 'value-first' : 'count-first'}; ` +
+        `priority=${valueFirst ? "value-first" : "count-first"}; ` +
         `window now [${plan.after.min}, ${plan.after.max}], valid=${after.valid}`,
     );
     return {
@@ -1531,13 +1642,7 @@ export class App {
     };
   }
 
-  // ---------- New dev methods (getStats, setBoard, evalPosition, afkHighScore, updateScore) ----------
-
-  /**
-   * Comprehensive board / session / UI diagnostics dump.
-   * Returns an object with every relevant piece of information about the
-   * current position, engine config, RNG state, validation, and UI.
-   */
+  /** Comprehensive board / session / UI diagnostics dump. */
   __getStats(): {
     board: {
       type: string;
@@ -1601,7 +1706,7 @@ export class App {
       pendingNew: boolean;
       hasOverlay: boolean;
       isSelecting: boolean;
-      theme: 'light' | 'dark';
+      theme: "light" | "dark";
       lastScore: number;
       lastBest: number;
       gameOverBarVisible: boolean;
@@ -1655,8 +1760,18 @@ export class App {
         if (down) smoothness += Math.abs(v - Math.log2(down.value));
 
         // Mergeable pairs
-        if (c + 1 < g[r].length && g[r][c + 1] && g[r][c + 1]!.value === cell.value) mergeable++;
-        if (r + 1 < g.length && g[r + 1][c] && g[r + 1][c]!.value === cell.value) mergeable++;
+        if (
+          c + 1 < g[r].length &&
+          g[r][c + 1] &&
+          g[r][c + 1]!.value === cell.value
+        )
+          mergeable++;
+        if (
+          r + 1 < g.length &&
+          g[r + 1][c] &&
+          g[r + 1][c]!.value === cell.value
+        )
+          mergeable++;
 
         // Open lines per row/col (consecutive empty cells at edges)
         if (c === 0 && !g[r][c]) openLines++;
@@ -1708,7 +1823,10 @@ export class App {
     if (seed && seed.length >= 8) {
       const gen = new SecureRng(seed, calls);
       const totalSpawns = 2 + s.moveCount;
-      for (let i = 0; i < totalSpawns; i++) { gen.next(); gen.next(); }
+      for (let i = 0; i < totalSpawns; i++) {
+        gen.next();
+        gen.next();
+      }
       const roll = gen.next();
       predValue = roll < SPAWN_PROB_4 ? 4 : 2;
       const emptiesList = emptyCells(g);
@@ -1784,46 +1902,42 @@ export class App {
         theme: currentResolved(),
         lastScore: this.lastScore,
         lastBest: this.lastBest,
-        gameOverBarVisible: this.gameOverBar.classList.contains('is-visible'),
+        gameOverBarVisible: this.gameOverBar.classList.contains("is-visible"),
       },
       validation: { ...vr },
       timestamp: Date.now(),
     };
   }
 
-  /**
-   * Set the board to an arbitrary position from a flat bitboard or values matrix.
-   *
-   * Signatures:
-   * | Call | Meaning |
-   * |------|---------|
-   * | `__setBoard(values)` | Set grid from `number[][]` (0 = empty). Uses existing size/mode. |
-   * | `__setBoard(size, values)` | Create a new game of given size with the values grid. |
-   * | `__setBoard(flatArray, size)` | Set from a flat `number[]` of length `size*size` (row-major). |
-   * | `__setBoard(flatArray)` | Set from flat array, inferring size from `Math.sqrt(length)`. |
-   */
-  __setBoard(
-    a: number[][] | number[] | number,
-    b?: number[][] | number,
-  ): void {
+  // Set the board to an arbitrary position from a values matrix or flat array.
+  // Signatures: __setBoard(values), __setBoard(size, values),
+  // __setBoard(flatArray), __setBoard(flatArray, size).
+  __setBoard(a: number[][] | number[] | number, b?: number[][] | number): void {
     let grid: Grid;
     let size: number;
 
     if (Array.isArray(a)) {
       // Flat array form: __setBoard(flat, size?)
       const flat = a;
-      if (b !== undefined && typeof b === 'number') {
+      if (b !== undefined && typeof b === "number") {
         size = b;
       } else {
         const root = Math.sqrt(flat.length);
         if (!Number.isInteger(root)) {
-          console.warn('[dev] __setBoard → flat array length must be a perfect square');
+          console.warn(
+            "[dev] __setBoard → flat array length must be a perfect square",
+          );
           return;
         }
         size = root;
       }
       if (flat.length !== size * size) {
-        console.warn('[dev] __setBoard → flat array length', flat.length, '!= size²', size * size);
+        console.warn(
+          "[dev] __setBoard → flat array length",
+          flat.length,
+          "!= size²",
+          size * size,
+        );
         return;
       }
       grid = createGrid(size);
@@ -1831,7 +1945,7 @@ export class App {
         const row = Math.floor(i / size);
         const col = i % size;
         const val = flat[i];
-        if (typeof val === 'number' && val > 0) {
+        if (typeof val === "number" && val > 0) {
           grid[row][col] = { id: freshDevId(), value: val };
         }
       }
@@ -1840,7 +1954,9 @@ export class App {
       size = a as number;
       const vals = b as number[][];
       if (vals.length !== size || vals.some((row) => row.length !== size)) {
-        console.warn(`[dev] __setBoard → values grid ${vals.length}x${vals[0]?.length} doesn't match size ${size}`);
+        console.warn(
+          `[dev] __setBoard → values grid ${vals.length}x${vals[0]?.length} doesn't match size ${size}`,
+        );
         return;
       }
       grid = createGrid(size);
@@ -1856,7 +1972,9 @@ export class App {
       const vals = a as unknown as number[][];
       size = this.size;
       if (vals.length !== size || vals.some((row) => row.length !== size)) {
-        console.warn(`[dev] __setBoard → values grid ${vals.length}x${vals[0]?.length} doesn't match current size ${size}`);
+        console.warn(
+          `[dev] __setBoard → values grid ${vals.length}x${vals[0]?.length} doesn't match current size ${size}`,
+        );
         return;
       }
       grid = createGrid(size);
@@ -1881,24 +1999,17 @@ export class App {
     this.updateUI();
     this.handleWinOver();
 
-    if (wasOver) console.log(`[dev] __setBoard → restored from game-over (${size}x${size}, ${grid.flat().filter(v => v !== null).length} tiles)`);
-    else console.log(`[dev] __setBoard → set ${size}x${size} board with ${grid.flat().filter(v => v !== null).length} tiles`);
+    if (wasOver)
+      console.log(
+        `[dev] __setBoard → restored from game-over (${size}x${size}, ${grid.flat().filter((v) => v !== null).length} tiles)`,
+      );
+    else
+      console.log(
+        `[dev] __setBoard → set ${size}x${size} board with ${grid.flat().filter((v) => v !== null).length} tiles`,
+      );
   }
 
-  /**
-   * Evaluate the current position with heuristic scoring.
-   * Returns a comprehensive analysis including:
-   *   - Current score and best score
-   *   - Empty cell count and occupancy ratio
-   *   - Max tile and sum of all tiles
-   *   - Smoothness score (lower = better tile adjacency)
-   *   - Monotonicity score (higher = better ordered layout)
-   *   - Open line count
-   *   - Estimated highest possible tile achievable
-   *   - Estimated eval score (heuristic position quality)
-   *   - Predicted score range based on tile composition
-   *   - Calculation time in ms
-   */
+  // Evaluate the current position with heuristic scoring.
   __evalPosition(): {
     calcTimeMs: number;
     currentScore: number;
@@ -1955,8 +2066,18 @@ export class App {
         const down = g[r + 1]?.[c];
         if (down) smoothness += Math.abs(v - Math.log2(down.value));
 
-        if (c + 1 < g[r].length && g[r][c + 1] && g[r][c + 1]!.value === cell.value) mergeable++;
-        if (r + 1 < g.length && g[r + 1][c] && g[r + 1][c]!.value === cell.value) mergeable++;
+        if (
+          c + 1 < g[r].length &&
+          g[r][c + 1] &&
+          g[r][c + 1]!.value === cell.value
+        )
+          mergeable++;
+        if (
+          r + 1 < g.length &&
+          g[r + 1][c] &&
+          g[r + 1][c]!.value === cell.value
+        )
+          mergeable++;
 
         if (c === 0 && !g[r][c]) openLines++;
         if (r === 0 && !g[r][c]) openLines++;
@@ -1985,30 +2106,41 @@ export class App {
     let maxCorner = false;
     let singleCorner = false;
     if (tileCount > 0) {
-      const corners = [[0, 0], [0, size - 1], [size - 1, 0], [size - 1, size - 1]];
+      const corners = [
+        [0, 0],
+        [0, size - 1],
+        [size - 1, 0],
+        [size - 1, size - 1],
+      ];
       for (const [cr, cc] of corners) {
-        if (g[cr][cc] && g[cr][cc]!.value === maxT) { maxCorner = true; break; }
+        if (g[cr][cc] && g[cr][cc]!.value === maxT) {
+          maxCorner = true;
+          break;
+        }
       }
       singleCorner = maxCorner;
     }
 
     // Composite score
     const composite =
-      emptyCells * W_EMPTY
-      - smoothness * W_SMOOTH
-      + mono * W_MONO
-      + mergeable * W_MERGE
-      + (maxCorner ? W_MAX_CORNER : 0)
-      + (singleCorner ? W_SINGLE_CORNER : 0);
+      emptyCells * W_EMPTY -
+      smoothness * W_SMOOTH +
+      mono * W_MONO +
+      mergeable * W_MERGE +
+      (maxCorner ? W_MAX_CORNER : 0) +
+      (singleCorner ? W_SINGLE_CORNER : 0);
 
     // Estimate highest possible tile: log2(maxT) + estimated merges possible
     const estMerges = emptyCells + mergeable;
-    const estHighestTile = Math.pow(2, Math.log2(maxT) + Math.floor(estMerges / 2));
+    const estHighestTile = Math.pow(
+      2,
+      Math.log2(maxT) + Math.floor(estMerges / 2),
+    );
 
     // Predicted score range from tile composition
     const win = scoreWindow(g);
 
-    const calcTimeMs = parseFloat(((performance.now() - t0).toFixed(3)));
+    const calcTimeMs = parseFloat((performance.now() - t0).toFixed(3));
 
     const result = {
       calcTimeMs,
@@ -2039,8 +2171,8 @@ export class App {
 
     console.log(
       `%c[dev] __evalPosition%c`,
-      'font-weight:bold',
-      '',
+      "font-weight:bold",
+      "",
       `\n  Score: ${s.score} / Best: ${s.best}`,
       `\n  Board: ${size}x${size} | Tiles: ${tileCount} | Empty: ${emptyCells}`,
       `\n  Max tile: ${maxT} | Sum: ${sumT}`,
@@ -2056,18 +2188,8 @@ export class App {
     return result;
   }
 
-  /**
-   * Run the AI engine AFK until the high score exceeds itself 3 consecutive times.
-   *
-   * Behavior:
-   *   - Sets autoSpeed to 0 (no delay, maximum speed)
-   *   - Uses current autoDepth and manipulate settings
-   *   - Starts a new game if needed
-   *   - Loops until best score has been beaten by at least 3x in a row
-   *   - Reports progress and final stats
-   *
-   * This is fire-and-forget: it runs asynchronously and notifies via console.
-   */
+  // Run the AI engine AFK until the best score is maintained 3 consecutive times.
+  // Sets autoSpeed to 0, uses current depth/manipulate settings. Fire-and-forget.
   async __afkHighScore(): Promise<void> {
     const s = this.session.state;
     const initialBest = s.best;
@@ -2075,7 +2197,9 @@ export class App {
     const manipulate = this.data.settings.rngManip;
 
     console.log(`[dev] __afkHighScore → starting AFK run`);
-    console.log(`[dev]   depth=${depth}, manipulate=${manipulate}, initialBest=${initialBest}`);
+    console.log(
+      `[dev]   depth=${depth}, manipulate=${manipulate}, initialBest=${initialBest}`,
+    );
 
     // Set zero delay for max speed
     const prevSpeed = this.data.settings.autoSpeed;
@@ -2117,11 +2241,15 @@ export class App {
       if (finishedBest > currentBest) {
         currentBest = finishedBest;
         exceedCount = 1;
-        console.log(`[dev] __afkHighScore → new best: ${currentBest} (game #${gamesPlayed})`);
+        console.log(
+          `[dev] __afkHighScore → new best: ${currentBest} (game #${gamesPlayed})`,
+        );
       } else if (finishedBest >= currentBest) {
         // Same best counts toward the 3x threshold
         exceedCount++;
-        console.log(`[dev] __afkHighScore → best maintained: ${currentBest} (exceedCount=${exceedCount}/3)`);
+        console.log(
+          `[dev] __afkHighScore → best maintained: ${currentBest} (exceedCount=${exceedCount}/3)`,
+        );
       } else {
         // Score dropped below threshold — reset counter
         exceedCount = 0;
@@ -2136,14 +2264,17 @@ export class App {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log(
           `%c[dev] __afkHighScore → DONE%c`,
-          'font-weight:bold;color:#4ade80',
-          '',
+          "font-weight:bold;color:#4ade80",
+          "",
           `  Games played: ${gamesPlayed}`,
           `  Final best: ${currentBest}`,
           `  Time: ${elapsed}s`,
           `  Exceeded 3x threshold ✓`,
         );
-        this.notify(`AFK High Score: ${currentBest} in ${elapsed}s`, Icons.engine);
+        this.notify(
+          `AFK High Score: ${currentBest} in ${elapsed}s`,
+          Icons.engine,
+        );
         return;
       }
 
@@ -2158,14 +2289,12 @@ export class App {
     loop();
   }
 
-  /**
-   * Recover from a NaN best score. If best is already valid (a finite number),
-   * does nothing. Otherwise sets best to the current score.
-   */
+  // Recover from a NaN best score. If best is already valid, does nothing.
+  // does nothing. Otherwise sets best to the current score.
   __fixBest(): void {
     const s = this.session.state;
-    if (typeof s.best === 'number' && !isNaN(s.best)) {
-      console.log('[dev] __fixBest → best score is already valid');
+    if (typeof s.best === "number" && !isNaN(s.best)) {
+      console.log("[dev] __fixBest → best score is already valid");
       return;
     }
     s.best = s.score;
@@ -2205,9 +2334,13 @@ export class App {
       this.clearPendingNew();
       this.saveCurrent();
       this.updateUI();
-      console.log(`[dev] __refreshScore -> score adjusted ${originalScore} → ${clamped.to} (window [${clamped.min}, ${clamped.max}])`);
+      console.log(
+        `[dev] __refreshScore -> score adjusted ${originalScore} → ${clamped.to} (window [${clamped.min}, ${clamped.max}])`,
+      );
     } else {
-      console.log(`[dev] __refreshScore -> score ${originalScore} already valid (window [${clamped.min}, ${clamped.max}])`);
+      console.log(
+        `[dev] __refreshScore -> score ${originalScore} already valid (window [${clamped.min}, ${clamped.max}])`,
+      );
     }
 
     return {
@@ -2228,53 +2361,54 @@ export class App {
    */
   __refreshPlayAgainStatus(): void {
     const isDead = !hasMoves(this.session.state.grid);
-    this.gameOverBar.classList.toggle('is-visible', isDead);
-    console.log(`[dev] __refreshPlayAgainStatus → ${isDead ? 'visible (board is dead)' : 'hidden'}`);
+    this.gameOverBar.classList.toggle("is-visible", isDead);
+    console.log(
+      `[dev] __refreshPlayAgainStatus → ${isDead ? "visible (board is dead)" : "hidden"}`,
+    );
   }
-
 
   /** Print usage info for the developer console. */
   __help(): void {
     const lines = [
-      '%c2048 Developer Console%c',
-      'font-weight:bold;font-size:14px;',
-      '',
-      '__undo()                  Undo last move (no powerup cost)',
-      '__undo(n)                 Undo n steps at once',
-      '__undo(-n)                Enable engine for n moves',
-      '__delete(row, col)        Remove tile at grid position',
-      '__deleteValue(n)          Remove all tiles of value n',
-      '__swap(r1, c1, r2, c2)   Swap two tiles',
-      '__addTiles(n)             Spawn n free tiles (value 2)',
-      '__add(val)                Place val at first empty cell',
-      '__add(x, y)               Place a 2 at grid position',
-      '__add(val, x, y)          Place val at (x, y); error if occupied',
-      '__add(val, x, y, 1)       Place val at (x, y), replacing if needed',
-      '__clear()                 Clear entire board',
-      '__fill(val)               Fill board with tiles of value',
-      '__score(n)                Set score to n',
-      '__max(row, col, val)      Place tile of value at position',
-      '__moves(n)                Set move count',
-      '__cheat(dir)              Move without spawning (free experiment)',
-      '__fillPowerups()          Max out all powerups',
-      '__win()                   Instantly win (place 2048)',
-      '__noDelay()               Start engine with zero delay (max speed)',
-      '__nextNumber()            Peek next spawn value (2 or 4)',
-      '__nextLocation()          Peek next spawn position',
-      '__validate()              Check score vs tile window (valid?)',
-      '__updatePosition()        Clamp score into the valid window',
-      '__bypassValidation(vf?)   Remove minimal tiles to make position valid (vf=true: value-first)',
-      '__getStats()              Full board/session/UI diagnostics dump',
-      '__setBoard(vals?)         Set board from values grid or flat array',
-      '__evalPosition()          Heuristic position evaluation & analysis',
-      '__afkHighScore()          Auto-run AFK until best exceeds 3x',
-      '__refreshScore()          Ensure score matches current position (also fixes NaN best)',
-      '__fixBest()               Recover from NaN best score',
-      '__refreshPlayAgainStatus  Explicitly toggle Play Again bar visibility',
-      '__dev.log(fn, ms?)        Periodic logger — log a function every N ms',
-      '__dev.stopLog(id?)        Stop a specific or all periodic loggers',
-      '__dev.callNative(name, …) Call any built-in dev method by name',
-      '__help()                  Show this message',
+      "%c2048 Developer Console%c",
+      "font-weight:bold;font-size:14px;",
+      "",
+      "__undo()                  Undo last move (no powerup cost)",
+      "__undo(n)                 Undo n steps at once",
+      "__undo(-n)                Enable engine for n moves",
+      "__delete(row, col)        Remove tile at grid position",
+      "__deleteValue(n)          Remove all tiles of value n",
+      "__swap(r1, c1, r2, c2)   Swap two tiles",
+      "__addTiles(n)             Spawn n free tiles (value 2)",
+      "__add(val)                Place val at first empty cell",
+      "__add(x, y)               Place a 2 at grid position",
+      "__add(val, x, y)          Place val at (x, y); error if occupied",
+      "__add(val, x, y, 1)       Place val at (x, y), replacing if needed",
+      "__clear()                 Clear entire board",
+      "__fill(val)               Fill board with tiles of value",
+      "__score(n)                Set score to n",
+      "__max(row, col, val)      Place tile of value at position",
+      "__moves(n)                Set move count",
+      "__cheat(dir)              Move without spawning (free experiment)",
+      "__fillPowerups()          Max out all powerups",
+      "__win()                   Instantly win (place 2048)",
+      "__noDelay()               Start engine with zero delay (max speed)",
+      "__nextNumber()            Peek next spawn value (2 or 4)",
+      "__nextLocation()          Peek next spawn position",
+      "__validate()              Check score vs tile window (valid?)",
+      "__updatePosition()        Clamp score into the valid window",
+      "__bypassValidation(vf?)   Remove minimal tiles to make position valid (vf=true: value-first)",
+      "__getStats()              Full board/session/UI diagnostics dump",
+      "__setBoard(vals?)         Set board from values grid or flat array",
+      "__evalPosition()          Heuristic position evaluation & analysis",
+      "__afkHighScore()          Auto-run AFK until best exceeds 3x",
+      "__refreshScore()          Ensure score matches current position (also fixes NaN best)",
+      "__fixBest()               Recover from NaN best score",
+      "__refreshPlayAgainStatus  Explicitly toggle Play Again bar visibility",
+      "__dev.log(fn, ms?)        Periodic logger — log a function every N ms",
+      "__dev.stopLog(id?)        Stop a specific or all periodic loggers",
+      "__dev.callNative(name, …) Call any built-in dev method by name",
+      "__help()                  Show this message",
     ];
     console.log(...lines);
   }
@@ -2286,4 +2420,6 @@ export class App {
 
 /** Monotonic id counter for dev-console tile placement (avoids collisions). */
 let _devId = 1;
-function freshDevId(): number { return _devId++; }
+function freshDevId(): number {
+  return _devId++;
+}

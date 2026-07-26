@@ -1,9 +1,8 @@
-// Core type definitions. No DOM, no side effects - safe to import from UI,
-// tests, or a future auto-play engine.
+// Core type definitions. No DOM, no side effects.
 
-export type Direction = 'up' | 'down' | 'left' | 'right';
+export type Direction = "up" | "down" | "left" | "right";
 
-export const DIRECTIONS: readonly Direction[] = ['up', 'down', 'left', 'right'];
+export const DIRECTIONS: readonly Direction[] = ["up", "down", "left", "right"];
 
 export interface Cell {
   /** Stable identity used by the renderer to animate a tile across moves. */
@@ -14,9 +13,9 @@ export interface Cell {
 /** row-major grid; grid[row][col] is null when empty. */
 export type Grid = (Cell | null)[][];
 
-export type GameMode = 'standard' | 'classic';
+export type GameMode = "standard" | "classic";
 
-export type PowerupType = 'undo' | 'swap' | 'delete';
+export type PowerupType = "undo" | "swap" | "delete";
 
 export interface Powerups {
   undo: number;
@@ -144,10 +143,10 @@ export interface EngineContext {
  * a signal to stop (no action available). The app applies it to the session.
  */
 export type AutoAction =
-  | { kind: 'move'; dir: Direction }
-  | { kind: 'swap'; r1: number; c1: number; r2: number; c2: number }
-  | { kind: 'delete'; row: number; col: number }
-  | { kind: 'stop' };
+  | { kind: "move"; dir: Direction }
+  | { kind: "swap"; r1: number; c1: number; r2: number; c2: number }
+  | { kind: "delete"; row: number; col: number }
+  | { kind: "stop" };
 
 /**
  * An auto-play engine. chooseAction may be sync or async (return a Promise) so

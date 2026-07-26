@@ -11,7 +11,7 @@
 // must lie within; outside it, the board has been altered. See docs/dev.md
 // "Position validation" for the full derivation.
 
-import type { Grid } from './types';
+import type { Grid } from "./types";
 
 /** Exact integer log2 for powers of two; falls back to Math.log2 otherwise. */
 function log2int(value: number): number {
@@ -161,7 +161,11 @@ export interface KeepResult {
  * `valueFirst` false the order is (count, value); with true it is (value,
  * count). Exported so the priority logic can be unit-tested directly.
  */
-export function keepBetter(x: KeepResult, y: KeepResult, valueFirst: boolean): boolean {
+export function keepBetter(
+  x: KeepResult,
+  y: KeepResult,
+  valueFirst: boolean,
+): boolean {
   return valueFirst
     ? x.value > y.value || (x.value === y.value && x.count > y.count)
     : x.count > y.count || (x.count === y.count && x.value > y.value);
@@ -183,9 +187,15 @@ function chooseKeep(
   valueFirst: boolean,
 ): { result: KeepResult | null; heuristic: boolean } {
   if (cands.length <= EXACT_MAX_CANDIDATES) {
-    return { result: exactKeep(cands, limLow, limHigh, valueFirst), heuristic: false };
+    return {
+      result: exactKeep(cands, limLow, limHigh, valueFirst),
+      heuristic: false,
+    };
   }
-  return { result: greedyKeep(cands, limLow, limHigh, valueFirst), heuristic: true };
+  return {
+    result: greedyKeep(cands, limLow, limHigh, valueFirst),
+    heuristic: true,
+  };
 }
 
 function exactKeep(
@@ -239,16 +249,26 @@ function greedyKeep(
   limHigh: number,
   valueFirst: boolean,
 ): KeepResult | null {
-  const better = (a: KeepResult | null, b: KeepResult | null): KeepResult | null => {
+  const better = (
+    a: KeepResult | null,
+    b: KeepResult | null,
+  ): KeepResult | null => {
     if (!b) return a;
     if (!a) return b;
     return keepBetter(b, a, valueFirst) ? b : a;
   };
 
-  const tryOrder = (key: (c: Candidate) => number, dir: 'asc' | 'desc'): KeepResult | null => {
+  const tryOrder = (
+    key: (c: Candidate) => number,
+    dir: "asc" | "desc",
+  ): KeepResult | null => {
     const order = cands
       .map((_, i) => i)
-      .sort((a, b) => (dir === 'asc' ? key(cands[a]) - key(cands[b]) : key(cands[b]) - key(cands[a])));
+      .sort((a, b) =>
+        dir === "asc"
+          ? key(cands[a]) - key(cands[b])
+          : key(cands[b]) - key(cands[a]),
+      );
     const kept = new Set<number>();
     let sumMin = 0;
     let sumMax = 0;
@@ -262,15 +282,28 @@ function greedyKeep(
         sumVal += c.value;
       }
     }
-    if (sumMin <= limLow && sumMax >= limHigh) return { count: kept.size, value: sumVal, kept };
+    if (sumMin <= limLow && sumMax >= limHigh)
+      return { count: kept.size, value: sumVal, kept };
     return null;
   };
 
   let best: KeepResult | null = null;
-  best = better(best, tryOrder((c) => c.m, 'asc')); // maximise count under the lower limit
-  best = better(best, tryOrder((c) => c.M, 'desc')); // satisfy the upper requirement first
-  best = better(best, tryOrder((c) => c.value, 'asc')); // keep cheap tiles
-  best = better(best, tryOrder((c) => c.value, 'desc')); // keep valuable tiles (value-first)
+  best = better(
+    best,
+    tryOrder((c) => c.m, "asc"),
+  ); // maximise count under the lower limit
+  best = better(
+    best,
+    tryOrder((c) => c.M, "desc"),
+  ); // satisfy the upper requirement first
+  best = better(
+    best,
+    tryOrder((c) => c.value, "asc"),
+  ); // keep cheap tiles
+  best = better(
+    best,
+    tryOrder((c) => c.value, "desc"),
+  ); // keep valuable tiles (value-first)
   // Keeping no candidate (base tiles only) is valid iff the base maximum covers the score.
   if (0 <= limLow && 0 >= limHigh) {
     best = better(best, { count: 0, value: 0, kept: new Set<number>() });
@@ -283,7 +316,11 @@ function greedyKeep(
  * mutate the grid. `valueFirst` flips the priority from (count, value) to
  * (value, count); for power-of-two tiles they select the same set.
  */
-export function planBypass(grid: Grid, score: number, valueFirst = false): BypassPlan {
+export function planBypass(
+  grid: Grid,
+  score: number,
+  valueFirst = false,
+): BypassPlan {
   const win = scoreWindow(grid);
   if (score >= win.min && score <= win.max) {
     return {
@@ -301,7 +338,14 @@ export function planBypass(grid: Grid, score: number, valueFirst = false): Bypas
   let baseMax = 0;
   for (const t of win.tiles) {
     if (t.min === 0) baseMax += t.max;
-    else cands.push({ row: t.row, col: t.col, value: t.value, m: t.min, M: t.max });
+    else
+      cands.push({
+        row: t.row,
+        col: t.col,
+        value: t.value,
+        m: t.min,
+        M: t.max,
+      });
   }
 
   // A kept subset K of the candidates must satisfy:
@@ -310,7 +354,12 @@ export function planBypass(grid: Grid, score: number, valueFirst = false): Bypas
   const limLow = score;
   const limHigh = score - baseMax;
 
-  const { result: best, heuristic } = chooseKeep(cands, limLow, limHigh, valueFirst);
+  const { result: best, heuristic } = chooseKeep(
+    cands,
+    limLow,
+    limHigh,
+    valueFirst,
+  );
   if (!best) {
     return {
       feasible: false,
@@ -330,7 +379,11 @@ export function planBypass(grid: Grid, score: number, valueFirst = false): Bypas
       keptMin += cands[i].m;
       keptMax += cands[i].M;
     } else {
-      remove.push({ row: cands[i].row, col: cands[i].col, value: cands[i].value });
+      remove.push({
+        row: cands[i].row,
+        col: cands[i].col,
+        value: cands[i].value,
+      });
     }
   }
   return {

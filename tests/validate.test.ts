@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { cloneGrid, gridFromValues } from '../src/core/grid';
+import { describe, it, expect } from "vitest";
+import { cloneGrid, gridFromValues } from "../src/core/grid";
 import {
   tileScoreRange,
   scoreWindow,
@@ -8,9 +8,9 @@ import {
   planBypass,
   keepBetter,
   type KeepResult,
-} from '../src/core/validate';
-import { GameSession } from '../src/core/session';
-import { DIRECTIONS } from '../src/core/types';
+} from "../src/core/validate";
+import { GameSession } from "../src/core/session";
+import { DIRECTIONS } from "../src/core/types";
 
 /** Deterministic RNG so spawn placement is reproducible. */
 function seededRng(seed = 7): () => number {
@@ -22,13 +22,16 @@ function seededRng(seed = 7): () => number {
 }
 
 /** Apply a bypass plan's removals to a fresh copy of the grid. */
-function applyPlan(grid: ReturnType<typeof gridFromValues>, plan: ReturnType<typeof planBypass>) {
+function applyPlan(
+  grid: ReturnType<typeof gridFromValues>,
+  plan: ReturnType<typeof planBypass>,
+) {
   const g = cloneGrid(grid);
   for (const t of plan.remove) g[t.row][t.col] = null;
   return g;
 }
 
-describe('tileScoreRange', () => {
+describe("tileScoreRange", () => {
   // (value, [min, max]) - matches the documented reference table.
   const cases: [number, [number, number]][] = [
     [2, [0, 0]],
@@ -47,8 +50,8 @@ describe('tileScoreRange', () => {
   }
 });
 
-describe('scoreWindow', () => {
-  it('sums per-tile windows across the board', () => {
+describe("scoreWindow", () => {
+  it("sums per-tile windows across the board", () => {
     const g = gridFromValues([
       [2, 4],
       [8, 16],
@@ -58,7 +61,7 @@ describe('scoreWindow', () => {
     expect(scoreWindow(g).tiles).toHaveLength(4);
   });
 
-  it('empty board has a zero window', () => {
+  it("empty board has a zero window", () => {
     const g = gridFromValues([
       [0, 0],
       [0, 0],
@@ -67,22 +70,22 @@ describe('scoreWindow', () => {
   });
 });
 
-describe('validatePosition', () => {
-  it('valid when score is inside the window (incl. endpoints)', () => {
+describe("validatePosition", () => {
+  it("valid when score is inside the window (incl. endpoints)", () => {
     const g = gridFromValues([[8, 16]]); // window [40, 64]
     expect(validatePosition(g, 40).valid).toBe(true);
     expect(validatePosition(g, 50).valid).toBe(true);
     expect(validatePosition(g, 64).valid).toBe(true);
   });
 
-  it('invalid below the minimum', () => {
+  it("invalid below the minimum", () => {
     const g = gridFromValues([[8, 16]]);
     const r = validatePosition(g, 10);
     expect(r.valid).toBe(false);
     expect(r.belowBy).toBe(-30);
   });
 
-  it('invalid above the maximum', () => {
+  it("invalid above the maximum", () => {
     const g = gridFromValues([[8, 16]]);
     const r = validatePosition(g, 100);
     expect(r.valid).toBe(false);
@@ -90,32 +93,32 @@ describe('validatePosition', () => {
   });
 });
 
-describe('clampScoreToWindow', () => {
-  it('clamps a too-low score up to the minimum', () => {
+describe("clampScoreToWindow", () => {
+  it("clamps a too-low score up to the minimum", () => {
     const g = gridFromValues([[8, 16]]); // [40, 64]
     expect(clampScoreToWindow(g, 10)).toMatchObject({ from: 10, to: 40 });
   });
 
-  it('clamps a too-high score down to the maximum', () => {
+  it("clamps a too-high score down to the maximum", () => {
     const g = gridFromValues([[8, 16]]);
     expect(clampScoreToWindow(g, 100)).toMatchObject({ from: 100, to: 64 });
   });
 
-  it('leaves an in-window score untouched', () => {
+  it("leaves an in-window score untouched", () => {
     const g = gridFromValues([[8, 16]]);
     expect(clampScoreToWindow(g, 50)).toMatchObject({ from: 50, to: 50 });
   });
 });
 
-describe('planBypass', () => {
-  it('removes nothing when the position is already valid', () => {
+describe("planBypass", () => {
+  it("removes nothing when the position is already valid", () => {
     const g = gridFromValues([[8, 16]]); // [40, 64]
     const plan = planBypass(g, 50);
     expect(plan.alreadyValid).toBe(true);
     expect(plan.remove).toHaveLength(0);
   });
 
-  it('removes a single impossible big tile (score 0)', () => {
+  it("removes a single impossible big tile (score 0)", () => {
     // 32768 alone: window [425984, 458752]; score 0 is below the minimum.
     const g = gridFromValues([
       [32768, 0],
@@ -129,7 +132,7 @@ describe('planBypass', () => {
     expect(plan.after).toEqual({ min: 0, max: 0 });
   });
 
-  it('keeps 2/4 tiles and removes only the impossible ones (score 0)', () => {
+  it("keeps 2/4 tiles and removes only the impossible ones (score 0)", () => {
     // 32768 + a 2-tile: the 2 has min contribution 0, so it is always keepable.
     const g = gridFromValues([
       [32768, 2],
@@ -143,7 +146,7 @@ describe('planBypass', () => {
     expect(plan.after).toEqual({ min: 0, max: 0 });
   });
 
-  it('removes the minimum number of tiles (two 32768s, score 0)', () => {
+  it("removes the minimum number of tiles (two 32768s, score 0)", () => {
     const g = gridFromValues([
       [32768, 32768],
       [0, 0],
@@ -154,7 +157,7 @@ describe('planBypass', () => {
     expect(plan.remove).toHaveLength(2);
   });
 
-  it('reports infeasible when no removal can validate the board', () => {
+  it("reports infeasible when no removal can validate the board", () => {
     // 32768 alone with a mid score: keeping it is below-min, removing it is
     // above-max (empty board can't support a positive score).
     const g = gridFromValues([
@@ -166,7 +169,7 @@ describe('planBypass', () => {
     expect(plan.remove).toHaveLength(0);
   });
 
-  it('falls back to a heuristic on large candidate sets and still yields a valid plan', () => {
+  it("falls back to a heuristic on large candidate sets and still yields a valid plan", () => {
     // 6x6 of 8s, score 0: 36 score-bearing tiles -> heuristic path.
     const row = () => new Array(6).fill(8);
     const g = gridFromValues([row(), row(), row(), row(), row(), row()]);
@@ -178,7 +181,7 @@ describe('planBypass', () => {
     expect(plan.after).toEqual({ min: 0, max: 0 });
   });
 
-  it('keeps as many tiles as the score allows (heuristic, mixed board)', () => {
+  it("keeps as many tiles as the score allows (heuristic, mixed board)", () => {
     // One 2-tile (always kept) + 35 8-tiles; score 16 lets two 8-tiles stay
     // (their min is 8 + 8 = 16, max 16 + 16 = 32 >= 16).
     const vals = [
@@ -201,8 +204,8 @@ describe('planBypass', () => {
   });
 });
 
-describe('end-to-end: validate -> fix -> validate', () => {
-  it('bypassValidation makes a below-min position valid (hacked 32768, score 0)', () => {
+describe("end-to-end: validate -> fix -> validate", () => {
+  it("bypassValidation makes a below-min position valid (hacked 32768, score 0)", () => {
     const g = gridFromValues([
       [32768, 2],
       [0, 4],
@@ -216,7 +219,7 @@ describe('end-to-end: validate -> fix -> validate', () => {
     expect(fixed.flat().filter(Boolean)).toHaveLength(2);
   });
 
-  it('updatePosition makes a below-min position valid by raising the score', () => {
+  it("updatePosition makes a below-min position valid by raising the score", () => {
     const g = gridFromValues([
       [32768, 0],
       [0, 0],
@@ -227,7 +230,7 @@ describe('end-to-end: validate -> fix -> validate', () => {
     expect(validatePosition(g, clamped.to).valid).toBe(true);
   });
 
-  it('updatePosition makes an above-max position valid by lowering the score', () => {
+  it("updatePosition makes an above-max position valid by lowering the score", () => {
     const g = gridFromValues([[8, 16]]); // window [40, 64]
     expect(validatePosition(g, 1000).valid).toBe(false);
     const clamped = clampScoreToWindow(g, 1000);
@@ -235,7 +238,7 @@ describe('end-to-end: validate -> fix -> validate', () => {
     expect(validatePosition(g, clamped.to).valid).toBe(true);
   });
 
-  it('bypassValidation is infeasible for an above-max position, but updatePosition fixes it', () => {
+  it("bypassValidation is infeasible for an above-max position, but updatePosition fixes it", () => {
     const g = gridFromValues([[8, 16]]); // window [40, 64]
     expect(planBypass(g, 1000).feasible).toBe(false);
     const clamped = clampScoreToWindow(g, 1000);
@@ -243,22 +246,22 @@ describe('end-to-end: validate -> fix -> validate', () => {
   });
 });
 
-describe('keepBetter (priority toggle)', () => {
-  it('prefers more count under count-first (valueFirst=false)', () => {
+describe("keepBetter (priority toggle)", () => {
+  it("prefers more count under count-first (valueFirst=false)", () => {
     const few: KeepResult = { count: 1, value: 100, kept: new Set() };
     const many: KeepResult = { count: 5, value: 10, kept: new Set() };
     expect(keepBetter(many, few, false)).toBe(true);
     expect(keepBetter(few, many, false)).toBe(false);
   });
 
-  it('prefers more value under value-first (valueFirst=true)', () => {
+  it("prefers more value under value-first (valueFirst=true)", () => {
     const a: KeepResult = { count: 1, value: 100, kept: new Set() };
     const b: KeepResult = { count: 5, value: 10, kept: new Set() };
     expect(keepBetter(a, b, true)).toBe(true);
     expect(keepBetter(b, a, true)).toBe(false);
   });
 
-  it('falls back to the secondary criterion on ties', () => {
+  it("falls back to the secondary criterion on ties", () => {
     const a: KeepResult = { count: 2, value: 30, kept: new Set() };
     const b: KeepResult = { count: 3, value: 30, kept: new Set() };
     // value tie; count-first prefers the larger count.
@@ -275,8 +278,8 @@ describe('keepBetter (priority toggle)', () => {
   });
 });
 
-describe('planBypass valueFirst toggle', () => {
-  it('both modes produce a valid plan on a hacked board (hacked 32768, score 0)', () => {
+describe("planBypass valueFirst toggle", () => {
+  it("both modes produce a valid plan on a hacked board (hacked 32768, score 0)", () => {
     const g = gridFromValues([
       [32768, 2],
       [0, 0],
@@ -290,7 +293,7 @@ describe('planBypass valueFirst toggle', () => {
     }
   });
 
-  it('both modes return the same removal set for power-of-two tiles (coincidence)', () => {
+  it("both modes return the same removal set for power-of-two tiles (coincidence)", () => {
     // 32768 + two 8s, score 16: the single 32768 must be removed (score 16 can
     // only support the 8s).  Both priorities agree.
     const g = gridFromValues([
@@ -308,15 +311,18 @@ describe('planBypass valueFirst toggle', () => {
   });
 });
 
-describe('real-game invariant', () => {
-  it('score always stays within the tile window during legitimate play', () => {
-    const s = GameSession.newGame(4, 'standard', 0, seededRng(42));
+describe("real-game invariant", () => {
+  it("score always stays within the tile window during legitimate play", () => {
+    const s = GameSession.newGame(4, "standard", 0, seededRng(42));
     // Play up to 500 moves or game over, trying a rotating set of directions.
     for (let i = 0; i < 500; i++) {
       let moved = false;
       for (let d = 0; d < 4; d++) {
         const dir = DIRECTIONS[(i + d) % 4];
-        if (s.applyMove(dir)) { moved = true; break; }
+        if (s.applyMove(dir)) {
+          moved = true;
+          break;
+        }
       }
       if (!moved) break; // game over
       const v = validatePosition(s.state.grid, s.state.score);

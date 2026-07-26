@@ -1,7 +1,7 @@
 // Type shim for the wasm-pack `--target web` output at `engine/pkg/engine2048.js`.
 // wasm-pack ships a sibling `.d.ts` when built; this ambient declaration is a
 // fallback so `tsc --noEmit` still passes before the package has been built.
-declare module '*/engine2048.js' {
+declare module "*/engine2048.js" {
   /**
    * Instantiate the WASM module. Must be awaited once before calling any
    * exported function (the generated glue's default export).
@@ -14,7 +14,11 @@ declare module '*/engine2048.js' {
    * adaptive default. Returns `0 = up, 1 = down, 2 = left, 3 = right`, or a
    * value `> 3` (`u32::MAX`) when no legal move exists.
    */
-  export function suggest_move(flat: Uint32Array, size: number, depth: number): number;
+  export function suggest_move(
+    flat: Uint32Array,
+    size: number,
+    depth: number,
+  ): number;
 
   /**
    * Full action suggestion (move or power-up). Returns a flat `u32` array:

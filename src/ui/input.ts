@@ -1,24 +1,24 @@
-import type { Direction } from '../core/types';
+import type { Direction } from "../core/types";
 
 export interface InputCallbacks {
   onMove: (dir: Direction) => void;
   /** Optional: keyboard shortcuts for powerups (U=undo, S=swap, D=delete). */
-  onShortcut?: (key: 'undo' | 'swap' | 'delete') => void;
+  onShortcut?: (key: "undo" | "swap" | "delete") => void;
 }
 
 const KEY_MAP: Record<string, Direction> = {
-  ArrowUp: 'up',
-  ArrowDown: 'down',
-  ArrowLeft: 'left',
-  ArrowRight: 'right',
-  w: 'up',
-  s: 'down',
-  a: 'left',
-  d: 'right',
-  W: 'up',
-  S: 'down',
-  A: 'left',
-  D: 'right',
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  w: "up",
+  s: "down",
+  a: "left",
+  d: "right",
+  W: "up",
+  S: "down",
+  A: "left",
+  D: "right",
 };
 
 const SWIPE_THRESHOLD = 24; // px
@@ -35,16 +35,18 @@ export class Input {
   constructor(target: HTMLElement, cb: InputCallbacks) {
     this.cb = cb;
     this.target = target;
-    window.addEventListener('keydown', this.onKey);
-    target.addEventListener('touchstart', this.onTouchStart, { passive: false });
-    target.addEventListener('touchmove', this.onTouchMove, { passive: false });
-    target.addEventListener('touchend', this.onTouchEnd, { passive: false });
+    window.addEventListener("keydown", this.onKey);
+    target.addEventListener("touchstart", this.onTouchStart, {
+      passive: false,
+    });
+    target.addEventListener("touchmove", this.onTouchMove, { passive: false });
+    target.addEventListener("touchend", this.onTouchEnd, { passive: false });
   }
 
   private onKey = (e: KeyboardEvent): void => {
     // Let users type in any future text fields.
     const tag = (e.target as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
 
     const dir = KEY_MAP[e.key];
     if (dir) {
@@ -52,8 +54,8 @@ export class Input {
       this.cb.onMove(dir);
       return;
     }
-    if (e.key === 'u' || e.key === 'U') this.cb.onShortcut?.('undo');
-    else if (e.key === 'e' || e.key === 'E') this.cb.onShortcut?.('delete');
+    if (e.key === "u" || e.key === "U") this.cb.onShortcut?.("undo");
+    else if (e.key === "e" || e.key === "E") this.cb.onShortcut?.("delete");
     // 's'/'d' already map to move directions, so powerup swap shortcut uses no
     // single-letter key to avoid collisions; expose via UI only.
   };
@@ -74,18 +76,19 @@ export class Input {
     const dx = t.clientX - this.touchStart.x;
     const dy = t.clientY - this.touchStart.y;
     this.touchStart = null;
-    if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
+    if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD)
+      return;
     if (Math.abs(dx) > Math.abs(dy)) {
-      this.cb.onMove(dx > 0 ? 'right' : 'left');
+      this.cb.onMove(dx > 0 ? "right" : "left");
     } else {
-      this.cb.onMove(dy > 0 ? 'down' : 'up');
+      this.cb.onMove(dy > 0 ? "down" : "up");
     }
   };
 
   destroy(): void {
-    window.removeEventListener('keydown', this.onKey);
-    this.target.removeEventListener('touchstart', this.onTouchStart);
-    this.target.removeEventListener('touchmove', this.onTouchMove);
-    this.target.removeEventListener('touchend', this.onTouchEnd);
+    window.removeEventListener("keydown", this.onKey);
+    this.target.removeEventListener("touchstart", this.onTouchStart);
+    this.target.removeEventListener("touchmove", this.onTouchMove);
+    this.target.removeEventListener("touchend", this.onTouchEnd);
   }
 }

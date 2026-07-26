@@ -1,5 +1,5 @@
-import type { Grid, MoveTranscript } from '../core/types';
-import { tileColor } from '../core/constants';
+import type { Grid, MoveTranscript } from "../core/types";
+import { tileColor } from "../core/constants";
 
 const SLIDE_MS = 120;
 
@@ -30,19 +30,23 @@ export class BoardRenderer {
   private gap = 10;
   private cellSize = 0;
   private ro: ResizeObserver;
-  private selectMode: { max: number; onSelected: (cells: SelectResult[]) => void; picked: SelectResult[] } | null = null;
+  private selectMode: {
+    max: number;
+    onSelected: (cells: SelectResult[]) => void;
+    picked: SelectResult[];
+  } | null = null;
 
   constructor(container: HTMLElement) {
-    this.el = document.createElement('div');
-    this.el.className = 'board';
-    this.el.style.setProperty('--n', '4');
+    this.el = document.createElement("div");
+    this.el.className = "board";
+    this.el.style.setProperty("--n", "4");
 
-    this.grid = document.createElement('div');
-    this.grid.className = 'board__grid';
+    this.grid = document.createElement("div");
+    this.grid.className = "board__grid";
 
-    this.tilesLayer = document.createElement('div');
-    this.tilesLayer.className = 'board__tiles';
-    this.tilesLayer.addEventListener('click', this.onTileClick);
+    this.tilesLayer = document.createElement("div");
+    this.tilesLayer.className = "board__tiles";
+    this.tilesLayer.addEventListener("click", this.onTileClick);
 
     this.el.append(this.grid, this.tilesLayer);
     container.append(this.el);
@@ -53,12 +57,12 @@ export class BoardRenderer {
 
   setSize(n: number): void {
     this.size = n;
-    this.el.style.setProperty('--n', String(n));
-    this.grid.innerHTML = '';
+    this.el.style.setProperty("--n", String(n));
+    this.grid.innerHTML = "";
     this.cells = [];
     for (let i = 0; i < n * n; i++) {
-      const cell = document.createElement('div');
-      cell.className = 'cell';
+      const cell = document.createElement("div");
+      cell.className = "cell";
       this.grid.appendChild(cell);
       this.cells.push(cell);
     }
@@ -75,45 +79,51 @@ export class BoardRenderer {
     this.gap = Math.max(minGap, Math.round(w * ratio));
     const inner = w - this.gap * 2;
     this.cellSize = (inner - this.gap * (this.size - 1)) / this.size;
-    this.el.style.setProperty('--gap', `${this.gap}px`);
-    this.el.style.setProperty('--cell', `${this.cellSize}px`);
+    this.el.style.setProperty("--gap", `${this.gap}px`);
+    this.el.style.setProperty("--cell", `${this.cellSize}px`);
     for (const rec of this.tiles.values()) this.positionTile(rec);
   }
 
   private positionTile(rec: TileRec): void {
     const tx = rec.col * (this.cellSize + this.gap);
     const ty = rec.row * (this.cellSize + this.gap);
-    rec.el.style.setProperty('--tx', `${tx}px`);
-    rec.el.style.setProperty('--ty', `${ty}px`);
+    rec.el.style.setProperty("--tx", `${tx}px`);
+    rec.el.style.setProperty("--ty", `${ty}px`);
     rec.el.dataset.row = String(rec.row);
     rec.el.dataset.col = String(rec.col);
   }
 
   private faceForValue(value: number): { face: HTMLElement } {
-    const face = document.createElement('div');
-    face.className = 'tile__face';
+    const face = document.createElement("div");
+    face.className = "tile__face";
     const digits = Math.min(6, String(value).length);
     face.classList.add(`tile__face--d${digits}`);
     const { bg, fg } = tileColor(value);
-    face.style.setProperty('--tile-bg', bg);
-    face.style.setProperty('--tile-fg', fg);
+    face.style.setProperty("--tile-bg", bg);
+    face.style.setProperty("--tile-fg", fg);
     face.textContent = String(value);
     return { face };
   }
 
-  private createTile(id: number, value: number, row: number, col: number, spawn: boolean): TileRec {
-    const el = document.createElement('div');
-    el.className = 'tile';
+  private createTile(
+    id: number,
+    value: number,
+    row: number,
+    col: number,
+    spawn: boolean,
+  ): TileRec {
+    const el = document.createElement("div");
+    el.className = "tile";
     el.dataset.id = String(id);
     const { face } = this.faceForValue(value);
-    if (spawn) face.classList.add('is-spawn');
+    if (spawn) face.classList.add("is-spawn");
     el.appendChild(face);
     this.tilesLayer.appendChild(el);
     const rec: TileRec = { el, row, col };
     this.positionTile(rec);
     this.tiles.set(id, rec);
     if (spawn) {
-      setTimeout(() => face.classList.remove('is-spawn'), 320);
+      setTimeout(() => face.classList.remove("is-spawn"), 320);
     }
     return rec;
   }
@@ -123,8 +133,8 @@ export class BoardRenderer {
     const digits = Math.min(6, String(value).length);
     face.className = `tile__face tile__face--d${digits}`;
     const { bg, fg } = tileColor(value);
-    face.style.setProperty('--tile-bg', bg);
-    face.style.setProperty('--tile-fg', fg);
+    face.style.setProperty("--tile-bg", bg);
+    face.style.setProperty("--tile-fg", fg);
     face.textContent = String(value);
   }
 
@@ -174,8 +184,8 @@ export class BoardRenderer {
         if (!rec) continue;
         this.updateFace(rec, value);
         const face = rec.el.firstElementChild as HTMLElement;
-        face.classList.add('is-merge');
-        window.setTimeout(() => face.classList.remove('is-merge'), 220);
+        face.classList.add("is-merge");
+        window.setTimeout(() => face.classList.remove("is-merge"), 220);
       }
       for (const id of removeIds) {
         const rec = this.tiles.get(id);
@@ -203,19 +213,23 @@ export class BoardRenderer {
   }
 
   // ---------- Select mode (swap / delete) ----------
-  enterSelectMode(max: number, onSelected: (cells: SelectResult[]) => void): void {
+  enterSelectMode(
+    max: number,
+    onSelected: (cells: SelectResult[]) => void,
+  ): void {
     this.exitSelectMode();
     this.selectMode = { max, onSelected, picked: [] };
-    this.el.classList.add('is-selecting');
-    for (const rec of this.tiles.values()) rec.el.classList.add('is-targetable');
+    this.el.classList.add("is-selecting");
+    for (const rec of this.tiles.values())
+      rec.el.classList.add("is-targetable");
   }
 
   exitSelectMode(): void {
     if (!this.selectMode) return;
     this.selectMode = null;
-    this.el.classList.remove('is-selecting');
+    this.el.classList.remove("is-selecting");
     for (const rec of this.tiles.values()) {
-      rec.el.classList.remove('is-targetable', 'is-selected');
+      rec.el.classList.remove("is-targetable", "is-selected");
     }
   }
 
@@ -225,7 +239,9 @@ export class BoardRenderer {
 
   private onTileClick = (e: MouseEvent): void => {
     if (!this.selectMode) return;
-    const tileEl = (e.target as HTMLElement).closest('.tile') as HTMLElement | null;
+    const tileEl = (e.target as HTMLElement).closest(
+      ".tile",
+    ) as HTMLElement | null;
     if (!tileEl) return;
     const row = Number(tileEl.dataset.row);
     const col = Number(tileEl.dataset.col);
@@ -235,11 +251,11 @@ export class BoardRenderer {
     const existing = sm.picked.findIndex((p) => p.row === row && p.col === col);
     if (existing >= 0) {
       sm.picked.splice(existing, 1);
-      tileEl.classList.remove('is-selected');
+      tileEl.classList.remove("is-selected");
       return;
     }
     sm.picked.push({ row, col, id: Number(tileEl.dataset.id) });
-    tileEl.classList.add('is-selected');
+    tileEl.classList.add("is-selected");
     if (sm.picked.length >= sm.max) {
       const result = [...sm.picked];
       this.exitSelectMode();
