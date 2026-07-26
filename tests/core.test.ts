@@ -19,7 +19,6 @@ import {
   type StoredData,
 } from "../src/core/storage";
 
-// Deterministic RNG so spawn placement is reproducible.
 function seededRng(seed = 1): () => number {
   let s = seed;
   return () => {
@@ -28,7 +27,6 @@ function seededRng(seed = 1): () => number {
   };
 }
 
-// In-memory localStorage for the node test environment.
 function memoryStorage(): Storage {
   let store: Record<string, string> = {};
   return {
@@ -54,7 +52,6 @@ beforeEach(() => {
     memoryStorage();
 });
 
-/** Build a size×size grid with the given row placed at row 0 (rest empty). */
 function row0(row: number[]): number[][] {
   const n = row.length;
   const grid: number[][] = [];
@@ -222,7 +219,6 @@ describe("GameSession moves + spawn", () => {
     const t = s.applyMove("left");
     expect(t).not.toBeNull();
     expect(s.state.score).toBe(4);
-    // one merge result (4) + one spawned tile = 2 non-empty cells
     expect(s.state.grid.flat().filter(Boolean).length).toBe(2);
   });
 
@@ -264,10 +260,10 @@ describe("powerups", () => {
 
   it("undo refuses without a charge or history", () => {
     const s = makeSession(row0([2, 0, 2, 0]));
-    expect(s.undo()).toBe(false); // no history yet
+    expect(s.undo()).toBe(false);
     s.state.powerups.undo = 0;
     s.applyMove("left");
-    expect(s.undo()).toBe(false); // no charge
+    expect(s.undo()).toBe(false);
   });
 
   it("swap exchanges two tiles and consumes a charge", () => {

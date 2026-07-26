@@ -22,7 +22,6 @@ describe("createRngSeed", () => {
   it("produces different seeds on successive calls", () => {
     const s1 = createRngSeed();
     const s2 = createRngSeed();
-    // With 2^256 possible seeds, collision is astronomically unlikely
     expect(s1).not.toEqual(s2);
   });
 });
@@ -44,7 +43,6 @@ describe("SecureRng determinism", () => {
     for (let i = 0; i < 10; i++) {
       results.push(gen.next());
     }
-    // Verify reproducibility
     const gen2 = new SecureRng(seed, 0);
     for (let i = 0; i < 10; i++) {
       expect(gen2.next()).toBe(results[i]);
@@ -72,14 +70,11 @@ describe("SecureRng calls tracking", () => {
 
   it("resumes from saved calls position", () => {
     const seed = [1, 2, 3, 4, 5, 6, 7, 8];
-    // Advance generator to call 10
     const gen1 = new SecureRng(seed, 0);
     for (let i = 0; i < 10; i++) gen1.next();
     const savedCalls = gen1.calls;
 
-    // Create new generator at saved position
     const gen2 = new SecureRng(seed, savedCalls);
-    // Both should produce the same next value
     expect(gen2.next()).toBe(gen1.next());
   });
 });
@@ -91,13 +86,10 @@ describe("SecureRng block boundary crossing", () => {
       0xdeadbeef, 0xcafebabe,
     ];
     const gen = new SecureRng(seed, 0);
-    // Values 0-15 are from block 0, values 16+ from block 1
     const beforeBoundary: number[] = [];
     for (let i = 0; i < 16; i++) beforeBoundary.push(gen.next());
     const afterBoundary: number[] = [];
     for (let i = 0; i < 5; i++) afterBoundary.push(gen.next());
-    // Block boundary should produce different values (not just a linear progression)
-    // The ChaCha20 algorithm ensures each block is independent
     expect(afterBoundary[0]).not.toBe(beforeBoundary[0]);
   });
 
@@ -105,10 +97,10 @@ describe("SecureRng block boundary crossing", () => {
     const seed = [42, 42, 42, 42, 42, 42, 42, 42];
     const gen1 = new SecureRng(seed, 0);
     for (let i = 0; i < 16; i++) gen1.next();
-    const val1 = gen1.next(); // 17th value
+    const val1 = gen1.next();
 
     const gen2 = new SecureRng(seed, 16);
-    const val2 = gen2.next(); // first value from block 1
+    const val2 = gen2.next();
     expect(val1).toBe(val2);
   });
 
@@ -117,7 +109,6 @@ describe("SecureRng block boundary crossing", () => {
     const gen = new SecureRng(seed, 0);
     const all: number[] = [];
     for (let i = 0; i < 32; i++) all.push(gen.next());
-    // Verify: values 0-15 from block 0, 16-31 from block 1
     const gen1 = new SecureRng(seed, 0);
     for (let i = 0; i < 16; i++) expect(gen1.next()).toBe(all[i]);
     const gen2 = new SecureRng(seed, 16);
@@ -149,7 +140,6 @@ describe("SecureRng float range", () => {
       sum += gen.next();
     }
     const mean = sum / n;
-    // Uniform [0,1) has mean 0.5; allow ±0.05 tolerance
     expect(mean).toBeGreaterThan(0.45);
     expect(mean).toBeLessThan(0.55);
   });

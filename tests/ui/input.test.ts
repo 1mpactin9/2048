@@ -1,5 +1,4 @@
 /// <reference types="vitest" />
-// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Input } from "@/ui/input";
 import type { Direction } from "@/core/types";
@@ -80,12 +79,8 @@ describe("Input — keyboard mapping", () => {
   });
 
   it("Input/Textarea focus prevents movement", () => {
-    // The onKey handler checks (e.target as HTMLElement)?.tagName === "INPUT"
-    // When we dispatch on window, e.target is window. To test the guard,
-    // we need the event target to be an input element.
     const inputEl = document.createElement("input");
     document.body.appendChild(inputEl);
-    // Dispatch on the input element so e.target.tagName === "INPUT"
     inputEl.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
     );
@@ -212,7 +207,6 @@ describe("Input — touch swipe detection", () => {
         touches: [{ clientX: 100, clientY: 100 } as Touch],
       } as TouchEventInit),
     );
-    // Horizontal movement > vertical
     target.dispatchEvent(
       new TouchEvent("touchend", {
         changedTouches: [{ clientX: 200, clientY: 120 } as Touch],

@@ -4,16 +4,6 @@ import { fileURLToPath } from "node:url";
 import { gridFromValues, spawnTile } from "../src/core/grid";
 import { SecureRng } from "../src/core/rng";
 
-// The predictive AI ports the ChaCha20 DRBG and the spawn logic (plain +
-// best-of-5 manipulation) from src/core/rng.ts and src/core/grid.ts into Rust.
-// This test is the cross-language guarantee that the port is bit-exact: for a
-// given seed, stream position, board, and manipulation flag, the Rust
-// `predict_spawn` must return the same cell + value + draws-consumed that the
-// real JS `spawnTile` produces. If they ever diverge, the "cheat" would predict
-// the wrong spawn and the search would optimize for a future that never
-// happens - so this is the single most important correctness check for the
-// feature.
-
 const wasmJsPath = fileURLToPath(
   new URL("../engine/pkg/engine2048.js", import.meta.url),
 );
@@ -39,7 +29,6 @@ async function ensureLoaded(): Promise<PredictSpawn | null> {
   return predictSpawn;
 }
 
-/** Run the real JS spawn path (SecureRng + spawnTile) and reduce to (idx, value, draws). */
 function jsSpawn(
   flat: number[],
   size: number,
@@ -62,7 +51,6 @@ function jsSpawn(
   };
 }
 
-/** Run the Rust predictor and reduce to the same shape. */
 function rustSpawn(
   fn: PredictSpawn,
   flat: number[],
@@ -78,7 +66,7 @@ function rustSpawn(
     calls,
     manipulate,
   );
-  if (out[0] === 4294967295) return null; // u32::MAX sentinel: board full
+  if (out[0] === 4294967295) return null;
   return { idx: out[0], value: out[1], draws: out[2] };
 }
 
@@ -162,17 +150,13 @@ describe("predictive spawn parity (Rust predict_spawn vs JS spawnTile)", () => {
     it(`matches for: ${c.name}`, async () => {
       const fn = await ensureLoaded();
       if (!fn) {
-        // wasm pkg not built in this environment (e.g. clean checkout running
-        // `vitest` before `build:wasm`). Skip rather than fail.
         expect(true).toBe(true);
         return;
       }
       const js = jsSpawn(c.flat, c.size, c.seed, c.calls, c.manipulate);
       const rust = rustSpawn(fn, c.flat, c.size, c.seed, c.calls, c.manipulate);
-      // Both must agree on whether a spawn exists.
       expect(rust).not.toBeNull();
       expect(js).not.toBeNull();
-      // And on the exact cell, value, and number of stream draws consumed.
       expect(js).toEqual(rust);
     });
   }

@@ -149,7 +149,6 @@ describe("gridFromValues / gridToValues round-trip", () => {
       ],
       10,
     );
-    // First tile id should be 10, last should be 13
     expect(g[0][0]!.id).toBe(10);
     expect(g[1][1]!.id).toBe(13);
   });
@@ -169,7 +168,6 @@ describe("setNextId / peekNextId", () => {
     const before = peekNextId();
     setNextId(before + 10);
     expect(peekNextId()).toBe(before + 10);
-    // Setting lower should not decrease
     setNextId(before + 5);
     expect(peekNextId()).toBe(before + 10);
   });
@@ -216,7 +214,6 @@ describe("spawnTile manipulation mode", () => {
       return Math.random();
     };
     spawnTile(g, { rng, manipulate: true });
-    // Manipulation with 13 empties samples up to 5 candidates = 10 draws
     expect(draws).toBeGreaterThan(2);
   });
 
@@ -233,12 +230,10 @@ describe("spawnTile manipulation mode", () => {
       return Math.random();
     };
     spawnTile(g, { rng, manipulate: true });
-    // Plain spawn = 2 draws (position + value)
     expect(draws).toBe(2);
   });
 
   it("manipulation does not change value distribution", () => {
-    // Run many spawns and verify 4 appears ~10% of time
     let fourCount = 0;
     const total = 200;
     for (let i = 0; i < total; i++) {
@@ -250,7 +245,6 @@ describe("spawnTile manipulation mode", () => {
       const val = g.flat().find((c) => c)?.value;
       if (val === 4) fourCount++;
     }
-    // Rough check: between 3% and 25% should be 4s
     expect(fourCount / total).toBeGreaterThan(0.03);
     expect(fourCount / total).toBeLessThan(0.25);
   });
@@ -298,11 +292,10 @@ describe("spawnTile edge cases", () => {
     };
     const g = createGrid(4);
     spawnTile(g, { rng });
-    expect(draws).toBe(2); // position + value
+    expect(draws).toBe(2);
   });
 });
 
-// Deterministic RNG for reproducibility
 function seededRng(seed = 1): () => number {
   let s = seed;
   return () => {

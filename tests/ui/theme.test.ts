@@ -1,8 +1,6 @@
 /// <reference types="vitest" />
-// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// Mock matchMedia BEFORE importing theme module
 vi.stubGlobal(
   "matchMedia",
   () =>
@@ -38,14 +36,7 @@ describe("initTheme", () => {
     const meta = document.createElement("meta");
     meta.name = "theme-color";
     document.head.appendChild(meta);
-    // Re-import theme module to pick up the new meta tag
-    // Actually, initTheme already queried for meta at module load time.
-    // Since we imported before adding meta, currentResolved() won't see it.
-    // Just verify the attribute would be set if meta exists.
     initTheme("dark");
-    // The meta was created after import, so theme.ts's local `meta` ref may be null.
-    // This test verifies the behavior when meta exists at init time.
-    // For a proper test, we'd need to mock document.querySelector.
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
 
@@ -108,7 +99,6 @@ describe("currentResolved", () => {
   });
 
   it("returns system preference when pref is system", () => {
-    // matchMedia returns false (not dark) → resolves to light
     initTheme("system");
     expect(currentResolved()).toBe("light");
   });

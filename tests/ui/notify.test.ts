@@ -1,5 +1,4 @@
 /// <reference types="vitest" />
-// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { NotificationCenter } from "@/ui/notify";
 
@@ -63,14 +62,11 @@ describe("NotificationCenter", () => {
     const card = parent.querySelector(".notify-card")!;
     const closeBtn = card.querySelector(".notify-card__close")!;
     closeBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    // Card should have leaving class
     expect(card.classList.contains("is-leaving")).toBe(true);
   });
 
   it("auto-dismiss after duration", () => {
     nc.show("Auto-dismiss", { duration: 50 });
-    // The card starts with opacity: 0 and gets is-visible via rAF.
-    // In jsdom without requestAnimationFrame, just verify the card exists.
     const card = parent.querySelector(".notify-card");
     expect(card).not.toBeNull();
   });

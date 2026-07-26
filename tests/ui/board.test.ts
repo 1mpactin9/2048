@@ -1,10 +1,8 @@
 /// <reference types="vitest" />
-// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { BoardRenderer } from "@/ui/board";
 import type { MoveTranscript } from "@/core/types";
 
-// Mock ResizeObserver for jsdom
 vi.stubGlobal(
   "ResizeObserver",
   class ResizeObserver {
@@ -138,7 +136,6 @@ describe("BoardRenderer — animateMove", () => {
     document.body.appendChild(container);
     board = new BoardRenderer(container);
     board.setSize(4);
-    // Pre-populate with tiles
     const grid = [
       [{ id: 1, value: 2 }, { id: 2, value: 2 }, null, null],
       [null, null, null, null],
@@ -164,7 +161,6 @@ describe("BoardRenderer — animateMove", () => {
       spawned: { id: 3, value: 2, row: 3, col: 3 },
     };
     board.animateMove(transcript);
-    // After animation, tile with id 1 should be at position (0,0)
     const tile1 = board.el.querySelector('[data-id="1"]');
     expect(tile1).not.toBeNull();
   });
@@ -208,7 +204,6 @@ describe("BoardRenderer — animateSwap", () => {
 
   it("swaps row/col of both tile records", () => {
     board.animateSwap(1, 2);
-    // Both tiles should still exist
     expect(board.el.querySelectorAll(".tile").length).toBe(2);
   });
 

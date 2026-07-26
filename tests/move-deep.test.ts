@@ -9,7 +9,6 @@ import {
   gridToValues,
 } from "../src/core/grid";
 
-/** Helper: build a square grid from row values. */
 function makeGrid(rows: number[][]): Grid {
   return gridFromValues(rows);
 }
@@ -54,7 +53,6 @@ describe("Transcript correctness — merged tiles", () => {
     const nonMerged = transcript.moves.filter(
       (m) => m.mergedInto === undefined && m.newValue === undefined,
     );
-    // Both tiles slide left without merging
     expect(nonMerged.length).toBe(2);
   });
 
@@ -66,7 +64,6 @@ describe("Transcript correctness — merged tiles", () => {
       [0, 0, 0, 0],
     ]);
     const { transcript } = move(g, "left");
-    // Merge 2+2=4 and 4+4=8, gained = 4 + 8 = 12
     expect(transcript.gained).toBe(12);
   });
 
@@ -78,7 +75,6 @@ describe("Transcript correctness — merged tiles", () => {
       [0, 0, 0, 0],
     ]);
     const { transcript } = move(g, "left");
-    // Two 2s merge into one, 4 slides: 3 move entries
     expect(transcript.moves.length).toBe(3);
   });
 });
@@ -133,7 +129,6 @@ describe("All four directions on complex boards", () => {
       [0, 0, 0, 0],
     ]);
     const { grid: out } = move(g, "up");
-    // Column 0: [2,0,2,0] → up → [4,0,0,0]
     expect(out[0][0]?.value).toBe(4);
   });
 
@@ -145,10 +140,8 @@ describe("All four directions on complex boards", () => {
       [0, 0, 0, 0],
     ]);
     const { grid: out } = move(g, "left");
-    // Row 0: [2,0,4,0] → [2,4,0,0]
     expect(out[0][0]?.value).toBe(2);
     expect(out[0][1]?.value).toBe(4);
-    // Row 2: [0,8,0,16] → [8,16,0,0]
     expect(out[2][0]?.value).toBe(8);
     expect(out[2][1]?.value).toBe(16);
   });
@@ -184,11 +177,8 @@ describe("Edge cases — cascading and special patterns", () => {
       [0, 0, 8, 0],
       [0, 0, 0, 16],
     ]);
-    // Tiles can still slide into empty cells — up changes positions
-    // But no merges happen. canMove returns true because positions change.
     const { grid: out } = move(g, "up");
-    // The move DID change something (tiles slid), but no merge occurred
-    expect(out[0][0]?.value).toBe(2); // 2 at (0,0) stays at (0,0) since it's already at top
+    expect(out[0][0]?.value).toBe(2);
   });
 
   it("large board 8x8 sparse: move completes without error", () => {
@@ -200,7 +190,6 @@ describe("Edge cases — cascading and special patterns", () => {
   });
 
   it("packed board with all merges", () => {
-    // Build an 8-wide grid properly
     const g = createGrid(8);
     const vals = [2, 2, 4, 4, 8, 8, 16, 16];
     for (let c = 0; c < 8; c++) g[0][c] = { id: c + 1, value: vals[c] };
@@ -258,7 +247,6 @@ describe("canMove thoroughness", () => {
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ]);
-    // Tiles at row 0 can slide right; tiles at row 1 can slide left
     expect(canMove(g, "right")).toBe(true);
     expect(canMove(g, "left")).toBe(true);
   });

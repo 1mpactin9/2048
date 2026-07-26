@@ -4,8 +4,6 @@ import { POWERUP_QUOTA, MAX_HISTORY } from "../src/core/constants";
 import { gridFromValues, gridToValues } from "../src/core/grid";
 import { GameSession, restoreSession } from "../src/core/session";
 
-// --- Helpers (mirrors core.test.ts to keep files self-contained) ---
-
 function seededRng(seed = 1): () => number {
   let s = seed;
   return () => {
@@ -42,7 +40,6 @@ function makeSession(
   return new GameSession(state, rng);
 }
 
-/** Build a size×size grid with the given row placed at row 0 (rest empty). */
 function row0(row: number[]): number[][] {
   const n = row.length;
   const grid: number[][] = [];
@@ -110,25 +107,22 @@ describe("GameSession — newGame", () => {
 describe("GameSession — applyMove", () => {
   it("spawns exactly one tile after a successful move", () => {
     const s = makeSession(row0([2, 0, 2, 0]));
-    s.applyMove("left"); // merges to 4
+    s.applyMove("left");
     const filled = s.state.grid.flat().filter(Boolean).length;
-    expect(filled).toBe(2); // merged 4 + spawned tile
+    expect(filled).toBe(2);
   });
 
   it("accumulates score correctly across moves", () => {
-    // Use a board where we can chain multiple left moves
     const s = makeSession([
       [2, 2, 0, 0],
       [2, 2, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ]);
-    s.applyMove("left"); // row 0: 2+2=4, row 1: 2+2=4, score += 8
+    s.applyMove("left");
     expect(s.state.score).toBe(8);
-    // Keep playing left — no more merges possible, just slide
-    s.applyMove("left"); // no-op, returns null
-    // Try right instead
-    s.applyMove("right"); // should still be valid if board changed
+    s.applyMove("left");
+    s.applyMove("right");
     expect(s.state.score).toBeGreaterThanOrEqual(8);
   });
 
@@ -184,7 +178,7 @@ describe("GameSession — applyMove", () => {
       [2, 4, 2, 4],
       [4, 2, 4, 2],
     ]);
-    s.applyMove("left"); // forces over
+    s.applyMove("left");
     expect(s.applyMove("up")).toBeNull();
   });
 
@@ -192,7 +186,7 @@ describe("GameSession — applyMove", () => {
     const s = makeSession(row0([2, 2, 4, 4]));
     const t = s.applyMove("left");
     expect(t).not.toBeNull();
-    expect(t!.gained).toBe(12); // 4 + 8
+    expect(t!.gained).toBe(12);
   });
 
   it("transcript spawned tile has id, value, row, col", () => {
@@ -214,8 +208,7 @@ describe("GameSession — applyMove", () => {
     ]);
     s.applyMove("left");
     expect(s.state.moveCount).toBe(1);
-    // Need another valid move
-    s.applyMove("up"); // should work if there are still moves
+    s.applyMove("up");
     expect(s.state.moveCount).toBeGreaterThanOrEqual(1);
   });
 });
@@ -223,7 +216,7 @@ describe("GameSession — applyMove", () => {
 describe("GameSession — undo", () => {
   it("restores grid, score, and powerups", () => {
     const s = makeSession(row0([2, 0, 2, 0]));
-    s.applyMove("left"); // score becomes 4
+    s.applyMove("left");
     expect(s.state.score).toBe(4);
     s.undo();
     expect(s.state.score).toBe(0);
@@ -263,8 +256,8 @@ describe("GameSession — undo", () => {
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ]);
-    s.applyMove("left"); // move 1
-    s.applyMove("up"); // move 2 (if possible)
+    s.applyMove("left");
+    s.applyMove("up");
     const histLen = s.state.history.length;
     if (histLen >= 2) {
       s.undo();
@@ -282,7 +275,7 @@ describe("GameSession — undo", () => {
     ]);
     s.applyMove("right");
     s.swap(0, 3, 0, 2);
-    s.undo(); // undo the swap
+    s.undo();
     expect(s.state.powerups.swap).toBe(2);
   });
 
@@ -301,11 +294,11 @@ describe("GameSession — undo", () => {
 
   it("canUndo transitions correctly", () => {
     const s = makeSession(row0([2, 0, 2, 0]));
-    expect(s.canUndo).toBe(false); // no history yet
+    expect(s.canUndo).toBe(false);
     s.applyMove("left");
     expect(s.canUndo).toBe(true);
     s.undo();
-    expect(s.canUndo).toBe(false); // history exhausted
+    expect(s.canUndo).toBe(false);
   });
 
   it("undoes up to MAX_HISTORY steps", () => {
@@ -315,7 +308,6 @@ describe("GameSession — undo", () => {
       [2, 2, 4, 4],
       [2, 2, 4, 4],
     ]);
-    // Push many moves
     let moveCount = 0;
     const dirs: Array<"up" | "down" | "left" | "right"> = [
       "up",
@@ -335,7 +327,6 @@ describe("GameSession — undo", () => {
       moveCount++;
     }
     if (moveCount > 0) {
-      // Undo all
       for (let i = 0; i < Math.min(moveCount, MAX_HISTORY); i++) {
         s.undo();
       }
@@ -366,9 +357,7 @@ describe("GameSession — swap", () => {
     const s = makeSession(row0([2, 0, 2, 0]));
     s.applyMove("left");
     expect(s.state.powerups.swap).toBe(2);
-    // Need two occupied adjacent cells
     const g = s.state.grid;
-    // Find two occupied cells
     let occupied: [number, number][] = [];
     for (let r = 0; r < g.length; r++)
       for (let c = 0; c < g[r].length; c++) if (g[r][c]) occupied.push([r, c]);
@@ -380,7 +369,7 @@ describe("GameSession — swap", () => {
 
   it("refuses when either cell is empty", () => {
     const s = makeSession(row0([2, 0, 2, 0]));
-    expect(s.swap(0, 0, 0, 1)).toBe(false); // col 1 is empty
+    expect(s.swap(0, 0, 0, 1)).toBe(false);
   });
 
   it("refuses same cell", () => {
@@ -559,7 +548,6 @@ describe("GameSession — restoreSession", () => {
       over: false,
       history: [],
       moveCount: 0,
-      // deltaHistory intentionally omitted
     };
     const s = restoreSession(state);
     expect(s.state.deltaHistory).toBeDefined();
@@ -570,7 +558,6 @@ describe("GameSession — restoreSession", () => {
 describe("GameSession — state consistency", () => {
   it("score stays within valid window during play", () => {
     const s = makeSession(row0([2, 0, 2, 0]));
-    // Play several moves
     for (let i = 0; i < 20; i++) {
       const dirs: Array<"up" | "down" | "left" | "right"> = [
         "up",

@@ -11,7 +11,6 @@ import {
 import { gameKey } from "../src/core/constants";
 import type { GameMode, GameState } from "../src/core/types";
 
-// In-memory localStorage for node test environment.
 function memoryStorage(): Storage {
   let store: Record<string, string> = {};
   return {
@@ -243,7 +242,6 @@ describe("Corrupted data handling", () => {
       }),
     );
     const loaded = load();
-    // settings spread with string should fall back to defaults
     expect(loaded.settings.theme).toBeDefined();
   });
 });
@@ -379,8 +377,6 @@ describe("clearGames", () => {
       nextId: 42,
     };
     clearGames(data);
-    // clearGames sets data.games = {} but does not modify data.nextId
-    // The setNextId(1) call in clearGames affects the global counter, not data.nextId
     expect(data.games).toEqual({});
   });
 
@@ -424,7 +420,6 @@ describe("save robustness", () => {
       games: {},
       nextId: 1,
     };
-    // Should not throw even if localStorage is full
     expect(() => save(data)).not.toThrow();
   });
 });
