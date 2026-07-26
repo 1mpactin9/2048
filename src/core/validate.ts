@@ -1,15 +1,12 @@
 // Position validation for hacked boards.
-//
 // Points are only awarded on merges, so every visible tile of value V (with
 // n = log2 V) was built by a chain of merges whose total award sits in a fixed
 // window:
 //   - all-2 spawns  -> the most merges -> max contribution = (n - 1) * V
 //   - all-4 spawns  -> the fewest merges -> min contribution = (n - 2) * V
 // A 2-tile (n = 1) would give a negative minimum, so the floor is clamped to 0.
-//
 // Summed across the board this yields a [min, max] window the displayed score
-// must lie within; outside it, the board has been altered. See docs/dev.md
-// "Position validation" for the full derivation.
+// must lie within; outside it, the board has been altered.
 
 import type { Grid } from "./types";
 
@@ -21,11 +18,7 @@ function log2int(value: number): number {
   return Math.log2(value);
 }
 
-/**
- * The [min, max] score contribution a single tile of `value` could have cost to
- * build. `min` assumes every spawn was a 4 (fewest merges); `max` assumes every
- * spawn was a 2 (most merges).
- */
+// The [min, max] score contribution a single tile of `value` could have cost.
 export function tileScoreRange(value: number): { min: number; max: number } {
   const n = log2int(value);
   return {
@@ -48,7 +41,7 @@ export interface ScoreWindow {
   tiles: TileContribution[];
 }
 
-/** Sum the per-tile min/max windows across every occupied cell. */
+// Sum the per-tile min/max windows across every occupied cell.
 export function scoreWindow(grid: Grid): ScoreWindow {
   const tiles: TileContribution[] = [];
   let min = 0;
@@ -79,7 +72,7 @@ export interface ValidationResult {
   tileCount: number;
 }
 
-/** Is `score` consistent with the tiles currently on `grid`? */
+// Is `score` consistent with the tiles currently on `grid`?
 export function validatePosition(grid: Grid, score: number): ValidationResult {
   const w = scoreWindow(grid);
   return {
@@ -100,32 +93,23 @@ export interface ClampResult {
   max: number;
 }
 
-/**
- * Clamp `score` into the board's valid window. A hacked board whose score falls
- * outside the window becomes valid with the smallest possible adjustment.
- */
+// Clamp `score` into the board's valid window. A hacked board whose score falls
+// outside the window becomes valid with the smallest possible adjustment.
 export function clampScoreToWindow(grid: Grid, score: number): ClampResult {
   const { min, max } = scoreWindow(grid);
   return { from: score, to: Math.min(max, Math.max(min, score)), min, max };
 }
 
-// ---------------------------------------------------------------------------
-// bypassValidation: remove the fewest tiles (then the least total value) so the
+// bypassValidation: remove the fewest tiles (then least total value) so the
 // remaining board is valid for the current score.
-//
-// Removing tiles can only lower the window, so this fixes the "score too low
-// for the tiles present" case (e.g. a hacked-in 32768 with score 0). It cannot
-// fix a score above the maximum - that is reported infeasible.
-//
-// Reframed as a keep-set problem: keep the largest subset of tiles whose window
-// still contains the score, and remove the rest. The priority is lexicographic:
-// by default (count, then value) -> fewest tiles removed; with `valueFirst` it
-// is (value, then count) -> least total value removed. For 2048's power-of-two
-// tiles the two orderings always select the same set, so the toggle is a no-op
-// in practice (kept for flexibility). Tiles with a 0 minimum contribution
-// (values 2 and 4) never push the board below its minimum and only add to the
-// maximum, so they are always kept.
-// ---------------------------------------------------------------------------
+// Removing tiles can only lower the window, so this fixes "score too low for
+// the tiles present" (e.g. a hacked 32768 with score 0). It cannot fix a score
+// above max — that is reported infeasible.
+// Reframed as a keep-set problem: keep the largest subset whose window contains
+// the score. Priority is lexicographic: (count, then value) by default, or
+// (value, then count) with `valueFirst`. For power-of-two tiles both orderings
+// pick the same set, so the toggle is a no-op in practice. Tiles with 0 min
+// contribution (values 2 and 4) are always kept.
 
 export interface BypassPlan {
   /** A valid keep-set exists; `remove` applied to the board makes it valid. */
@@ -171,7 +155,7 @@ export function keepBetter(
     : x.count > y.count || (x.count === y.count && x.value > y.value);
 }
 
-/** Brute-force the keep-set exactly up to this many score-bearing tiles. */
+// Brute-force the keep-set exactly up to this many score-bearing tiles.
 const EXACT_MAX_CANDIDATES = 20;
 
 /**

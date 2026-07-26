@@ -1088,8 +1088,6 @@ export class App {
     this.board.destroy();
   }
 
-  // ---------- Developer console helpers ----------
-
   // Bypass-powerup undo: reverts up to `steps` past moves.
   // Default 1 step. Negative values instead enable the auto-engine
   // and run it for `Math.abs(steps)` moves.

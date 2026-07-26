@@ -7,7 +7,7 @@ declare global {
   interface Window {
     __app?: App;
     __runAutoLoop: (score: number) => void;
-    /** Call from browser DevTools. */
+    // Call from browser DevTools.
     __dev: {
       undo(steps?: number): void;
       delete(row: number, col: number): void;
@@ -30,21 +30,21 @@ declare global {
       updatePosition(): { from: number; to: number; min: number; max: number; changed: boolean } | undefined;
       bypassValidation(valueFirst?: boolean): { feasible: boolean; removed: number; totalValue: number; heuristic: boolean; valid: boolean } | undefined;
       help(): void;
-      /** Recover from NaN best score. */
+  // Recover from NaN best score.
       fixBest(): void;
-      /** Clamp score into valid window. Also fixes NaN best. */
+      // Clamp score into valid window. Also fixes NaN best.
       refreshScore(): { from: number; to: number; min: number; max: number; changed: boolean; tileCount: number; scoreFromMerges: number } | undefined;
-      /** Toggle Play Again bar visibility based on board dead state. */
+      // Toggle Play Again bar visibility based on board dead state.
       refreshPlayAgainStatus(): void;
-      /** Periodic logger — executes a function at an interval. Returns ID for cancellation. */
+      // Periodic logger — executes a function at an interval. Returns ID for cancellation.
       log(fn: (...args: unknown[]) => unknown, intervalMs?: number): number;
-      /** Stop a specific or all periodic loggers. */
+      // Stop a specific or all periodic loggers.
       stopLog(id?: number): void;
-      /** Execute a dev method by name with arbitrary arguments. */
+      // Execute a dev method by name with arbitrary arguments.
       callNative(methodName: string, ...args: unknown[]): unknown;
-      /** Internal: timer registry for log/stopLog (not part of public API). */
+// Internal: timer registry for log/stopLog.
       _timers: Map<number, ReturnType<typeof setInterval>>;
-      /** Internal: monotonic counter for log IDs (not part of public API). */
+      // Internal: monotonic counter for log IDs.
       _nextId: number;
     };
   }
@@ -66,7 +66,7 @@ window.__runAutoLoop = (score: number) => {
   window.__app.runAutoLoop(score);
 };
 
-/** DevTools console — proxied to window.__app methods. */
+// DevTools console — proxied to window.__app methods.
 window.__dev = {
   undo: (steps?: number) => window.__app?.__undo(steps),
   delete: (r: number, c: number) => window.__app?.__delete(r, c),
