@@ -9,7 +9,7 @@ export default defineConfig({
     extensions: [".ts", ".js"],
   },
   test: {
-    environment: "node",
+    environment: "jsdom",
     include: ["tests/**/*.test.ts"],
     environmentOptions: {
       jsdom: {

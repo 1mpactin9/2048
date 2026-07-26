@@ -1,14 +1,14 @@
+/// <reference vitest-env={ "environment": "node" } />
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { gridFromValues, spawnTile } from "../src/core/grid";
 import { SecureRng } from "../src/core/rng";
 
-const wasmJsPath = fileURLToPath(
-  new URL("../engine/pkg/engine2048.js", import.meta.url),
-);
-const wasmBinPath = fileURLToPath(
-  new URL("../engine/pkg/engine2048_bg.wasm", import.meta.url),
+const wasmJsPath = path.resolve(__dirname, "../engine/pkg/engine2048.js");
+const wasmBinPath = path.resolve(
+  __dirname,
+  "../engine/pkg/engine2048_bg.wasm",
 );
 
 type PredictSpawn = (
