@@ -1,8 +1,6 @@
 import type { Grid, SpawnedTile } from "./types";
 import { SPAWN_PROB_4 } from "./constants";
 
-// Monotonic tile id counter. Persisted via storage so reloaded tiles never
-// collide with freshly spawned ones.
 let nextId = 1;
 
 export function peekNextId(): number {
@@ -58,20 +56,14 @@ export function isFull(grid: Grid): boolean {
 }
 
 export interface SpawnOptions {
-  /** Force a specific value (used by tests). */
   value?: number;
-  /** Force a specific empty cell (used by tests). */
   at?: { row: number; col: number };
-  /** Injectable RNG for deterministic tests. */
   rng?: () => number;
-  /** Bias spawns toward the player via best-of-N candidate draws from the same stream. */
   manipulate?: boolean;
 }
 
-// Number of candidate draws sampled per spawn in manipulation mode.
 const MANIPULATION_CANDIDATES = 5;
 
-// Score a candidate spawn position: rewards empty space and smooth neighbours.
 function scoreSpawnCandidate(grid: Grid): number {
   const n = grid.length;
   let empty = 0;
@@ -116,7 +108,6 @@ export function spawnTile(
     for (let i = 0; i < rounds; i++) {
       const candSpot = empties[Math.floor(rng() * empties.length)];
       const candValue = opts.value ?? (rng() < SPAWN_PROB_4 ? 4 : 2);
-      // Probe: temporarily place candidate, score board, undo.
       grid[candSpot.row][candSpot.col] = { id: -1, value: candValue };
       const score = scoreSpawnCandidate(grid);
       grid[candSpot.row][candSpot.col] = null;
@@ -172,7 +163,6 @@ export function hasTile(grid: Grid, value: number): boolean {
   return false;
 }
 
-/** Build a grid from a number matrix (0 = empty). */
 export function gridFromValues(values: number[][], idSeed = 1): Grid {
   let id = idSeed;
   const grid: Grid = values.map((row) =>
@@ -182,7 +172,6 @@ export function gridFromValues(values: number[][], idSeed = 1): Grid {
   return grid;
 }
 
-/** Read a grid back as a number matrix. */
 export function gridToValues(grid: Grid): number[][] {
   return grid.map((row) => row.map((c) => (c ? c.value : 0)));
 }

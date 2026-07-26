@@ -9,14 +9,10 @@ export interface Settings {
   lastSize: number;
   lastMode: GameMode;
   autoOn: boolean;
-  autoSpeed: number; // ms between auto moves
-  /** AI search depth override (0 = adaptive). */
+  autoSpeed: number;
   autoDepth: number;
-  /** Whether auto-play may spend swap/delete charges. */
   autoPowerups: boolean;
-  /** RNG Manipulation: biases spawns via the same CSPRNG stream. */
   rngManip: boolean;
-  /** Backtrack: delta-encoded history for unlimited __undo. */
   backtrackEnabled: boolean;
 }
 
@@ -75,9 +71,7 @@ export function save(data: StoredData): void {
       nextId: peekNextId(),
     };
     localStorage.setItem(KEY, JSON.stringify(payload));
-  } catch {
-    // Fail silently — game still plays, just won't persist.
-  }
+  } catch {}
 }
 
 export function getGame(

@@ -29,7 +29,6 @@ function emptyPowerups(): Powerups {
   return { undo: 0, swap: 0, delete: 0 };
 }
 
-/** Owns one game's mutable state. All transitions go through here so the UI stays a thin view. */
 export class GameSession {
   state: GameState;
   private rng: () => number;
@@ -114,7 +113,6 @@ export class GameSession {
     this.state.over = !hasMoves(this.state.grid);
   }
 
-  // Record a delta-encoded history step for unlimited backtrack.
   private recordDeltas(prevGrid: Grid): void {
     const currGrid = this.state.grid;
     const size = this.state.size;
@@ -141,7 +139,6 @@ export class GameSession {
       const anchor = this.snapshot();
       const dh = this.state.deltaHistory!;
       dh.push({ anchor, deltas });
-      // Cap at 10000 entries to prevent localStorage bloat.
       const MAX_DELTA_HISTORY = 10000;
       while (dh.length > MAX_DELTA_HISTORY) {
         dh.shift();
@@ -149,7 +146,6 @@ export class GameSession {
     }
   }
 
-  /** Apply a directional move. Returns a transcript to animate, or null if the move was a no-op. */
   applyMove(dir: Direction): MoveTranscript | null {
     if (this.state.over) return null;
     const { grid: next, transcript } = move(this.state.grid, dir);
@@ -162,7 +158,6 @@ export class GameSession {
     this.state.grid = next;
     this.state.score += transcript.gained;
     this.state.best = Math.max(this.state.best, this.state.score);
-    // Capture grid after move but before spawn for delta recording.
     const prevGridForDelta = cloneGrid(next);
     transcript.spawned =
       spawnTile(next, { rng: this.rng, manipulate: this.manipulate }) ??
@@ -170,12 +165,10 @@ export class GameSession {
     this.state.moveCount++;
     if (!this.state.won && hasTile(next, WIN_VALUE)) this.state.won = true;
     this.recomputeOver();
-    // Record deltas covering both the move and the spawn.
     this.recordDeltas(prevGridForDelta);
     return transcript;
   }
 
-  // Undo the last action, consuming one undo charge. Not recorded in history.
   undo(): boolean {
     if (this.state.mode !== "standard") return false;
     if (this.state.powerups.undo <= 0) return false;
@@ -187,13 +180,11 @@ export class GameSession {
     this.state.won = snap.won;
     this.state.wonAcknowledged = snap.wonAcknowledged;
     this.state.moveCount = snap.moveCount;
-    // Restore pre-action powerups, then pay one undo charge.
     this.state.powerups = { ...snap.powerups, undo: snap.powerups.undo - 1 };
     this.recomputeOver();
     return true;
   }
 
-  /** Swap two occupied tiles. Coordinates must differ and both be non-empty. */
   swap(r1: number, c1: number, r2: number, c2: number): boolean {
     if (this.state.mode !== "standard") return false;
     if (this.state.powerups.swap <= 0) return false;
@@ -273,7 +264,6 @@ export function restoreSession(
   rng?: () => number,
 ): GameSession {
   if (!state.deltaHistory) state.deltaHistory = [];
-  // Fix the id counter to avoid collisions with persisted tiles.
   let maxId = 0;
   for (const row of state.grid) {
     for (const c of row) if (c && c.id > maxId) maxId = c.id;

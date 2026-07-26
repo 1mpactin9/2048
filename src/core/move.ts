@@ -21,7 +21,6 @@ interface Coord {
   col: number;
 }
 
-// Slide + merge one line toward index 0 (destination edge).
 function slideLine(
   entries: LineEntry[],
   destAt: (i: number) => Coord,
@@ -34,7 +33,6 @@ function slideLine(
     if (!e.cell) continue;
     const top = placed[placed.length - 1];
     if (top && top.value === e.cell.value && !top.merged) {
-      // Merge incoming tile into the one nearer the edge.
       top.merged = true;
       top.newValue = top.value * 2;
       top.value = top.newValue;
@@ -114,7 +112,6 @@ function buildLines(
   return lines;
 }
 
-// Pure move: returns resulting grid and transcript. Does not spawn or mutate input.
 export function move(
   grid: Grid,
   dir: Direction,
@@ -145,7 +142,6 @@ export function move(
   };
 }
 
-// True if a move in this direction would change the board.
 export function canMove(grid: Grid, dir: Direction): boolean {
   return move(grid, dir).transcript.moved;
 }
