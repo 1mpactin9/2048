@@ -1,14 +1,6 @@
-//! WebAssembly bindings for the 2048 AI, built with `wasm-pack --target web`.
-//!
-//! The browser owns all game state (grid, score, powerups, animations) and
-//! asks the Rust AI what to do next via [`suggest_move`] (directions only) or
-//! [`suggest_action`] (directions + power-ups). Both are pure - no RNG or
-//! engine state is needed on this side.
-
 use crate::{Action, Direction, Engine};
 use wasm_bindgen::prelude::*;
 
-/// Pack a direction into the integer code the JS side expects.
 fn direction_code(dir: Direction) -> u32 {
     match dir {
         Direction::Up => 0,
@@ -18,12 +10,8 @@ fn direction_code(dir: Direction) -> u32 {
     }
 }
 
-/// Sentinel returned when there is no legal move (game over) or the input is
-/// malformed. Any value `> 3` means "no move"; the JS bridge maps that to a
-/// stop action.
 const NO_MOVE: u32 = u32::MAX;
 
-/// Reconstruct a square grid from a flat row-major slice. `None` if malformed.
 fn grid_from_flat(flat: &[u32], size: usize) -> Option<Vec<Vec<u32>>> {
     if size < 2 || flat.len() != size * size {
         return None;
@@ -35,10 +23,6 @@ fn grid_from_flat(flat: &[u32], size: usize) -> Option<Vec<Vec<u32>>> {
     )
 }
 
-/// Suggest the best move for a board given as a flat, row-major `u32` array
-/// (`0` = empty). Returns `0 = up, 1 = down, 2 = left, 3 = right`, or
-/// `u32::MAX` when no legal move exists. `depth = 0` uses the engine's
-/// adaptive default (deeper on small boards, shallower on large ones).
 #[wasm_bindgen]
 pub fn suggest_move(flat: &[u32], size: usize, depth: u32) -> u32 {
     let grid = match grid_from_flat(flat, size) {
@@ -53,16 +37,6 @@ pub fn suggest_move(flat: &[u32], size: usize, depth: u32) -> u32 {
     Engine::suggest_move_for(&grid, depth_opt).map_or(NO_MOVE, direction_code)
 }
 
-/// Suggest a full action (move or power-up). The result is a flat `u32` array
-/// the JS side decodes:
-/// - `[0, dir]` - move (dir: 0=up, 1=down, 2=left, 3=right)
-/// - `[1, r, c]` - delete the tile at (r, c)
-/// - `[2, r1, c1, r2, c2]` - swap tiles at (r1,c1) and (r2,c2)
-/// - `[3]` - no action (game over, no usable power-up)
-///
-/// `depth = 0` uses the adaptive default. `swaps_left` / `deletes_left` are the
-/// remaining charges; power-ups are only considered when `> 0` and the board is
-/// congested or stuck, so they aren't wasted in the comfortable midgame.
 #[wasm_bindgen]
 pub fn suggest_action(
     flat: &[u32],
@@ -88,17 +62,6 @@ pub fn suggest_action(
     }
 }
 
-/// Predictive ("cheat") counterpart of `suggest_move`, used when RNG
-/// Manipulation is on. Instead of modelling spawns as random, the search peeks
-/// the exact next spawn from the deterministic ChaCha20 stream (keyed by `seed`
-/// at stream position `calls`) at every chance node and follows the single
-/// predicted outcome. `manipulate` matches the real game's spawn logic: plain
-/// single draw when false, best-of-5 candidate selection when true - so the
-/// predicted spawn is identical to what `spawnTile` will actually produce.
-///
-/// `seed` is the 8-uint32 per-game seed; `calls` is the stream position (uint32
-/// values consumed so far). Returns `0..3` for the move, or `u32::MAX` when no
-/// legal move exists.
 #[wasm_bindgen]
 pub fn suggest_move_det(
     flat: &[u32],
@@ -122,8 +85,6 @@ pub fn suggest_move_det(
         .map_or(NO_MOVE, direction_code)
 }
 
-/// Predictive counterpart of `suggest_action` (move or power-up) using the
-/// deterministic spawn stream. See `suggest_move_det` for the stream arguments.
 #[wasm_bindgen]
 pub fn suggest_action_det(
     flat: &[u32],
@@ -161,12 +122,6 @@ pub fn suggest_action_det(
     }
 }
 
-/// Diagnostic/test export: predict the single tile the real game will spawn
-/// next on `flat` (`0` = empty) from the ChaCha20 stream keyed by `seed` at
-/// position `calls`. Returns `[cell_index, value, draws_consumed]`, or
-/// `[u32::MAX]` when the board is full (no spawn). Used by the JS parity test
-/// to confirm the Rust predictor matches `spawnTile` bit-for-bit; also lets the
-/// UI surface the predicted spawn as a hint if desired.
 #[wasm_bindgen]
 pub fn predict_spawn(
     flat: &[u32],

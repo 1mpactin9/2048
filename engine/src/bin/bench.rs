@@ -1,13 +1,3 @@
-//! AI score benchmark: plays N full games of standard 4x4 2048 (no
-//! power-ups) with the AI auto-playing every move, and reports score stats.
-//!
-//! Usage:
-//!   cargo run --release --bin bench           # 20 games
-//!   cargo run --release --bin bench -- 50      # 50 games
-//!
-//! Always use `--release`: the AI search is much slower in debug builds and
-//! per-move time is not representative of real usage otherwise.
-
 use engine2048::{Config, Engine};
 use std::env;
 use std::time::Instant;

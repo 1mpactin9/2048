@@ -1,29 +1,11 @@
-//! engine2048 — a standalone 2048 game engine (no UI).
-//!
-//! Supports arbitrary square board sizes (3x3, 4x4, 5x5, 6x6, 8x8, or any N),
-//! undo, a "swap two tiles" power-up, a "delete a tile" power-up, and an
-//! expectimax-based AI that can suggest or auto-play moves.
-
 use rand::Rng;
 use std::fmt;
 
-/// Hard cap on search nodes expanded per AI decision. The expectimax search and
-/// every power-up candidate evaluation share one budget; once it runs out,
-/// remaining branches fall back to the static heuristic. This bounds the
-/// worst-case cost of a single `suggest_*` call so the synchronous WASM search
-/// can never stall the UI thread for long - even on large, congested boards
-/// where `auto_depth` would otherwise push the tree toward hundreds of
-/// millions of nodes, and even on dangerous boards where the power-up path
-/// evaluates dozens of candidate positions. Normal-play moves typically use far
-/// fewer nodes, so this only bites on the pathological cases that caused lag.
 const SEARCH_NODE_BUDGET: u64 = 150_000;
 
-// WebAssembly bridge (compiled only for the wasm32 target). Exposes the
-// expectimax AI to the browser via wasm-bindgen; see `src/wasm.rs`.
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
-/// The four cardinal move directions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
     Up,
@@ -41,19 +23,14 @@ impl Direction {
     ];
 }
 
-/// An action the auto-play AI can take: a directional move or a power-up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Move(Direction),
-    /// Delete the tile at (row, col).
     Delete(usize, usize),
-    /// Swap the tiles at (row_a, col_a) and (row_b, col_b).
     Swap((usize, usize), (usize, usize)),
-    /// No action available (game over with no usable power-up).
     None,
 }
 
-/// Errors returned by engine operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EngineError {
     OutOfBounds,
@@ -80,7 +57,6 @@ impl fmt::Display for EngineError {
 }
 impl std::error::Error for EngineError {}
 
-/// Outcome of applying a move.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MoveOutcome {
     pub moved: bool,
@@ -90,7 +66,6 @@ pub struct MoveOutcome {
     pub won: bool,
 }
 
-/// A snapshot of engine state used for undo.
 #[derive(Clone)]
 struct Snapshot {
     grid: Vec<Vec<u32>>,
@@ -100,20 +75,13 @@ struct Snapshot {
     won: bool,
 }
 
-/// Configuration used when creating a new engine.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Board is `size x size`. Supported/tested: 3, 4, 5, 6, 8 (any >=2 works).
     pub size: usize,
-    /// Tile value that counts as "won" (e.g. 2048). Set to `u32::MAX` to disable.
     pub target_tile: u32,
-    /// How many undo steps to keep in history.
     pub max_undo_history: usize,
-    /// Number of tile-swap power-ups available. 0 disables the feature.
     pub swap_charges: u32,
-    /// Number of tile-delete power-ups available. 0 disables the feature.
     pub delete_charges: u32,
-    /// Probability of spawning a 4 instead of a 2 (standard 2048 = 0.1).
     pub four_probability: f64,
 }
 
@@ -130,7 +98,6 @@ impl Default for Config {
     }
 }
 
-/// The game engine itself.
 pub struct Engine {
     pub size: usize,
     grid: Vec<Vec<u32>>,
@@ -146,7 +113,6 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Create a new engine with the given config, spawning two starting tiles.
     pub fn new(config: Config) -> Result<Self, EngineError> {
         if config.size < 2 {
             return Err(EngineError::InvalidSize);
@@ -169,32 +135,24 @@ impl Engine {
         Ok(engine)
     }
 
-    /// Convenience constructor: standard rules at the given board size.
     pub fn with_size(size: usize) -> Result<Self, EngineError> {
         Engine::new(Config {
             size,
             ..Config::default()
         })
     }
-
-    // ---------- accessors ----------
-
     pub fn grid(&self) -> &Vec<Vec<u32>> {
         &self.grid
     }
-
     pub fn score(&self) -> u64 {
         self.score
     }
-
     pub fn swaps_left(&self) -> u32 {
         self.swaps_left
     }
-
     pub fn deletes_left(&self) -> u32 {
         self.delete_left
     }
-
     pub fn has_won(&self) -> bool {
         self.won
     }
@@ -223,10 +181,6 @@ impl Engine {
         v
     }
 
-    // ---------- core move logic ----------
-
-    /// Apply a move. Handles compression, merging, scoring, spawning a new tile,
-    /// win/game-over detection, and pushes an undo snapshot beforehand.
     pub fn make_move(&mut self, dir: Direction) -> Result<MoveOutcome, EngineError> {
         if self.is_game_over() {
             return Err(EngineError::GameOver);
@@ -269,7 +223,6 @@ impl Engine {
         })
     }
 
-    /// Undo the last mutating action (move, swap, or delete).
     pub fn undo(&mut self) -> Result<(), EngineError> {
         match self.history.pop() {
             Some(snap) => {
@@ -288,7 +241,6 @@ impl Engine {
         self.history.len()
     }
 
-    /// Swap the values of two tiles (both must be occupied). Consumes one swap charge.
     pub fn swap_tiles(&mut self, a: (usize, usize), b: (usize, usize)) -> Result<(), EngineError> {
         if a == b {
             return Err(EngineError::SamePosition);
@@ -309,7 +261,6 @@ impl Engine {
         Ok(())
     }
 
-    /// Delete (clear) a tile. Consumes one delete charge. Does not spawn a replacement.
     pub fn delete_tile(&mut self, pos: (usize, usize)) -> Result<(), EngineError> {
         self.check_bounds(pos)?;
         if self.delete_left == 0 {
@@ -380,8 +331,6 @@ impl Engine {
         false
     }
 
-    /// Pure function: slide+merge a grid in `dir`, returning (new_grid, score_gained).
-    /// Does not mutate `self`; used both by `make_move` and by the AI search.
     fn slide_grid(grid: &Vec<Vec<u32>>, dir: Direction) -> (Vec<Vec<u32>>, u64) {
         let n = grid.len();
         let mut result = vec![vec![0u32; n]; n];
@@ -430,34 +379,15 @@ impl Engine {
         (result, gained)
     }
 
-    // ---------- AI ----------
-
-    /// Suggest the best move using expectimax search with a positional heuristic.
-    /// `depth` overrides the default adaptive depth if provided.
     pub fn suggest_move(&self, depth: Option<usize>) -> Option<Direction> {
         Self::suggest_move_for(&self.grid, depth)
     }
-
-    /// Pure AI entry point: suggest the best move for an arbitrary board
-    /// (`0` = empty), without needing an `Engine` instance. The WebAssembly
-    /// bridge exposes this so a browser can query the AI without constructing
-    /// an engine (which would require an entropy source for `Engine::new`).
     pub fn suggest_move_for(grid: &Vec<Vec<u32>>, depth: Option<usize>) -> Option<Direction> {
-        // Resolve once per decision: an explicit depth (Basic/Medium/Advanced)
-        // is followed exactly; `None` (Auto) is resolved from the current
-        // board via `auto_depth` and then treated as a fixed depth for the
-        // rest of this call, so the budget and every candidate branch agree
-        // on the same depth.
         let search_depth = depth.unwrap_or_else(|| Self::auto_depth(grid));
         let mut budget = Self::budget_for_depth(search_depth);
         Self::best_move(grid, search_depth, &mut budget).0
     }
 
-    /// Flatten a `size x size` nested grid into a single row-major `Vec<u32>`.
-    /// The AI search operates on this flat form internally: one contiguous
-    /// allocation per board state instead of one allocation per row, which
-    /// matters once the same shape gets cloned at every node of an
-    /// expectimax tree that can span millions of nodes at deeper search.
     fn flatten(grid: &Vec<Vec<u32>>) -> Vec<u32> {
         let n = grid.len();
         let mut out = Vec::with_capacity(n * n);
@@ -467,15 +397,7 @@ impl Engine {
         out
     }
 
-    /// Best directional move for `grid` and its expectimax value. The value is
-    /// a heavy negative sentinel when no move is possible (game over), so it
-    /// compares cleanly against power-up outcomes in `suggest_action_for`.
     fn best_move(grid: &Vec<Vec<u32>>, depth: usize, budget: &mut u64) -> (Option<Direction>, f64) {
-        // `depth` is already fully resolved by the caller (either an explicit
-        // override followed exactly, or the auto-ramp value for this board) -
-        // it is used as-is here so every branch of a single decision (the
-        // move itself, plus any power-up candidates) searches at the same
-        // depth instead of being silently re-boosted per call.
         let n = grid.len();
         let board = Self::flatten(grid);
         let mut best_dir = None;
@@ -483,7 +405,7 @@ impl Engine {
         for &dir in Direction::ALL.iter() {
             let (mut new_board, gained) = Self::slide_flat(&board, n, dir);
             if new_board == board {
-                continue; // illegal move, skip
+                continue;
             }
             let value = gained as f64
                 + Self::expectimax_chance_flat(&mut new_board, n, depth.saturating_sub(1), budget);
@@ -500,14 +422,6 @@ impl Engine {
         (best_dir, val)
     }
 
-    /// Suggest a full action (move or power-up) for an arbitrary board.
-    ///
-    /// Power-ups are scarce, so they are only evaluated when the board is
-    /// congested (`is_dangerous`) or no directional move is possible - never in
-    /// the comfortable midgame. A power-up is then chosen only if it improves
-    /// the position by at least `POWERUP_MARGIN` over the best plain move, so
-    /// charges aren't burned on marginal gains. When the board is stuck, the
-    /// sentinel move value (`-200_000`) lets any escaping power-up through.
     pub fn suggest_action_for(
         grid: &Vec<Vec<u32>>,
         swaps_left: u32,
@@ -516,30 +430,16 @@ impl Engine {
     ) -> Action {
         let size = grid.len();
         let d = depth.unwrap_or_else(|| Self::auto_depth(grid));
-        // One shared node budget spans the main move and every power-up
-        // candidate, so the whole decision is hard-bounded (see
-        // `budget_for_depth`). Power-ups are only evaluated on dangerous
-        // boards, which is exactly when the unbounded search used to stall
-        // the UI. The budget scales with the resolved depth so shallow
-        // (fast/early-game) decisions stay cheap and only deep (dangerous)
-        // decisions spend the larger budget.
         let mut budget = Self::budget_for_depth(d);
 
         let (best_dir, move_val) = Self::best_move(grid, d, &mut budget);
 
-        // Skip power-up evaluation entirely while the board is comfortable.
         let stuck = best_dir.is_none();
         if !stuck && !Self::is_dangerous(grid) {
             return best_dir.map(Action::Move).unwrap_or(Action::None);
         }
-
-        // Lowered from 150 to 90: on a dangerous board a power-up that helps
-        // even a modest amount is usually worth spending, since the
-        // alternative is risking a dead board. Still high enough that
-        // charges aren't burned for trivial gains.
         const POWERUP_MARGIN: f64 = 90.0;
 
-        // Deletes: O(n^2) - try every occupied cell.
         let mut best_delete: Option<(usize, usize)> = None;
         let mut best_delete_val = f64::NEG_INFINITY;
         if deletes_left > 0 {
@@ -559,7 +459,6 @@ impl Engine {
             }
         }
 
-        // Swaps: O(n^4) pairs - sample to bound the cost on large boards.
         let mut best_swap: Option<((usize, usize), (usize, usize))> = None;
         let mut best_swap_val = f64::NEG_INFINITY;
         if swaps_left > 0 {
@@ -580,8 +479,6 @@ impl Engine {
             }
         }
 
-        // Pick the highest-value action, gating power-ups behind the margin.
-        // When stuck, `move_val` is the sentinel, so any escape qualifies.
         let mut chosen = best_dir.map(Action::Move).unwrap_or(Action::None);
         let mut chosen_val = move_val;
         if best_delete_val >= move_val + POWERUP_MARGIN && best_delete_val > chosen_val {
@@ -596,22 +493,13 @@ impl Engine {
         chosen
     }
 
-    /// A board is "dangerous" (worth spending a power-up) when empty cells are
-    /// scarce. The threshold scales with board area so large boards aren't
-    /// flagged prematurely.
     fn is_dangerous(grid: &Vec<Vec<u32>>) -> bool {
         let n = grid.len();
         let empties = grid.iter().flatten().filter(|&&v| v == 0).count();
-        // Widened from area/8 to area/6: flags danger a little earlier so a
-        // power-up (when enabled) is available with more empty cells still on
-        // the board to work with, instead of only once things are nearly
-        // full - this materially improves how often a run survives the
-        // danger zone and keeps climbing.
         let threshold = (n * n / 6).max(2);
         empties <= threshold
     }
 
-    /// Apply the AI's suggested move (if any) and return its outcome.
     pub fn auto_play_step(
         &mut self,
         depth: Option<usize>,
@@ -619,10 +507,6 @@ impl Engine {
         self.suggest_move(depth).map(|dir| self.make_move(dir))
     }
 
-    /// Base search depth for a board size at "typical" congestion (the anchor
-    /// point `auto_depth`'s ramp scales around). Larger boards have a much
-    /// higher branching factor per ply, so search shallower to keep runtime
-    /// reasonable; smaller boards can go deeper.
     fn default_depth(size: usize) -> usize {
         match size {
             0..=3 => 6,
@@ -633,18 +517,6 @@ impl Engine {
         }
     }
 
-    /// Adaptive depth used only when the caller passes `depth: None` (Auto).
-    /// Fixes the "extreme lag when turning the engine on" / "so slow at the
-    /// start" complaints: auto-play used to run a fixed, fairly deep search
-    /// (`default_depth`) on every move including the very first ones - right
-    /// when the board is emptiest and the expectimax tree is at its widest,
-    /// so early moves were by far the most expensive. Instead depth ramps
-    /// against how full the board is: shallow (fast) while mostly empty and
-    /// there's little danger, deepening as empty cells run out - which is
-    /// also when the search tree is naturally smaller, so the extra depth
-    /// stays cheap. The late-game boost is larger than before (up to +5) so
-    /// the AI looks far enough ahead to reliably survive the danger zone -
-    /// the single biggest lever for consistently reaching high scores.
     fn auto_depth(grid: &Vec<Vec<u32>>) -> usize {
         let n = grid.len();
         let base = Self::default_depth(n);
@@ -653,29 +525,23 @@ impl Engine {
         let ratio = empty as f64 / area as f64;
 
         let depth = if ratio > 0.55 {
-            base.saturating_sub(3) // opening: board nearly empty, play fast
+            base.saturating_sub(3)
         } else if ratio > 0.35 {
             base.saturating_sub(2)
         } else if ratio > 0.22 {
             base.saturating_sub(1)
         } else if ratio > 0.12 {
-            base // comfortable midgame: the tuned baseline
+            base
         } else if ratio > 0.07 {
             base + 1
         } else if ratio > 0.035 {
-            base + 3 // getting dangerous: look much further ahead
+            base + 3
         } else {
-            base + 5 // critical: board almost full, spend whatever it takes
+            base + 5
         };
         depth.max(2)
     }
 
-    /// Node budget scaled to the resolved depth. Shallow (opening / Basic)
-    /// decisions get a small budget so they resolve near-instantly; deep
-    /// (danger-zone / Advanced) decisions get a much larger budget since
-    /// that's when the extra search actually changes the outcome. Replaces
-    /// the old flat `SEARCH_NODE_BUDGET`, which made every decision -
-    /// including cheap opening ones - pay the same worst-case cost.
     fn budget_for_depth(depth: usize) -> u64 {
         match depth {
             0..=2 => 15_000,
@@ -687,11 +553,6 @@ impl Engine {
         }
     }
 
-    /// Flat-board equivalent of `slide_grid` (see `flatten`), used internally
-    /// by the AI search: one contiguous allocation per board state instead of
-    /// `n` separate row allocations. Logic is identical to `slide_grid`,
-    /// just re-indexed as `r * n + c` - kept in lockstep by the
-    /// `slide_flat_matches_slide_grid` test below.
     fn slide_flat(board: &[u32], n: usize, dir: Direction) -> (Vec<u32>, u64) {
         let mut result = vec![0u32; n * n];
         let mut gained: u64 = 0;
@@ -743,7 +604,6 @@ impl Engine {
         (result, gained)
     }
 
-    // Max node: player picks the best of the (up to 4) resulting states.
     fn expectimax_max_flat(board: &[u32], n: usize, depth: usize, budget: &mut u64) -> f64 {
         if depth == 0 || *budget == 0 {
             return Self::heuristic_flat(board, n);
@@ -764,20 +624,11 @@ impl Engine {
             }
         }
         if !any_move {
-            return -200000.0; // game over in this branch: heavy penalty
+            return -200000.0;
         }
         best
     }
 
-    // Chance node: environment spawns a 2 (90%) or 4 (10%) in a random empty cell.
-    // For performance on large boards we cap how many empty cells we expand over.
-    //
-    // `board` is mutated in place for each candidate cell/value and restored
-    // to empty afterward, rather than cloned. This is safe because `board` is
-    // always a freshly-built buffer from `slide_flat` that belongs solely to
-    // this call chain - nothing else reads it concurrently - so skipping the
-    // clone removes what used to be the single biggest allocation cost in the
-    // whole search (up to `MAX_CELLS * 2` clones per node, at every node).
     fn expectimax_chance_flat(
         board: &mut Vec<u32>,
         n: usize,
@@ -798,8 +649,6 @@ impl Engine {
         }
         *budget -= 1;
 
-        // Cap branching: sample at most MAX_CELLS empty cells (evenly strided)
-        // to bound the tree size on big boards.
         const MAX_CELLS: usize = 6;
         let sampled: Vec<usize> = if empties.len() <= MAX_CELLS {
             empties.clone()
@@ -824,10 +673,6 @@ impl Engine {
         total
     }
 
-    /// Heuristic board evaluation: rewards empty space, monotonic rows/columns,
-    /// smoothness (small differences between neighbours), and keeping the
-    /// largest tile anchored in a corner. Flat-board equivalent of the
-    /// original nested-Vec `heuristic`; logic is unchanged.
     fn heuristic_flat(board: &[u32], n: usize) -> f64 {
         let empty = board.iter().filter(|&&v| v == 0).count() as f64;
 
@@ -897,17 +742,6 @@ impl Engine {
             + W_SNAKE * Self::snake_score_flat(board, n)
     }
 
-    /// Corner-anchored "snake" gradient score. Lays a boustrophedon path of
-    /// geometrically decreasing weights across the board (heaviest cell in a
-    /// corner, decreasing back and forth from there) and dot-products it with
-    /// `log2(tile)` values. This rewards keeping tiles arranged along one
-    /// continuous descending chain from a corner - the arrangement that lets
-    /// large tiles keep merging instead of getting stranded - which is the
-    /// single biggest driver of high scores in strong 2048 bots. The weight
-    /// grid is tried in all 4 rotations (so any corner may anchor the chain)
-    /// and the best-fitting orientation for the current board wins.
-    /// Flat-board equivalent of the original nested-Vec `snake_score`; logic
-    /// is unchanged.
     fn snake_score_flat(board: &[u32], n: usize) -> f64 {
         if n == 0 {
             return 0.0;
@@ -920,8 +754,6 @@ impl Engine {
             }
         };
 
-        // Boustrophedon (snake) traversal order starting at (0,0): left-to-right
-        // on even rows, right-to-left on odd rows.
         const RATIO: f64 = 0.5;
         let mut weight = vec![0.0f64; n * n];
         let mut w = 1.0f64;
@@ -966,24 +798,6 @@ impl Engine {
             .fold(f64::NEG_INFINITY, f64::max)
     }
 
-    // ---------- predictive ("cheat") search ----------
-    //
-    // When RNG Manipulation is on, the spawn stream is a deterministic function
-    // of (seed, calls) - reproducible from the source. Instead of modelling
-    // spawns as random (the expectimax chance nodes above average over sampled
-    // empties x {2,4}), the predictive search *peeks* the exact next spawn from
-    // the ChaCha20 stream at every chance node and searches the single
-    // deterministic outcome. That collapses each chance node from up to 12
-    // branches to 1, so the same node budget reaches far deeper plies (faster
-    // *and* sharper) and - because the real game draws from the same stream -
-    // it optimizes for the board's actual future instead of a probability
-    // average. The spawn predictor (`predict_spawn_flat`) and DRBG are ported
-    // bit-for-bit from src/core/grid.ts and src/core/rng.ts, so the predicted
-    // spawn matches what the real game will produce.
-
-    /// Derive the 256-bit ChaCha20 key from a per-game seed by XOR-ing with the
-    /// source-embedded `KEY_MATERIAL` (see `deriveKey` in rng.ts). Public so the
-    /// wasm bridge can build it once per request and hand it to the search.
     pub fn derive_key(seed: &[u32]) -> [u32; 8] {
         let mut seed_bytes = [0u8; 32];
         for i in 0..8 {
@@ -1006,13 +820,6 @@ impl Engine {
         key
     }
 
-    /// Predict the single tile the real game will spawn next on `board` (flat,
-    /// `0` = empty), given the ChaCha20 stream at position `calls`. Returns
-    /// `(cell_index, value, draws_consumed)`. `draws_consumed` advances the
-    /// stream for the next ply: 2 for a plain spawn, `2 * min(5, empties)` for a
-    /// manipulated (best-of-5) spawn. `None` only when the board is full. The
-    /// board is probed in place (candidate placed, scored, removed) but restored
-    /// to its original state on return.
     pub fn predict_spawn_flat(
         board: &mut [u32],
         n: usize,
@@ -1058,8 +865,6 @@ impl Engine {
         Some((spot, value, draws))
     }
 
-    /// Max node of the predictive search: the player picks the best move; the
-    /// resulting board is then expanded by the deterministic chance node.
     fn expectimax_max_flat_det(
         board: &mut Vec<u32>,
         n: usize,
@@ -1101,11 +906,6 @@ impl Engine {
         best
     }
 
-    /// Chance node of the predictive search: instead of averaging over many
-    /// possible spawns, peek the *one* spawn the stream will actually produce
-    /// and recurse into the single resulting board. Gates mirror the averaging
-    /// version (budget empty / board full / depth 0 -> heuristic), and the
-    /// stream advances by exactly the draws the spawn consumed.
     fn expectimax_chance_flat_det(
         board: &mut Vec<u32>,
         n: usize,
@@ -1140,8 +940,6 @@ impl Engine {
         v
     }
 
-    /// Best move + value for `grid` under the predictive search, threading the
-    /// RNG stream position (`calls`) so every chance node peeks the right spawn.
     fn best_move_det(
         grid: &Vec<Vec<u32>>,
         depth: usize,
@@ -1182,9 +980,6 @@ impl Engine {
         (best_dir, val)
     }
 
-    /// Predictive counterpart of `suggest_move_for`. Used when RNG Manipulation
-    /// is on: the search peeks the deterministic spawn stream instead of
-    /// averaging over random spawns.
     pub fn suggest_move_det_for(
         grid: &Vec<Vec<u32>>,
         depth: Option<usize>,
@@ -1197,9 +992,6 @@ impl Engine {
         Self::best_move_det(grid, search_depth, &mut budget, key, calls, manipulate).0
     }
 
-    /// Predictive counterpart of `suggest_action_for`. Power-up candidates are
-    /// evaluated with the same deterministic search; a power-up doesn't spawn,
-    /// so its evaluation starts at the same `calls` as the plain move.
     pub fn suggest_action_det_for(
         grid: &Vec<Vec<u32>>,
         swaps_left: u32,
@@ -1277,9 +1069,6 @@ impl Engine {
     }
 }
 
-/// Deterministic strided sample of up to `max` unordered pairs from `occ`, so
-/// swap evaluation stays bounded on large boards. Returns every pair when there
-/// are fewer than `max`.
 fn sampled_pairs(occ: &[(usize, usize)], max: usize) -> Vec<((usize, usize), (usize, usize))> {
     let n = occ.len();
     if n < 2 || max == 0 {
@@ -1304,20 +1093,6 @@ fn sampled_pairs(occ: &[(usize, usize)], max: usize) -> Vec<((usize, usize), (us
     out
 }
 
-// ---------- ChaCha20 DRBG + spawn prediction (predictive AI) ----------
-//
-// Bit-for-bit port of `SecureRng` (src/core/rng.ts) so the predictive search
-// peeks the exact same spawn stream the real game draws from. The key is the
-// per-game seed XOR-ed with `KEY_MATERIAL`; `KEY_MATERIAL` MUST stay identical
-// to the constant in rng.ts or the two streams diverge. The spawn logic
-// (plain draw / best-of-5 under manipulation) is ported from `spawnTile` in
-// src/core/grid.ts; `score_spawn_candidate_flat` mirrors `scoreSpawnCandidate`.
-//
-// Correctness hinge: 2048 tile values are always powers of two, so `log2(v)` is
-// an exact integer. `score_spawn_candidate_flat` therefore uses
-// `trailing_zeros()` in place of `Math.log2` - both yield the same exact
-// integer for powers of two, so the candidate scores (and thus the argmax pick)
-// are bit-identical to the JS version, with no float rounding to drift the pick.
 const KEY_MATERIAL: [u8; 32] = [
     0x9e, 0x37, 0x79, 0xb9, 0x8f, 0x1c, 0x4d, 0xa2, 0x55, 0x71, 0x03, 0x96, 0xc4, 0x6e, 0x20, 0xf1,
     0x4a, 0xd8, 0x7b, 0xe5, 0x19, 0xa0, 0x66, 0x3c, 0xf2, 0x4b, 0x88, 0x0d, 0xe6, 0x11, 0xc7, 0x5a,
@@ -1341,8 +1116,6 @@ fn chacha_quarter_round(x: &mut [u32; 16], a: usize, b: usize, c: usize, d: usiz
     x[b] = rotl32(x[b] ^ x[c], 7);
 }
 
-/// Generate one 64-byte ChaCha20 keystream block (16 uint32 words) for the
-/// given 32-bit block `counter`. Mirrors `chacha20BlockInto` in rng.ts.
 fn chacha20_block(key: &[u32; 8], counter: u32, nonce: &[u32; 2], out: &mut [u32; 16]) {
     let mut s = [0u32; 16];
     s[0..4].copy_from_slice(&CHACHA_SIGMA);
@@ -1367,11 +1140,6 @@ fn chacha20_block(key: &[u32; 8], counter: u32, nonce: &[u32; 2], out: &mut [u32
     }
 }
 
-/// ChaCha20 float generator: `next()` returns the uint32 at stream position
-/// `calls` as `w / 2^32`, advancing `calls` - identical to `SecureRng::next`.
-/// The block holding the current position is cached; a spawn prediction draws a
-/// short contiguous run (<=10 words), so the cache almost always hits and no
-/// per-node state needs threading beyond the `calls` counter.
 struct ChaChaGen<'a> {
     key: &'a [u32; 8],
     block: [u32; 16],
@@ -1397,7 +1165,6 @@ impl<'a> ChaChaGen<'a> {
         }
     }
 
-    /// Next float in [0, 1) with 32-bit precision - identical to `SecureRng::next`.
     fn next(&mut self) -> f64 {
         self.ensure_block();
         let w = self.block[(self.calls % VALUES_PER_BLOCK) as usize];
@@ -1406,9 +1173,6 @@ impl<'a> ChaChaGen<'a> {
     }
 }
 
-/// Port of `scoreSpawnCandidate` (src/core/grid.ts): rewards empty space and
-/// smooth (small-difference) neighbours. `log2` is `trailing_zeros` here - exact
-/// for power-of-two tile values, matching the JS `Math.log2` integer result.
 fn score_spawn_candidate_flat(board: &[u32], n: usize) -> f64 {
     let log = |v: u32| -> f64 {
         if v == 0 {
@@ -1521,9 +1285,6 @@ mod tests {
 
     #[test]
     fn slide_flat_matches_slide_grid() {
-        // Cross-checks the new flat-board AI internals against the existing,
-        // proven `slide_grid` used by real gameplay, on several representative
-        // boards (including a full deadlocked board) and all 4 directions.
         let grids: Vec<Vec<Vec<u32>>> = vec![
             vec![
                 vec![2, 2, 4, 0],
@@ -1575,27 +1336,23 @@ mod tests {
 
     #[test]
     fn action_uses_delete_to_escape_stuck_board() {
-        // Full board, no adjacent equals -> no move possible (game over).
         let grid = vec![
             vec![2, 4, 2, 4],
             vec![4, 2, 4, 2],
             vec![2, 4, 2, 4],
             vec![4, 2, 4, 2],
         ];
-        // Stuck with a delete charge: the AI must spend it to escape.
         let action = Engine::suggest_action_for(&grid, 0, 1, None);
         assert!(
             matches!(action, Action::Delete(_, _)),
             "expected a delete to escape, got {:?}",
             action
         );
-        // Stuck with no charges at all: nothing can be done.
         assert_eq!(Engine::suggest_action_for(&grid, 0, 0, None), Action::None);
     }
 
     #[test]
     fn action_moves_on_comfortable_board() {
-        // Fresh board with two tiles is comfortable -> just move, save charges.
         let engine = Engine::with_size(4).unwrap();
         let grid = engine.grid().clone();
         let action = Engine::suggest_action_for(&grid, 2, 2, None);
@@ -1608,11 +1365,8 @@ mod tests {
 
     #[test]
     fn score_spawn_candidate_matches_grid_ts() {
-        // [[2,0],[0,4]]: 2 empties, no occupied neighbour pairs -> 2*4 + 0 = 8.
         assert_eq!(score_spawn_candidate_flat(&[2, 0, 0, 4], 2), 8.0);
-        // [[2,2],[0,4]]: 1 empty; (0,1)=2 vs down (1,1)=4 -> smoothness -= 1 -> 4 - 1 = 3.
         assert_eq!(score_spawn_candidate_flat(&[2, 2, 0, 4], 2), 3.0);
-        // [[2,4],[0,8]]: 1 empty; (0,0)/(0,1) cost 1 and (0,1)/(1,1) cost 1 -> 4 - 2 = 2.
         assert_eq!(score_spawn_candidate_flat(&[2, 4, 0, 8], 2), 2.0);
     }
 
@@ -1630,7 +1384,6 @@ mod tests {
             let mut board = Engine::flatten(&grid);
             let (idx, value, draws) =
                 Engine::predict_spawn_flat(&mut board, n, &key, 0, manipulate).unwrap();
-            // Board is restored after probing, so the predicted cell is still empty.
             assert_eq!(board[idx], 0, "predicted cell must be empty after probe");
             assert!(
                 value == 2 || value == 4,
@@ -1678,13 +1431,11 @@ mod tests {
 
     #[test]
     fn predict_spawn_plain_consumes_two_draws_regardless_of_position() {
-        // A plain spawn always draws exactly 2 (cell + value), even with 1 empty.
-        let grid = vec![vec![2, 0], vec![4, 8]]; // one empty
+        let grid = vec![vec![2, 0], vec![4, 8]];
         let key = Engine::derive_key(&[9; 8]);
         let mut board = Engine::flatten(&grid);
         let (_, _, draws) = Engine::predict_spawn_flat(&mut board, 2, &key, 3, false).unwrap();
         assert_eq!(draws, 2);
-        // manipulate with a single empty falls through to the plain branch too.
         let (_, _, draws_m) = Engine::predict_spawn_flat(&mut board, 2, &key, 3, true).unwrap();
         assert_eq!(draws_m, 2);
     }
@@ -1734,7 +1485,6 @@ mod tests {
 
     #[test]
     fn game_over_detected_on_locked_board() {
-        // Board full, no adjacent equal tiles in any direction -> game over.
         let mut engine = Engine::with_size(3).unwrap();
         engine.grid = vec![vec![2, 4, 2], vec![4, 2, 4], vec![2, 4, 8]];
         assert!(engine.is_game_over());
@@ -1749,7 +1499,6 @@ mod tests {
         })
         .unwrap();
 
-        // Make 5 moves, only 2 undos should be kept.
         for _ in 0..5 {
             for &dir in Direction::ALL.iter() {
                 if engine.make_move(dir).unwrap().moved {
@@ -1759,15 +1508,11 @@ mod tests {
         }
         assert_eq!(engine.undo_available(), 2);
 
-        // Undo twice should work.
         engine.undo().unwrap();
         engine.undo().unwrap();
 
-        // Third undo should fail.
         assert_eq!(engine.undo(), Err(EngineError::NothingToUndo));
     }
-
-    // ---------- Additional slide_grid edge cases ----------
 
     #[test]
     fn slide_grid_empty_grid() {
@@ -1779,7 +1524,6 @@ mod tests {
 
     #[test]
     fn slide_grid_reverse_direction_right() {
-        // [2,2,4,4] right -> [0,0,4,8]
         let grid = vec![vec![2, 2, 4, 4], vec![0; 4], vec![0; 4], vec![0; 4]];
         let (result, gained) = Engine::slide_grid(&grid, Direction::Right);
         assert_eq!(result[0], vec![0, 0, 4, 8]);
@@ -1788,7 +1532,6 @@ mod tests {
 
     #[test]
     fn slide_grid_up_direction() {
-        // Column 0: [2,2,0,0] up -> [4,0,0,0]
         let mut grid = vec![vec![0; 4]; 4];
         grid[1][0] = 2;
         grid[2][0] = 2;
@@ -1800,7 +1543,6 @@ mod tests {
 
     #[test]
     fn slide_grid_down_direction() {
-        // Column 0: [2,2,0,0] down -> [0,0,0,4]
         let mut grid = vec![vec![0; 4]; 4];
         grid[1][0] = 2;
         grid[2][0] = 2;
@@ -1820,13 +1562,11 @@ mod tests {
         let (result, gained) = Engine::slide_grid(&grid, Direction::Left);
         assert_eq!(result[0], vec![2, 4, 0, 0]);
         assert_eq!(gained, 0);
-        // Empty rows unchanged
         assert_eq!(result[1], vec![0; 4]);
     }
 
     #[test]
     fn slide_flat_matches_slide_grid_all_sizes() {
-        // Extended to sizes beyond 4x4
         let sizes = [3u32, 4, 5, 6, 8];
         for size in sizes {
             let grid: Vec<Vec<u32>> = (0..size)
@@ -1843,11 +1583,8 @@ mod tests {
         }
     }
 
-    // ---------- auto_depth ramp verification ----------
-
     #[test]
     fn auto_depth_floor_is_2() {
-        // Even on a very empty board, depth >= 2
         let grid = vec![vec![0u32; 4]; 4];
         let depth = Engine::auto_depth(&grid);
         assert!(depth >= 2);
@@ -1856,7 +1593,6 @@ mod tests {
     #[test]
     fn auto_depth_deeper_on_dangerous_board() {
         let mut grid = vec![vec![0u32; 4]; 4];
-        // Fill 95% of board (dangerous)
         for r in 0..4 {
             for c in 0..4 {
                 if r != 0 || c != 0 {
@@ -1871,13 +1607,10 @@ mod tests {
 
     #[test]
     fn auto_depth_different_bases_per_size() {
-        // Size 3 base = 6, size 8 base = 1
         let grid3 = vec![vec![0u32; 3]; 3];
         let grid8 = vec![vec![0u32; 8]; 8];
         assert!(Engine::auto_depth(&grid3) > Engine::auto_depth(&grid8));
     }
-
-    // ---------- budget_for_depth ----------
 
     #[test]
     fn budget_for_depth_values() {
@@ -1892,8 +1625,6 @@ mod tests {
         assert_eq!(Engine::budget_for_depth(10), 320_000);
     }
 
-    // ---------- snake_score_flat ----------
-
     #[test]
     fn snake_score_flat_empty_board() {
         let board: Vec<u32> = vec![0; 16];
@@ -1903,18 +1634,15 @@ mod tests {
     #[test]
     fn snake_score_flat_single_corner_tile_positive() {
         let mut board = vec![0u32; 16];
-        board[0] = 2048; // corner tile
+        board[0] = 2048;
         let score = Engine::snake_score_flat(&board, 4);
         assert!(score > 0.0);
     }
-
-    // ---------- sampled_pairs ----------
 
     #[test]
     fn sampled_pairs_returns_all_when_few() {
         let occ: Vec<(usize, usize)> = vec![(0, 0), (0, 1), (1, 0)];
         let pairs = sampled_pairs(&occ, 100);
-        // 3 items -> 3 pairs
         assert_eq!(pairs.len(), 3);
     }
 
@@ -1931,19 +1659,15 @@ mod tests {
         assert!(sampled_pairs(&occ, 10).is_empty());
     }
 
-    // ---------- heuristic_flat component checks ----------
-
     #[test]
     fn heuristic_flat_empty_board_only_empty_term() {
         let board: Vec<u32> = vec![0; 16];
         let h = Engine::heuristic_flat(&board, 4);
-        // Should be positive (empty term contributes)
         assert!(h > 0.0);
     }
 
     #[test]
     fn heuristic_flat_sorted_board_high_score() {
-        // Snake-like sorted board should score well
         let mut board = vec![0u32; 16];
         board[0] = 2048;
         board[1] = 1024;

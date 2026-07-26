@@ -1,22 +1,10 @@
-//! Speed-only benchmark: measures how long each AI configuration takes per decision.
-//! No score / win-rate tracking — just raw timing across board sizes, depths, and states.
-//!
-//! Usage:
-//!   cargo run --release --bin bench-speed          # run all configs
-//!   cargo run --release --bin bench-speed -- 3     # only size 3
-//!   cargo run --release --bin bench-speed -- 4     # only size 4
-//!
-//! Always use `--release`.
-
 use engine2048::Engine;
 use std::env;
 use std::io::Write;
 use std::time::Instant;
 
-/// Board sizes to benchmark.
 const SIZES: [usize; 5] = [3, 4, 5, 6, 8];
 
-/// Search depth overrides: 0 = adaptive auto.
 const DEPTHS: [(usize, &'static str); 4] = [
     (0, "auto"),
     (2, "basic (d=2)"),
@@ -24,7 +12,6 @@ const DEPTHS: [(usize, &'static str); 4] = [
     (6, "advanced (d=6)"),
 ];
 
-/// Number of decisions to average per configuration.
 const DECISIONS_PER_CONFIG: usize = 20;
 
 fn run_phase(_label: &str, grid: Vec<Vec<u32>>, _size: usize, _state: &str) -> u128 {
@@ -60,7 +47,6 @@ fn main() {
     .unwrap();
     writeln!(out).unwrap();
 
-    // Phase 1: Directional move, plain expectimax
     writeln!(
         out,
         "── Phase 1: Directional moves only (plain expectimax) ──"
@@ -85,7 +71,6 @@ fn main() {
         let opening = build_opening_board(size);
         let danger = build_danger_board(size);
 
-        // Auto depth on opening
         let base_us = run_phase("opening", opening.clone(), size, "opening");
         writeln!(
             out,
@@ -94,7 +79,6 @@ fn main() {
         )
         .unwrap();
 
-        // Danger with auto
         let danger_us = run_phase("danger", danger.clone(), size, "danger");
         writeln!(
             out,
@@ -107,7 +91,6 @@ fn main() {
         )
         .unwrap();
 
-        // Fixed depths on danger
         for (_depth, name) in &DEPTHS[1..] {
             let us = run_phase("danger+d", danger.clone(), size, "danger");
             writeln!(
@@ -126,8 +109,6 @@ fn main() {
 
     writeln!(out).unwrap();
 
-    // Phase 2: Full action (with power-up evaluation)
-    // Use a stuck board so power-up evaluation is always triggered.
     writeln!(
         out,
         "── Phase 2: Full action (move + power-up eval, stuck board) ──"
@@ -142,7 +123,6 @@ fn main() {
     writeln!(out, "{}", "─".repeat(50)).unwrap();
     out.flush().unwrap();
 
-    // Stuck board: no legal moves, forces power-up evaluation
     let stuck_4 = vec![
         vec![2, 4, 2, 4],
         vec![4, 2, 4, 2],
@@ -157,7 +137,6 @@ fn main() {
             }
         }
 
-        // Base: plain directional move on the same stuck board
         let base_us = {
             let t0 = Instant::now();
             for _ in 0..DECISIONS_PER_CONFIG {
@@ -187,7 +166,6 @@ fn main() {
 
     writeln!(out).unwrap();
 
-    // Phase 3: Predictive vs plain
     writeln!(out, "── Phase 3: Predictive (manipulate) vs Plain ──").unwrap();
     writeln!(
         out,
@@ -248,7 +226,6 @@ fn main() {
     out.flush().unwrap();
 }
 
-/// Build a board with 2-3 tiles (fresh game state).
 fn build_opening_board(size: usize) -> Vec<Vec<u32>> {
     let mut grid = vec![vec![0u32; size]; size];
     grid[0][0] = 2;
@@ -261,7 +238,6 @@ fn build_opening_board(size: usize) -> Vec<Vec<u32>> {
     grid
 }
 
-/// Build a dangerous, nearly-full board with high tiles.
 fn build_danger_board(size: usize) -> Vec<Vec<u32>> {
     let mut grid = vec![vec![0u32; size]; size];
     let values: Vec<u32> = (1..=(size * size - 3))
@@ -278,7 +254,6 @@ fn build_danger_board(size: usize) -> Vec<Vec<u32>> {
             }
         }
     }
-    // Leave exactly 2 cells empty (maximally dangerous)
     grid[size - 1][size - 1] = 0;
     grid[size - 1][size - 2] = 0;
     grid
