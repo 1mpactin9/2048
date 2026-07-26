@@ -1766,4 +1766,190 @@ mod tests {
         // Third undo should fail.
         assert_eq!(engine.undo(), Err(EngineError::NothingToUndo));
     }
+
+    // ---------- Additional slide_grid edge cases ----------
+
+    #[test]
+    fn slide_grid_empty_grid() {
+        let grid = vec![vec![0; 4]; 4];
+        let (result, gained) = Engine::slide_grid(&grid, Direction::Left);
+        assert_eq!(result, grid);
+        assert_eq!(gained, 0);
+    }
+
+    #[test]
+    fn slide_grid_reverse_direction_right() {
+        // [2,2,4,4] right -> [0,0,4,8]
+        let grid = vec![vec![2, 2, 4, 4], vec![0; 4], vec![0; 4], vec![0; 4]];
+        let (result, gained) = Engine::slide_grid(&grid, Direction::Right);
+        assert_eq!(result[0], vec![0, 0, 4, 8]);
+        assert_eq!(gained, 12);
+    }
+
+    #[test]
+    fn slide_grid_up_direction() {
+        // Column 0: [2,2,0,0] up -> [4,0,0,0]
+        let mut grid = vec![vec![0; 4]; 4];
+        grid[1][0] = 2;
+        grid[2][0] = 2;
+        let (result, gained) = Engine::slide_grid(&grid, Direction::Up);
+        assert_eq!(result[0][0], 4);
+        assert_eq!(result[1][0], 0);
+        assert_eq!(gained, 4);
+    }
+
+    #[test]
+    fn slide_grid_down_direction() {
+        // Column 0: [2,2,0,0] down -> [0,0,0,4]
+        let mut grid = vec![vec![0; 4]; 4];
+        grid[1][0] = 2;
+        grid[2][0] = 2;
+        let (result, gained) = Engine::slide_grid(&grid, Direction::Down);
+        assert_eq!(result[3][0], 4);
+        assert_eq!(gained, 4);
+    }
+
+    #[test]
+    fn slide_grid_empty_rows_pass_through() {
+        let grid = vec![
+            vec![2, 0, 4, 0],
+            vec![0, 0, 0, 0],
+            vec![0, 0, 0, 0],
+            vec![0, 0, 0, 0],
+        ];
+        let (result, gained) = Engine::slide_grid(&grid, Direction::Left);
+        assert_eq!(result[0], vec![2, 4, 0, 0]);
+        assert_eq!(gained, 0);
+        // Empty rows unchanged
+        assert_eq!(result[1], vec![0; 4]);
+    }
+
+    #[test]
+    fn slide_flat_matches_slide_grid_all_sizes() {
+        // Extended to sizes beyond 4x4
+        let sizes = [3u32, 4, 5, 6, 8];
+        for size in sizes {
+            let grid: Vec<Vec<u32>> = (0..size)
+                .map(|r| (0..size).map(|c| ((r * size + c + 1) as u32) * 2).collect())
+                .collect();
+            let board = Engine::flatten(&grid);
+            for &dir in Direction::ALL.iter() {
+                let (expected_grid, expected_gain) = Engine::slide_grid(&grid, dir);
+                let (flat_result, flat_gain) = Engine::slide_flat(&board, size as usize, dir);
+                let expected_flat = Engine::flatten(&expected_grid);
+                assert_eq!(flat_result, expected_flat, "size {} dir {:?}", size, dir);
+                assert_eq!(flat_gain, expected_gain, "size {} dir gain {:?}", size, dir);
+            }
+        }
+    }
+
+    // ---------- auto_depth ramp verification ----------
+
+    #[test]
+    fn auto_depth_floor_is_2() {
+        // Even on a very empty board, depth >= 2
+        let grid = vec![vec![0u32; 4]; 4];
+        let depth = Engine::auto_depth(&grid);
+        assert!(depth >= 2);
+    }
+
+    #[test]
+    fn auto_depth_deeper_on_dangerous_board() {
+        let mut grid = vec![vec![0u32; 4]; 4];
+        // Fill 95% of board (dangerous)
+        for r in 0..4 {
+            for c in 0..4 {
+                if r != 0 || c != 0 {
+                    grid[r][c] = 2;
+                }
+            }
+        }
+        let deep = Engine::auto_depth(&grid);
+        let empty = Engine::auto_depth(&vec![vec![0u32; 4]; 4]);
+        assert!(deep > empty);
+    }
+
+    #[test]
+    fn auto_depth_different_bases_per_size() {
+        // Size 3 base = 6, size 8 base = 1
+        let grid3 = vec![vec![0u32; 3]; 3];
+        let grid8 = vec![vec![0u32; 8]; 8];
+        assert!(Engine::auto_depth(&grid3) > Engine::auto_depth(&grid8));
+    }
+
+    // ---------- budget_for_depth ----------
+
+    #[test]
+    fn budget_for_depth_values() {
+        assert_eq!(Engine::budget_for_depth(0), 15_000);
+        assert_eq!(Engine::budget_for_depth(2), 15_000);
+        assert_eq!(Engine::budget_for_depth(3), 40_000);
+        assert_eq!(Engine::budget_for_depth(4), 90_000);
+        assert_eq!(Engine::budget_for_depth(5), 150_000);
+        assert_eq!(Engine::budget_for_depth(6), 150_000);
+        assert_eq!(Engine::budget_for_depth(7), 220_000);
+        assert_eq!(Engine::budget_for_depth(8), 220_000);
+        assert_eq!(Engine::budget_for_depth(10), 320_000);
+    }
+
+    // ---------- snake_score_flat ----------
+
+    #[test]
+    fn snake_score_flat_empty_board() {
+        let board: Vec<u32> = vec![0; 16];
+        assert_eq!(Engine::snake_score_flat(&board, 4), 0.0);
+    }
+
+    #[test]
+    fn snake_score_flat_single_corner_tile_positive() {
+        let mut board = vec![0u32; 16];
+        board[0] = 2048; // corner tile
+        let score = Engine::snake_score_flat(&board, 4);
+        assert!(score > 0.0);
+    }
+
+    // ---------- sampled_pairs ----------
+
+    #[test]
+    fn sampled_pairs_returns_all_when_few() {
+        let occ: Vec<(usize, usize)> = vec![(0, 0), (0, 1), (1, 0)];
+        let pairs = sampled_pairs(&occ, 100);
+        // 3 items -> 3 pairs
+        assert_eq!(pairs.len(), 3);
+    }
+
+    #[test]
+    fn sampled_pairs_caps_at_max() {
+        let occ: Vec<(usize, usize)> = (0..20).map(|i| (i, 0)).collect();
+        let pairs = sampled_pairs(&occ, 5);
+        assert!(pairs.len() <= 5);
+    }
+
+    #[test]
+    fn sampled_pairs_empty_input() {
+        let occ: Vec<(usize, usize)> = vec![];
+        assert!(sampled_pairs(&occ, 10).is_empty());
+    }
+
+    // ---------- heuristic_flat component checks ----------
+
+    #[test]
+    fn heuristic_flat_empty_board_only_empty_term() {
+        let board: Vec<u32> = vec![0; 16];
+        let h = Engine::heuristic_flat(&board, 4);
+        // Should be positive (empty term contributes)
+        assert!(h > 0.0);
+    }
+
+    #[test]
+    fn heuristic_flat_sorted_board_high_score() {
+        // Snake-like sorted board should score well
+        let mut board = vec![0u32; 16];
+        board[0] = 2048;
+        board[1] = 1024;
+        board[3] = 512;
+        board[2] = 256;
+        let h = Engine::heuristic_flat(&board, 4);
+        assert!(h > 0.0);
+    }
 }

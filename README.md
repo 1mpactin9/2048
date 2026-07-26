@@ -48,7 +48,7 @@ npm run build
 ## Verification
 
 ```bash
-# run test suite
+# run test suite (281+ tests across core logic, UI, RNG, storage, engine, and Rust/WASM parity)
 npm test
 
 # build and preview
@@ -62,6 +62,7 @@ In the preview, check:
 - **WASM engine** — Rust expectimax AI runs in a Web Worker without console errors
 - **Theme toggle** — light/dark mode switches cleanly
 - **Responsive** — board scales on different viewport sizes
+- **Merge animation** — tiles briefly fade during merges for smoother visual feedback
 
 ## Reference
 

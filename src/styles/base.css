@@ -42,7 +42,7 @@ button:disabled {
   border-radius: 6px;
 }
 
-/* ---------- Theme tokens ---------- */
+/* Theme tokens */
 :root,
 :root[data-theme="light"] {
   /* core surfaces */

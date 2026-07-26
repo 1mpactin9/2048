@@ -6,23 +6,21 @@ export const DEFAULT_SIZE: Size = 4;
 
 export const DEFAULT_MODE = "standard" as const;
 
-/** Reaching this tile shows the win banner (you may keep playing). */
+// Reaching this tile shows the win banner (you may keep playing).
 export const WIN_VALUE = 2048;
 
-/** Probability that a newly spawned tile is a 4 (otherwise a 2). */
+// Probability that a newly spawned tile is a 4 (otherwise a 2).
 export const SPAWN_PROB_4 = 0.1;
 
-/** Powerup charges granted at the start of each Standard game. */
+// Powerup charges granted at the start of each Standard game.
 export const POWERUP_QUOTA: Powerups = { undo: 2, swap: 2, delete: 2 };
 
-/** Bounded undo history so storage stays small. */
+// Bounded undo history so storage stays small.
 export const MAX_HISTORY = 16;
 
-/**
- * Tile colors per value, exposed as CSS custom-property references so the
- * palette can adapt per theme (see --tile-* in base.css).  Values above 2048
- * fall back to SUPER_TILE.
- */
+// Tile colors per value, exposed as CSS custom-property references so the
+// palette adapts per theme (see --tile-* in base.css). Values above 2048
+// fall back to SUPER_TILE.
 export const TILE_COLORS: Record<number, { bg: string; fg: string }> = {
   2: { bg: "var(--tile-2-bg)", fg: "var(--tile-2-fg)" },
   4: { bg: "var(--tile-4-bg)", fg: "var(--tile-4-fg)" },

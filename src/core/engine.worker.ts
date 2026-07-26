@@ -1,6 +1,5 @@
 /** Web Worker host for the Rust expectimax AI. Moves off-thread search so the UI stays responsive. */
 import init, {
-import init, {
   suggest_move,
   suggest_action,
   suggest_move_det,

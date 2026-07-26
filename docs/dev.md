@@ -488,15 +488,25 @@ All colors use CSS custom properties defined in `:root` (light) and `:root[data-
 
 ## Tests
 
-Test suite lives in `tests/` and runs with Vitest in Node environment:
+Test suite lives in `tests/` and runs with Vitest in Node environment (jsdom for UI tests):
 
 | Test File | Coverage |
 |-----------|----------|
-| `tests/core.test.ts` | Grid operations, spawn logic, move resolution, canMove, hasMoves, maxTile, hasTile, grid helpers |
-| `tests/predict.test.ts` | ChaCha20 RNG predictability, spawn prediction accuracy, manipulation mode behavior |
-| `tests/validate.test.ts` | Score window validation, position consistency checks |
+| `tests/core.test.ts` | Move resolution, grid helpers, GameSession powerups, storage round-trip |
+| `tests/session.test.ts` | Full GameSession lifecycle: newGame, applyMove, undo chain, swap/delete, restoreSession, delta history, canUndo/Swap/Delete getters |
+| `tests/grid-edge.test.ts` | emptyCells, isFull, maxTile, hasTile, gridFromValues/ToValues, setNextId/peekNextId, spawnTile manipulation scoring |
+| `tests/rng.test.ts` | SecureRng determinism, block boundary crossing, float range, key derivation, stream resumption |
+| `tests/engine.test.ts` | PlaceholderEngine legal moves, WasmEngine fallback, decodeAction, engine interface contract |
+| `tests/storage.test.ts` | load with corrupted JSON, version mismatch, partial settings, multi-game round-trip, clearGames |
+| `tests/move-deep.test.ts` | Transcript correctness (mergedInto/newValue), all 4 directions, cascading merges, cloneGrid independence, gridsEqual, canMove edge cases |
+| `tests/ui/board.test.ts` | BoardRenderer constructor, setSize, fullRender, animateMove, animateSwap, select mode, destroy |
+| `tests/ui/input.test.ts` | Keyboard mapping (arrows/WASD), touch swipe detection, shortcut keys, destroy cleanup |
+| `tests/ui/theme.test.ts` | initTheme, setThemePref, toggleTheme, currentResolved, currentThemePref |
+| `tests/ui/notify.test.ts` | NotificationCenter card creation, icon/close button/progress bar, dismiss behavior |
+| `tests/predict.test.ts` | Rust predict_spawn vs JS spawnTile cross-language parity |
+| `tests/validate.test.ts` | tileScoreRange, scoreWindow, validatePosition, clampScoreToWindow, planBypass, keepBetter priority |
 
-Run with `npm test` or `npm run test:watch`.
+Run with `npm test` or `npm run test:watch`. 281+ tests covering core logic, UI components, RNG, storage, and Rust-WASM parity.
 
 ## Build Pipeline
 

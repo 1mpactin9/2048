@@ -8,7 +8,7 @@
   border-radius: calc(var(--gap, 10px) * 1.6);
   padding: var(--gap, 10px);
   box-shadow: var(--shadow-board);
-  touch-action: none; /* capture swipes on the board */
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -31,15 +31,15 @@
 .board__tiles {
   position: absolute;
   inset: var(--gap, 10px);
-  pointer-events: none; /* let clicks fall through to the board unless a tile arms selection */
+  pointer-events: none;
 }
 
 .board.is-selecting .board__tiles {
   pointer-events: auto;
 }
 
-// Frozen: game is over - the board is iced over and locked. The overlay is
-// pointer-events:none so it never blocks swap/delete selection.
+/* Frozen: game is over - the board is iced over and locked. The overlay is
+   pointer-events:none so it never blocks swap/delete selection. */
 .board.is-frozen .board__tiles {
   filter: saturate(0.82) brightness(0.97);
 }
@@ -89,7 +89,7 @@
   line-height: 1;
 }
 
-/* digit-count font scaling */
+/* Digit-count font scaling */
 .tile__face--d1 {
   --ff: 0.45;
 }
@@ -129,13 +129,15 @@
 @keyframes tile-pop {
   0% {
     transform: scale(1.03);
+    opacity: 0.55;
   }
   100% {
     transform: scale(1);
+    opacity: 1;
   }
 }
 
-/* highlight a tile while choosing swap/delete targets */
+/* Highlight a tile while choosing swap/delete targets */
 .tile.is-targetable .tile__face {
   outline: 2px solid var(--accent);
   outline-offset: -3px;
@@ -159,7 +161,7 @@
   }
 }
 
-/* score bump animation */
+/* Score bump animation */
 .score-box__value.is-bump {
   animation: score-bump 0.18s ease-out;
 }
