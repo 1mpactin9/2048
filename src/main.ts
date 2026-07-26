@@ -6,8 +6,7 @@ import "./styles/main.css";
 declare global {
   interface Window {
     __app?: App;
-    __runAutoLoop: (score: number) => void;
-    __dev: {
+    dev: {
       undo(steps?: number): void;
       delete(row: number, col: number): void;
       deleteValue(n: number): void;
@@ -63,6 +62,8 @@ declare global {
       log(fn: (...args: unknown[]) => unknown, intervalMs?: number): number;
       stopLog(id?: number): void;
       callNative(methodName: string, ...args: unknown[]): unknown;
+      afkHighScore(): Promise<void>;
+      runAutoLoop(score: number): void;
       _timers: Map<number, ReturnType<typeof setInterval>>;
       _nextId: number;
     };
@@ -79,15 +80,7 @@ function boot(): App {
 
 let app = boot();
 
-window.__runAutoLoop = (score: number) => {
-  if (!window.__app) {
-    console.warn("[2048] App not ready yet");
-    return;
-  }
-  window.__app.runAutoLoop(score);
-};
-
-window.__dev = {
+window.dev = {
   undo: (steps?: number) => window.__app?.__undo(steps),
   delete: (r: number, c: number) => window.__app?.__delete(r, c),
   deleteValue: (n: number) => window.__app?.__deleteValue(n),
@@ -115,6 +108,8 @@ window.__dev = {
   fixBest: () => window.__app?.__fixBest(),
   refreshScore: () => window.__app?.__refreshScore(),
   refreshPlayAgainStatus: () => window.__app?.__refreshPlayAgainStatus(),
+  afkHighScore: () => window.__app?.__afkHighScore() as Promise<void>,
+  runAutoLoop: (score: number) => window.__app?.runAutoLoop(score),
   _timers: new Map<number, ReturnType<typeof setInterval>>(),
   _nextId: 1,
   log: function (
@@ -123,7 +118,7 @@ window.__dev = {
   ): number {
     const app = window.__app;
     if (!app) {
-      console.warn("[2048] App not ready for __dev.log");
+      console.warn("[2048] App not ready for dev.log");
       return -1;
     }
     const id = this._nextId++;
@@ -166,7 +161,7 @@ window.__dev = {
   callNative: function (methodName: string, ...args: unknown[]): unknown {
     const app = window.__app;
     if (!app) {
-      console.warn("[2048] App not ready for __dev.callNative");
+      console.warn("[2048] App not ready for dev.callNative");
       return undefined;
     }
     const method = (app as unknown as Record<string, unknown>)[methodName];
