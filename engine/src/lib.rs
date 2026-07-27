@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 
-const SEARCH_NODE_BUDGET: u64 = 150_000;
+const SEARCH_NODE_BUDGET: u64 = 500_000;
 const ENDGAME_EMPTY_THRESHOLD: usize = 2;
 const ENDGAME_EXTRA_DEPTH: usize = 30;
 
@@ -409,7 +409,8 @@ impl Engine {
     }
 
     pub fn suggest_move_for(grid: &Vec<Vec<u32>>, depth: Option<usize>) -> Option<Direction> {
-        let search_depth = Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
+        let search_depth =
+            Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
         let mut budget = Self::budget_for_depth(search_depth);
         Self::best_move(grid, search_depth, &mut budget).0
     }
@@ -429,13 +430,15 @@ impl Engine {
         let board = Self::flatten(grid);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
+        let mut new_board = [0u32; 256];
         for &dir in Direction::ALL.iter() {
-            let (mut new_board, gained) = Self::slide_flat(&board, n, dir);
-            if new_board == board {
+            let slice = &mut new_board[..n * n];
+            let gained = Self::slide_flat_into(&board, n, dir, slice);
+            if slice == board {
                 continue;
             }
             let value = gained as f64
-                + Self::expectimax_chance_flat(&mut new_board, n, depth.saturating_sub(1), budget);
+                + Self::expectimax_chance_flat(slice, n, depth.saturating_sub(1), budget);
             if value > best_val {
                 best_val = value;
                 best_dir = Some(dir);
@@ -571,64 +574,67 @@ impl Engine {
 
     fn budget_for_depth(depth: usize) -> u64 {
         match depth {
-            0..=2 => 15_000,
-            3 => 40_000,
-            4 => 90_000,
+            0..=2 => 25_000,
+            3 => 80_000,
+            4 => 200_000,
             5..=6 => SEARCH_NODE_BUDGET,
-            7..=8 => 220_000,
-            _ => 320_000,
+            7..=8 => 800_000,
+            _ => 1_500_000,
         }
     }
 
     fn slide_flat(board: &[u32], n: usize, dir: Direction) -> (Vec<u32>, u64) {
         let mut result = vec![0u32; n * n];
+        let gained = Self::slide_flat_into(board, n, dir, &mut result);
+        (result, gained)
+    }
+
+    fn slide_flat_into(board: &[u32], n: usize, dir: Direction, result: &mut [u32]) -> u64 {
         let mut gained: u64 = 0;
-
-        let lines: Vec<Vec<usize>> = match dir {
-            Direction::Left => (0..n)
-                .map(|r| (0..n).map(|c| r * n + c).collect())
-                .collect(),
-            Direction::Right => (0..n)
-                .map(|r| (0..n).rev().map(|c| r * n + c).collect())
-                .collect(),
-            Direction::Up => (0..n)
-                .map(|c| (0..n).map(|r| r * n + c).collect())
-                .collect(),
-            Direction::Down => (0..n)
-                .map(|c| (0..n).rev().map(|r| r * n + c).collect())
-                .collect(),
-        };
-
-        for line in lines {
-            let values: Vec<u32> = line
-                .iter()
-                .map(|&idx| board[idx])
-                .filter(|&v| v != 0)
-                .collect();
-
-            let mut merged: Vec<u32> = Vec::with_capacity(values.len());
-            let mut i = 0;
-            while i < values.len() {
-                if i + 1 < values.len() && values[i] == values[i + 1] {
-                    let m = values[i] * 2;
-                    merged.push(m);
-                    gained += m as u64;
-                    i += 2;
-                } else {
-                    merged.push(values[i]);
-                    i += 1;
+        for i in 0..n {
+            let mut values = [0u32; 16];
+            let mut v_count = 0;
+            for j in 0..n {
+                let idx = match dir {
+                    Direction::Left => i * n + j,
+                    Direction::Right => i * n + (n - 1 - j),
+                    Direction::Up => j * n + i,
+                    Direction::Down => (n - 1 - j) * n + i,
+                };
+                if board[idx] != 0 && v_count < 16 {
+                    values[v_count] = board[idx];
+                    v_count += 1;
                 }
             }
-            while merged.len() < n {
-                merged.push(0);
+
+            let mut merged = [0u32; 16];
+            let mut m_count = 0;
+            let mut k = 0;
+            while k < v_count {
+                if k + 1 < v_count && values[k] == values[k + 1] {
+                    let m = values[k] * 2;
+                    merged[m_count] = m;
+                    gained += m as u64;
+                    m_count += 1;
+                    k += 2;
+                } else {
+                    merged[m_count] = values[k];
+                    m_count += 1;
+                    k += 1;
+                }
             }
 
-            for (k, &idx) in line.iter().enumerate() {
-                result[idx] = merged[k];
+            for j in 0..n {
+                let idx = match dir {
+                    Direction::Left => i * n + j,
+                    Direction::Right => i * n + (n - 1 - j),
+                    Direction::Up => j * n + i,
+                    Direction::Down => (n - 1 - j) * n + i,
+                };
+                result[idx] = if j < m_count { merged[j] } else { 0 };
             }
         }
-
-        (result, gained)
+        gained
     }
 
     fn expectimax_max_flat(board: &[u32], n: usize, depth: usize, budget: &mut u64) -> f64 {
@@ -642,14 +648,16 @@ impl Engine {
         *budget -= 1;
         let mut best = f64::NEG_INFINITY;
         let mut any_move = false;
+        let mut new_board = [0u32; 256];
         for &dir in Direction::ALL.iter() {
-            let (mut new_board, gained) = Self::slide_flat(board, n, dir);
-            if new_board.as_slice() == board {
+            let slice = &mut new_board[..n * n];
+            let gained = Self::slide_flat_into(board, n, dir, slice);
+            if slice == board {
                 continue;
             }
             any_move = true;
             let v = gained as f64
-                + Self::expectimax_chance_flat(&mut new_board, n, depth.saturating_sub(1), budget);
+                + Self::expectimax_chance_flat(slice, n, depth.saturating_sub(1), budget);
             if v > best {
                 best = v;
             }
@@ -659,23 +667,20 @@ impl Engine {
         result
     }
 
-    fn expectimax_chance_flat(
-        board: &mut Vec<u32>,
-        n: usize,
-        depth: usize,
-        budget: &mut u64,
-    ) -> f64 {
+    fn expectimax_chance_flat(board: &mut [u32], n: usize, depth: usize, budget: &mut u64) -> f64 {
         if *budget == 0 {
-            return Self::heuristic_flat(&*board, n);
+            return Self::heuristic_flat(board, n);
         }
-        let mut empties: Vec<usize> = Vec::new();
+        let mut empties = [0usize; 256];
+        let mut num_empties = 0;
         for (idx, &v) in board.iter().enumerate() {
             if v == 0 {
-                empties.push(idx);
+                empties[num_empties] = idx;
+                num_empties += 1;
             }
         }
-        if empties.is_empty() || depth == 0 {
-            return Self::heuristic_flat(&*board, n);
+        if num_empties == 0 || depth == 0 {
+            return Self::heuristic_flat(board, n);
         }
         let key = (board_hash(board), depth);
         if let Some(cached) = TT.with(|c| c.borrow().get(&key).copied()) {
@@ -684,23 +689,29 @@ impl Engine {
         *budget -= 1;
 
         const MAX_CELLS: usize = 6;
-        let sampled: Vec<usize> = if empties.len() <= MAX_CELLS {
-            empties.clone()
+        let mut sampled = [0usize; MAX_CELLS];
+        let sampled_len = if num_empties <= MAX_CELLS {
+            for i in 0..num_empties {
+                sampled[i] = empties[i];
+            }
+            num_empties
         } else {
-            let stride = empties.len() as f64 / MAX_CELLS as f64;
-            (0..MAX_CELLS)
-                .map(|i| empties[(i as f64 * stride) as usize])
-                .collect()
+            let stride = num_empties as f64 / MAX_CELLS as f64;
+            for i in 0..MAX_CELLS {
+                sampled[i] = empties[(i as f64 * stride) as usize];
+            }
+            MAX_CELLS
         };
 
         let mut total = 0.0;
-        let weight_each = 1.0 / sampled.len() as f64;
+        let weight_each = 1.0 / sampled_len as f64;
         let next_depth = depth.saturating_sub(1);
-        for &idx in &sampled {
+        for i in 0..sampled_len {
+            let idx = sampled[i];
             board[idx] = 2;
-            let v2 = Self::expectimax_max_flat(&*board, n, next_depth, budget);
+            let v2 = Self::expectimax_max_flat(board, n, next_depth, budget);
             board[idx] = 4;
-            let v4 = Self::expectimax_max_flat(&*board, n, next_depth, budget);
+            let v4 = Self::expectimax_max_flat(board, n, next_depth, budget);
             board[idx] = 0;
 
             total += weight_each * (0.9 * v2 + 0.1 * v4);
@@ -710,13 +721,18 @@ impl Engine {
     }
 
     fn heuristic_flat(board: &[u32], n: usize) -> f64 {
-        let empty = board.iter().filter(|&&v| v == 0).count() as f64;
+        let mut empty = 0.0;
+        for &v in board.iter() {
+            if v == 0 {
+                empty += 1.0;
+            }
+        }
 
         let log = |v: u32| -> f64 {
             if v == 0 {
                 0.0
             } else {
-                (v as f64).log2()
+                v.trailing_zeros() as f64
             }
         };
 
@@ -728,11 +744,23 @@ impl Engine {
                     continue;
                 }
                 let v = log(v_raw);
-                if c + 1 < n && board[r * n + c + 1] != 0 {
-                    smoothness -= (v - log(board[r * n + c + 1])).abs();
+                if c + 1 < n {
+                    let mut next_c = c + 1;
+                    while next_c < n && board[r * n + next_c] == 0 {
+                        next_c += 1;
+                    }
+                    if next_c < n {
+                        smoothness -= (v - log(board[r * n + next_c])).abs();
+                    }
                 }
-                if r + 1 < n && board[(r + 1) * n + c] != 0 {
-                    smoothness -= (v - log(board[(r + 1) * n + c])).abs();
+                if r + 1 < n {
+                    let mut next_r = r + 1;
+                    while next_r < n && board[next_r * n + c] == 0 {
+                        next_r += 1;
+                    }
+                    if next_r < n {
+                        smoothness -= (v - log(board[next_r * n + c])).abs();
+                    }
                 }
             }
         }
@@ -772,7 +800,7 @@ impl Engine {
         const W_SMOOTH: f64 = 11.0;
         const W_SNAKE: f64 = 46.0;
 
-        W_EMPTY * (empty + 1.0).log2()
+        W_EMPTY * (empty + 1.0f64).log2()
             + W_MONO * mono
             + W_SMOOTH * smoothness
             + W_SNAKE * Self::snake_score_flat(board, n)
@@ -782,56 +810,48 @@ impl Engine {
         if n == 0 {
             return 0.0;
         }
-        let log = |v: u32| -> f64 {
-            if v == 0 {
-                0.0
-            } else {
-                (v as f64).log2()
-            }
-        };
 
-        const RATIO: f64 = 0.5;
-        let mut weight = vec![0.0f64; n * n];
+        let mut scores = [0.0f64; 4];
         let mut w = 1.0f64;
+        const RATIO: f64 = 0.5;
+
         for r in 0..n {
-            let cols: Box<dyn Iterator<Item = usize>> = if r % 2 == 0 {
-                Box::new(0..n)
-            } else {
-                Box::new((0..n).rev())
-            };
-            for c in cols {
-                weight[r * n + c] = w;
+            for c_idx in 0..n {
+                let c = if r % 2 == 0 { c_idx } else { n - 1 - c_idx };
+
+                let v = board[r * n + c];
+                scores[0] += (if v == 0 {
+                    0.0
+                } else {
+                    v.trailing_zeros() as f64
+                }) * w;
+
+                let v90 = board[c * n + (n - 1 - r)];
+                scores[1] += (if v90 == 0 {
+                    0.0
+                } else {
+                    v90.trailing_zeros() as f64
+                }) * w;
+
+                let v180 = board[(n - 1 - r) * n + (n - 1 - c)];
+                scores[2] += (if v180 == 0 {
+                    0.0
+                } else {
+                    v180.trailing_zeros() as f64
+                }) * w;
+
+                let v270 = board[(n - 1 - c) * n + r];
+                scores[3] += (if v270 == 0 {
+                    0.0
+                } else {
+                    v270.trailing_zeros() as f64
+                }) * w;
+
                 w *= RATIO;
             }
         }
 
-        let dot = |wgt: &Vec<f64>| -> f64 {
-            let mut s = 0.0;
-            for r in 0..n {
-                for c in 0..n {
-                    s += log(board[r * n + c]) * wgt[r * n + c];
-                }
-            }
-            s
-        };
-        let rotate = |wgt: &Vec<f64>| -> Vec<f64> {
-            let mut out = vec![0.0f64; n * n];
-            for r in 0..n {
-                for c in 0..n {
-                    out[c * n + (n - 1 - r)] = wgt[r * n + c];
-                }
-            }
-            out
-        };
-
-        let w0 = weight;
-        let w90 = rotate(&w0);
-        let w180 = rotate(&w90);
-        let w270 = rotate(&w180);
-
-        [dot(&w0), dot(&w90), dot(&w180), dot(&w270)]
-            .into_iter()
-            .fold(f64::NEG_INFINITY, f64::max)
+        scores.iter().copied().fold(f64::NEG_INFINITY, f64::max)
     }
 
     pub fn derive_key(seed: &[u32]) -> [u32; 8] {
@@ -863,24 +883,26 @@ impl Engine {
         calls: u64,
         manipulate: bool,
     ) -> Option<(usize, u32, u64)> {
-        let mut empties: Vec<usize> = Vec::new();
+        let mut empties = [0usize; 256];
+        let mut num_empties = 0;
         for (idx, &v) in board.iter().enumerate() {
             if v == 0 {
-                empties.push(idx);
+                empties[num_empties] = idx;
+                num_empties += 1;
             }
         }
-        if empties.is_empty() {
+        if num_empties == 0 {
             return None;
         }
         let mut rng = ChaChaGen::new(key, calls);
         const PROB_4: f64 = 0.1;
-        let (spot, value) = if manipulate && empties.len() > 1 {
-            let rounds = 5_usize.min(empties.len());
+        let (spot, value) = if manipulate && num_empties > 1 {
+            let rounds = 5_usize.min(num_empties);
             let mut best_spot = empties[0];
             let mut best_value: u32 = 2;
             let mut best_score = f64::NEG_INFINITY;
             for _ in 0..rounds {
-                let cand_spot = empties[(rng.next() * empties.len() as f64) as usize];
+                let cand_spot = empties[(rng.next() * num_empties as f64) as usize];
                 let cand_value: u32 = if rng.next() < PROB_4 { 4 } else { 2 };
                 board[cand_spot] = cand_value;
                 let score = score_spawn_candidate_flat(board, n);
@@ -893,7 +915,7 @@ impl Engine {
             }
             (best_spot, best_value)
         } else {
-            let spot = empties[(rng.next() * empties.len() as f64) as usize];
+            let spot = empties[(rng.next() * num_empties as f64) as usize];
             let value: u32 = if rng.next() < PROB_4 { 4 } else { 2 };
             (spot, value)
         };
@@ -902,7 +924,7 @@ impl Engine {
     }
 
     fn expectimax_max_flat_det(
-        board: &mut Vec<u32>,
+        board: &mut [u32],
         n: usize,
         depth: usize,
         budget: &mut u64,
@@ -916,15 +938,17 @@ impl Engine {
         *budget -= 1;
         let mut best = f64::NEG_INFINITY;
         let mut any_move = false;
+        let mut new_board = [0u32; 256];
         for &dir in Direction::ALL.iter() {
-            let (mut new_board, gained) = Self::slide_flat(board, n, dir);
-            if new_board.as_slice() == board {
+            let slice = &mut new_board[..n * n];
+            let gained = Self::slide_flat_into(board, n, dir, slice);
+            if slice == board {
                 continue;
             }
             any_move = true;
             let v = gained as f64
                 + Self::expectimax_chance_flat_det(
-                    &mut new_board,
+                    slice,
                     n,
                     depth.saturating_sub(1),
                     budget,
@@ -943,7 +967,7 @@ impl Engine {
     }
 
     fn expectimax_chance_flat_det(
-        board: &mut Vec<u32>,
+        board: &mut [u32],
         n: usize,
         depth: usize,
         budget: &mut u64,
@@ -952,16 +976,15 @@ impl Engine {
         manipulate: bool,
     ) -> f64 {
         if *budget == 0 {
-            return Self::heuristic_flat(&*board, n);
+            return Self::heuristic_flat(board, n);
         }
         let empties = board.iter().filter(|&&v| v == 0).count();
         if empties == 0 || depth == 0 {
-            return Self::heuristic_flat(&*board, n);
+            return Self::heuristic_flat(board, n);
         }
         *budget -= 1;
-        let (idx, value, draws) =
-            Self::predict_spawn_flat(&mut board[..], n, key, calls, manipulate)
-                .expect("non-empty board has a spawn");
+        let (idx, value, draws) = Self::predict_spawn_flat(board, n, key, calls, manipulate)
+            .expect("non-empty board has a spawn");
         board[idx] = value;
         let v = Self::expectimax_max_flat_det(
             board,
@@ -988,14 +1011,16 @@ impl Engine {
         let board = Self::flatten(grid);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
+        let mut new_board = [0u32; 256];
         for &dir in Direction::ALL.iter() {
-            let (mut new_board, gained) = Self::slide_flat(&board, n, dir);
-            if new_board == board {
+            let slice = &mut new_board[..n * n];
+            let gained = Self::slide_flat_into(&board, n, dir, slice);
+            if slice == board {
                 continue;
             }
             let value = gained as f64
                 + Self::expectimax_chance_flat_det(
-                    &mut new_board,
+                    slice,
                     n,
                     depth.saturating_sub(1),
                     budget,
@@ -1023,7 +1048,8 @@ impl Engine {
         calls: u64,
         manipulate: bool,
     ) -> Option<Direction> {
-        let search_depth = Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
+        let search_depth =
+            Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
         let mut budget = Self::budget_for_depth(search_depth);
         Self::best_move_det(grid, search_depth, &mut budget, key, calls, manipulate).0
     }
@@ -1228,15 +1254,21 @@ fn score_spawn_candidate_flat(board: &[u32], n: usize) -> f64 {
             }
             let v = log(v_raw);
             if c + 1 < n {
-                let right = board[r * n + c + 1];
-                if right != 0 {
-                    smoothness -= (v - log(right)).abs();
+                let mut right_c = c + 1;
+                while right_c < n && board[r * n + right_c] == 0 {
+                    right_c += 1;
+                }
+                if right_c < n {
+                    smoothness -= (v - log(board[r * n + right_c])).abs();
                 }
             }
             if r + 1 < n {
-                let down = board[(r + 1) * n + c];
-                if down != 0 {
-                    smoothness -= (v - log(down)).abs();
+                let mut down_r = r + 1;
+                while down_r < n && board[down_r * n + c] == 0 {
+                    down_r += 1;
+                }
+                if down_r < n {
+                    smoothness -= (v - log(board[down_r * n + c])).abs();
                 }
             }
         }

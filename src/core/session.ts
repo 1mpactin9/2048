@@ -32,7 +32,6 @@ function emptyPowerups(): Powerups {
 export class GameSession {
   state: GameState;
   private rng: () => number;
-  /** Toggle RNG Manipulation for subsequent spawns. */
   private manipulate = false;
 
   constructor(state: GameState, rng?: () => number) {
@@ -53,7 +52,6 @@ export class GameSession {
     }
   }
 
-  /** Toggle RNG Manipulation for subsequent spawns. */
   setRngManipulation(on: boolean): void {
     this.manipulate = on;
   }
@@ -206,7 +204,6 @@ export class GameSession {
     return true;
   }
 
-  /** Remove a single tile from the board. */
   deleteTile(row: number, col: number): boolean {
     if (this.state.mode !== "standard") return false;
     if (this.state.powerups.delete <= 0) return false;
@@ -244,7 +241,6 @@ export class GameSession {
     return this.state.mode === "standard" && this.state.powerups.delete > 0;
   }
 
-  /** A read-only view for engines. */
   toContext() {
     return {
       grid: this.state.grid,
@@ -258,7 +254,6 @@ export class GameSession {
   }
 }
 
-/** Restore a session from a persisted GameState. */
 export function restoreSession(
   state: GameState,
   rng?: () => number,
