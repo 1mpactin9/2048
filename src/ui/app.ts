@@ -7,14 +7,20 @@ import type {
   Powerups,
   Grid,
 } from "../core/types";
-import { DEFAULT_MODE, DEFAULT_SIZE, MAX_HISTORY } from "../core/constants";
+import { DEFAULT_MODE, DEFAULT_SIZE, MAX_HISTORY, gameKey } from "../core/constants";
 import {
   type StoredData,
+  addSnapshot,
+  bumpNextId,
   clearGames,
-  getGame,
+  getSnapshots,
   load,
   putGame,
-  save,
+  readGame,
+  repairSaves,
+  saveSettings,
+  stateSignature,
+  writeGame,
 } from "../core/storage";
 import { GameSession, restoreSession } from "../core/session";
 import { hasMoves, emptyCells, createGrid } from "../core/grid";
@@ -34,6 +40,7 @@ import { Input } from "./input";
 import { SettingsPopover } from "./controls";
 import { NotificationCenter } from "./notify";
 import { Icons } from "./icons";
+import { MultiWindowSync } from "./sync";
 import { currentResolved, initTheme, setThemePref, toggleTheme } from "./theme";
 
 type Armed = "none" | "swap" | "delete";
@@ -70,7 +77,10 @@ export class App {
   private autoTimer: ReturnType<typeof setTimeout> | null = null;
   private autoLoopStart: number | null = null;
   private currentOverlay: HTMLElement | null = null;
+  private confirmResolver: ((v: boolean) => void) | null = null;
   private wasOver = false;
+  private sync!: MultiWindowSync;
+  private lastSyncedSig: Record<string, string> = {};
 
   private scoreVal!: HTMLElement;
   private bestVal!: HTMLElement;
@@ -95,6 +105,12 @@ export class App {
   start(): void {
     initTheme(this.data.settings.theme);
     this.buildDOM();
+    this.sync = new MultiWindowSync({
+      getGameKey: () => gameKey(this.size, this.mode),
+      onSelect: (state) => this.loadSnapshot(state),
+      onConfirm: (title, message) => this.confirmAction(title, message),
+      onMultiWindowChange: (multi) => this.onMultiWindow(multi),
+    });
     this.loadGame(this.size, this.mode);
     if (this.data.settings.autoOn) this.startAuto();
   }
@@ -284,11 +300,10 @@ export class App {
   private loadGame(size: number, mode: GameMode): void {
     this.size = size;
     this.mode = mode;
-    const saved = getGame(this.data, size, mode);
-    let state: GameState;
+    const key = gameKey(size, mode);
+    const saved = readGame(key);
     if (saved) {
-      state = saved;
-      this.session = restoreSession(state);
+      this.session = restoreSession(saved);
     } else {
       this.session = GameSession.newGame(
         size,
@@ -297,16 +312,18 @@ export class App {
         undefined,
         this.data.settings.rngManip,
       );
-      putGame(this.data, this.session.state);
-      this.persist();
     }
+    putGame(this.data, this.session.state);
     this.session.setRngManipulation(this.data.settings.rngManip);
+    if (!saved) this.saveCurrent();
     this.pendingNew = false;
     this.board.setSize(size);
     this.board.fullRender(this.session.state.grid, !saved);
     this.updateUI();
     this.wasOver = this.session.state.over;
     this.handleWinOver();
+    this.lastSyncedSig[key] = stateSignature(this.session.state);
+    this.sync?.refresh();
   }
 
   private switchTo(size: number, mode: GameMode): void {
@@ -373,7 +390,7 @@ export class App {
 
   private resumeGame(): void {
     if (!this.pendingNew) return;
-    const saved = getGame(this.data, this.size, this.mode);
+    const saved = readGame(gameKey(this.size, this.mode));
     if (!saved || saved.over || saved.moveCount === 0) {
       this.pendingNew = false;
       this.updatePrimaryButton();
@@ -714,6 +731,11 @@ export class App {
       this.currentOverlay.remove();
       this.currentOverlay = null;
     }
+    if (this.confirmResolver) {
+      const r = this.confirmResolver;
+      this.confirmResolver = null;
+      r(false);
+    }
   }
 
   private notify(message: string, icon?: string): void {
@@ -1045,11 +1067,88 @@ export class App {
 
   private saveCurrent(): void {
     putGame(this.data, this.session.state);
-    this.persist();
+    const key = gameKey(this.size, this.mode);
+    if (this.sync?.isMultiWindow) {
+      const live = readGame(key);
+      const liveSig = stateSignature(live);
+      const ourSig = stateSignature(this.session.state);
+      if (
+        live &&
+        liveSig !== (this.lastSyncedSig[key] ?? "") &&
+        liveSig !== ourSig
+      ) {
+        addSnapshot(key, this.sync.windowId, this.defaultSnapName(live), live);
+      }
+    }
+    writeGame(this.session.state);
+    bumpNextId();
+    this.lastSyncedSig[key] = stateSignature(this.session.state);
+    this.sync?.refresh();
+    this.sync?.notifyChanged();
   }
 
   private persist(): void {
-    save(this.data);
+    saveSettings(this.data);
+  }
+
+  private defaultSnapName(state: GameState): string {
+    return `${state.score} pts · ${state.moveCount} moves`;
+  }
+
+  private loadSnapshot(state: GameState): void {
+    const key = gameKey(state.size, state.mode);
+    const switched = state.size !== this.size || state.mode !== this.mode;
+    if (this.sync?.isMultiWindow) {
+      const live = readGame(key);
+      if (live && stateSignature(live) !== stateSignature(state)) {
+        addSnapshot(key, this.sync.windowId, this.defaultSnapName(live), live);
+      }
+    }
+    this.session = restoreSession(state);
+    this.session.setRngManipulation(this.data.settings.rngManip);
+    this.size = state.size;
+    this.mode = state.mode;
+    putGame(this.data, state);
+    writeGame(state);
+    bumpNextId();
+    this.lastSyncedSig[key] = stateSignature(state);
+    if (switched) this.popover.update({ size: this.size, mode: this.mode });
+    this.board.setSize(state.size);
+    this.board.fullRender(state.grid, true);
+    this.updateUI();
+    this.handleWinOver();
+    this.sync?.refresh();
+    this.sync?.notifyChanged();
+  }
+
+  private confirmAction(title: string, message: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const done = (v: boolean) => {
+        if (!this.confirmResolver) return;
+        this.confirmResolver = null;
+        this.closeOverlay();
+        resolve(v);
+      };
+      this.confirmResolver = done;
+      this.showOverlay({
+        title,
+        danger: true,
+        message,
+        actions: [
+          { label: "Cancel", onClick: () => done(false) },
+          { label: "Delete", primary: true, onClick: () => done(true) },
+        ],
+      });
+    });
+  }
+
+  private onMultiWindow(multi: boolean): void {
+    if (!multi) return;
+    const key = gameKey(this.size, this.mode);
+    if (getSnapshots(key).length === 0) {
+      addSnapshot(key, this.sync.windowId, "Initial board", this.session.state);
+      this.sync.refresh();
+    }
   }
 
   destroy(): void {
@@ -1057,6 +1156,7 @@ export class App {
     this.closeOverlay();
     this.input.destroy();
     this.board.destroy();
+    this.sync?.destroy();
   }
 
   __undo(steps?: number): void {
@@ -2188,6 +2288,15 @@ export class App {
     console.log(`[dev] __fixBest → recovered best from NaN to ${s.best}`);
   }
 
+  __repairSaves(): { games: number; snapshots: number } {
+    const r = repairSaves(this.data);
+    this.loadGame(this.size, this.mode);
+    console.log(
+      `[dev] __repairSaves -> removed ${r.games} corrupt game(s), ${r.snapshots} corrupt snapshot(s)`,
+    );
+    return r;
+  }
+
   __refreshScore(): {
     from: number;
     to: number;
@@ -2273,6 +2382,7 @@ export class App {
       "dev.afkHighScore()          Auto-run AFK until best exceeds 3x",
       "dev.refreshScore()          Ensure score matches current position (also fixes NaN best)",
       "dev.fixBest()               Recover from NaN best score",
+      "dev.repairSaves()           Detect & remove corrupt games/snapshots",
       "dev.refreshPlayAgainStatus  Explicitly toggle Play Again bar visibility",
       "dev.log(fn, ms?)            Periodic logger — log a function every N ms",
       "dev.stopLog(id?)            Stop a specific or all periodic loggers",

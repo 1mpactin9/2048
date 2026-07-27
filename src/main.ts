@@ -47,6 +47,7 @@ declare global {
         | undefined;
       help(): void;
       fixBest(): void;
+      repairSaves(): { games: number; snapshots: number } | undefined;
       refreshScore():
         | {
             from: number;
@@ -106,6 +107,7 @@ window.dev = {
     window.__app?.__bypassValidation(valueFirst),
   help: () => window.__app?.__help(),
   fixBest: () => window.__app?.__fixBest(),
+  repairSaves: () => window.__app?.__repairSaves(),
   refreshScore: () => window.__app?.__refreshScore(),
   refreshPlayAgainStatus: () => window.__app?.__refreshPlayAgainStatus(),
   afkHighScore: () => window.__app?.__afkHighScore() as Promise<void>,
