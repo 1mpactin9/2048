@@ -943,8 +943,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   color: var(--btn-text);
   background: linear-gradient(
@@ -953,22 +953,20 @@
     color-mix(in srgb, var(--btn-gobg) 85%, black)
   );
   box-shadow: var(--shadow);
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease, filter 0.15s ease;
 }
 
 .sync-dock__fab:hover {
-  transform: translateY(-2px);
+  filter: brightness(1.08);
 }
 
 .sync-dock__fab:active {
-  transform: translateY(1px);
+  filter: brightness(0.95);
 }
 
 .sync-dock__fab svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
 }
 
 .sync-dock__badge {
@@ -990,6 +988,9 @@
 }
 
 .sync-dock__panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
   width: 300px;
   max-height: min(60vh, 460px);
   display: flex;
@@ -1179,6 +1180,21 @@
   display: flex;
   align-items: center;
   gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.sync-row:hover .sync-row__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .sync-row__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .sync-row--live .sync-row__actions {
@@ -1217,6 +1233,9 @@
 }
 
 .sync-rename {
+  position: absolute;
+  right: calc(100% + 12px);
+  bottom: 0;
   width: 260px;
   display: flex;
   flex-direction: column;
@@ -1268,6 +1287,11 @@
 @media (max-width: 640px) {
   .sync-dock__panel {
     width: min(300px, calc(100vw - 36px));
+  }
+  .sync-rename {
+    right: 0;
+    bottom: calc(100% + 10px);
+    width: min(260px, calc(100vw - 36px));
   }
   .sync-dock {
     right: 12px;

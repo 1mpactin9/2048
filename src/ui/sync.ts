@@ -63,6 +63,7 @@ export class MultiWindowSync {
   private open = false;
   private dragId: string | null = null;
   private renamingId: string | null = null;
+  private hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(opts: SyncOptions) {
     this.opts = opts;
@@ -83,6 +84,7 @@ export class MultiWindowSync {
     this.fab.append(this.badge);
     this.fab.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (this.supportsHover()) return;
       this.toggle();
     });
 
@@ -142,6 +144,22 @@ export class MultiWindowSync {
       if (this.open && !this.dock.contains(e.target as Node)) this.close();
     });
 
+    this.dock.addEventListener("mouseenter", () => {
+      if (!this.supportsHover()) return;
+      if (this.hoverTimer) {
+        clearTimeout(this.hoverTimer);
+        this.hoverTimer = null;
+      }
+      if (!this.renamingId) this.openPanel();
+    });
+    this.dock.addEventListener("mouseleave", () => {
+      if (!this.supportsHover()) return;
+      this.hoverTimer = setTimeout(() => {
+        this.close();
+        this.closeRename();
+      }, 150);
+    });
+
     this.setupChannel();
     this.startHeartbeat();
     window.addEventListener("beforeunload", this.onUnload);
@@ -150,6 +168,24 @@ export class MultiWindowSync {
 
   get isMultiWindow(): boolean {
     return this.multi;
+  }
+
+  private supportsHover(): boolean {
+    return (
+      typeof matchMedia === "function" &&
+      matchMedia("(hover: hover) and (pointer: fine)").matches
+    );
+  }
+
+  private applyVisibility(count: number): void {
+    this.dock.hidden = !(this.multi && count > 1);
+  }
+
+  private updateBadge(): void {
+    const gk = this.opts.getGameKey();
+    const count = getSnapshots(gk).length;
+    this.badge.textContent = String(count);
+    this.applyVisibility(count);
   }
 
   private setupChannel(): void {
@@ -191,7 +227,8 @@ export class MultiWindowSync {
       this.peers.delete(msg.id);
       this.updatePresence();
     } else if (msg.type === "changed") {
-      this.renderList();
+      if (this.open) this.renderList();
+      else this.updateBadge();
     }
   }
 
@@ -211,19 +248,21 @@ export class MultiWindowSync {
     const next = this.peers.size >= 1;
     if (next !== this.multi) {
       this.multi = next;
-      this.dock.hidden = !next;
       if (!next) {
+        this.dock.hidden = true;
         this.close();
         this.closeRename();
       } else {
-        this.renderList();
+        this.updateBadge();
       }
       this.opts.onMultiWindowChange?.(next);
     }
   }
 
   refresh(): void {
-    if (this.multi) this.renderList();
+    if (!this.multi) return;
+    if (this.open) this.renderList();
+    else this.updateBadge();
   }
 
   private toggle(): void {
@@ -245,6 +284,7 @@ export class MultiWindowSync {
     const gk = this.opts.getGameKey();
     const snaps = getSnapshots(gk);
     this.badge.textContent = String(snaps.length);
+    this.applyVisibility(snaps.length);
     this.list.replaceChildren();
     const live = this.makeLiveRow();
     if (live) this.list.appendChild(live);
@@ -416,7 +456,8 @@ export class MultiWindowSync {
 
   private onStorage = (e: StorageEvent): void => {
     if (e.key === "2048:snapshots:v1" || (e.key && e.key.startsWith("2048:game:"))) {
-      this.renderList();
+      if (this.open) this.renderList();
+      else this.updateBadge();
     }
   };
 

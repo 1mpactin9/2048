@@ -1148,6 +1148,7 @@ export class App {
     if (getSnapshots(key).length === 0) {
       addSnapshot(key, this.sync.windowId, "Initial board", this.session.state);
       this.sync.refresh();
+      this.sync.notifyChanged();
     }
   }
 
