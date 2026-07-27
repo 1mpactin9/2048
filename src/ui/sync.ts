@@ -154,6 +154,7 @@ export class MultiWindowSync {
     });
     this.dock.addEventListener("mouseleave", () => {
       if (!this.supportsHover()) return;
+      if (this.renamingId) return;
       this.hoverTimer = setTimeout(() => {
         this.close();
         this.closeRename();
@@ -433,6 +434,7 @@ export class MultiWindowSync {
   }
 
   private openRename(s: SnapshotEntry): void {
+    this.close();
     this.renamingId = s.id;
     this.renameInput.value = s.name || "Snapshot";
     this.renameCard.hidden = false;
