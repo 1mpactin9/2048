@@ -1,27 +1,123 @@
 use rand::Rng;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fmt;
+use std::sync::OnceLock;
 
 const SEARCH_NODE_BUDGET: u64 = 500_000;
 const ENDGAME_EMPTY_THRESHOLD: usize = 2;
 const ENDGAME_EXTRA_DEPTH: usize = 30;
+const DEFAULT_TIME_BUDGET_MS: u64 = 200;
+const PROB_CUTOFF: f64 = 1e-4;
+const PRUNE_MARGIN: f64 = 400.0;
+const TT_BITS: u32 = 20;
+const TT_SIZE: usize = 1 << TT_BITS;
+const TT_MASK: u64 = (TT_SIZE as u64) - 1;
+const ZOBRIST_CELLS: usize = 256;
+const ZOBRIST_RANKS: usize = 32;
 
-thread_local! {
-    static TT: RefCell<HashMap<(u64, usize), f64>> = RefCell::new(HashMap::new());
+#[derive(Clone, Copy)]
+struct TTEntry {
+    key: u64,
+    depth: u8,
+    value: f32,
+    occupied: bool,
 }
 
-fn board_hash(board: &[u32]) -> u64 {
-    let mut h: u64 = 0xcbf29ce484222325;
-    for &v in board {
-        h ^= v as u64;
-        h = h.wrapping_mul(0x100000001b3);
+impl Default for TTEntry {
+    fn default() -> Self {
+        TTEntry {
+            key: 0,
+            depth: 0,
+            value: 0.0,
+            occupied: false,
+        }
+    }
+}
+
+thread_local! {
+    static TT: RefCell<Box<[TTEntry]>> =
+        RefCell::new(vec![TTEntry::default(); TT_SIZE].into_boxed_slice());
+}
+
+fn zobrist_table() -> &'static [[u64; ZOBRIST_RANKS]; ZOBRIST_CELLS] {
+    static TABLE: OnceLock<[[u64; ZOBRIST_RANKS]; ZOBRIST_CELLS]> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut state: u64 = 0x9e3779b97f4a7c15;
+        let mut table = [[0u64; ZOBRIST_RANKS]; ZOBRIST_CELLS];
+        for cell in table.iter_mut() {
+            for slot in cell.iter_mut() {
+                state = state.wrapping_add(0x9e3779b97f4a7c15);
+                let mut z = state;
+                z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+                z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+                z ^= z >> 31;
+                *slot = z;
+            }
+        }
+        table
+    })
+}
+
+fn zobrist_hash(board: &[u32]) -> u64 {
+    let table = zobrist_table();
+    let mut h: u64 = 0;
+    for (i, &v) in board.iter().enumerate() {
+        if v != 0 && i < ZOBRIST_CELLS {
+            let rank = (v.trailing_zeros() as usize).min(ZOBRIST_RANKS - 1);
+            h ^= table[i][rank];
+        }
     }
     h
 }
 
+fn tt_get(hash: u64, depth: usize) -> Option<f64> {
+    TT.with(|c| {
+        let table = c.borrow();
+        let entry = table[(hash & TT_MASK) as usize];
+        if entry.occupied && entry.key == hash && entry.depth as usize >= depth {
+            Some(entry.value as f64)
+        } else {
+            None
+        }
+    })
+}
+
+fn tt_put(hash: u64, depth: usize, value: f64) {
+    TT.with(|c| {
+        let mut table = c.borrow_mut();
+        let idx = (hash & TT_MASK) as usize;
+        let entry = &mut table[idx];
+        if !entry.occupied || entry.key != hash || depth as u8 >= entry.depth {
+            *entry = TTEntry {
+                key: hash,
+                depth: depth.min(255) as u8,
+                value: value as f32,
+                occupied: true,
+            };
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn now_ms() -> f64 {
+    js_sys::Date::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn now_ms() -> f64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs_f64() * 1000.0)
+        .unwrap_or(0.0)
+}
+
 #[cfg(target_arch = "wasm32")]
 mod wasm;
+
+#[cfg(feature = "bitboard")]
+mod bitboard;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
@@ -121,7 +217,7 @@ pub struct Engine {
     score: u64,
     target_tile: u32,
     four_probability: f64,
-    history: Vec<Snapshot>,
+    history: VecDeque<Snapshot>,
     max_undo_history: usize,
     swaps_left: u32,
     delete_left: u32,
@@ -140,7 +236,7 @@ impl Engine {
             score: 0,
             target_tile: config.target_tile,
             four_probability: config.four_probability,
-            history: Vec::new(),
+            history: VecDeque::new(),
             max_undo_history: config.max_undo_history,
             swaps_left: config.swap_charges,
             delete_left: config.delete_charges,
@@ -241,7 +337,7 @@ impl Engine {
     }
 
     pub fn undo(&mut self) -> Result<(), EngineError> {
-        match self.history.pop() {
+        match self.history.pop_back() {
             Some(snap) => {
                 self.grid = snap.grid;
                 self.score = snap.score;
@@ -301,7 +397,7 @@ impl Engine {
     }
 
     fn push_history(&mut self) {
-        self.history.push(Snapshot {
+        self.history.push_back(Snapshot {
             grid: self.grid.clone(),
             score: self.score,
             swaps_left: self.swaps_left,
@@ -309,7 +405,7 @@ impl Engine {
             won: self.won,
         });
         if self.max_undo_history > 0 && self.history.len() > self.max_undo_history {
-            self.history.remove(0);
+            self.history.pop_front();
         }
     }
 
@@ -411,8 +507,7 @@ impl Engine {
     pub fn suggest_move_for(grid: &Vec<Vec<u32>>, depth: Option<usize>) -> Option<Direction> {
         let search_depth =
             Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
-        let mut budget = Self::budget_for_depth(search_depth);
-        Self::best_move(grid, search_depth, &mut budget).0
+        Self::best_move(grid, search_depth, DEFAULT_TIME_BUDGET_MS).0
     }
 
     fn flatten(grid: &Vec<Vec<u32>>) -> Vec<u32> {
@@ -424,21 +519,42 @@ impl Engine {
         out
     }
 
-    fn best_move(grid: &Vec<Vec<u32>>, depth: usize, budget: &mut u64) -> (Option<Direction>, f64) {
-        TT.with(|c| c.borrow_mut().clear());
+    fn ordered_directions(board: &[u32], n: usize) -> [(Direction, bool, f64); 4] {
+        let mut new_board = [0u32; 256];
+        let mut out = [(Direction::Up, false, f64::NEG_INFINITY); 4];
+        for (i, &dir) in Direction::ALL.iter().enumerate() {
+            let slice = &mut new_board[..n * n];
+            let gained = Self::slide_flat_into(board, n, dir, slice);
+            let moved = slice != board;
+            let score = if moved {
+                gained as f64 + Self::heuristic_flat(slice, n)
+            } else {
+                f64::NEG_INFINITY
+            };
+            out[i] = (dir, moved, score);
+        }
+        out.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+        out
+    }
+
+    fn best_move_fixed(grid: &Vec<Vec<u32>>, depth: usize, budget: &mut u64) -> (Option<Direction>, f64) {
         let n = grid.len();
         let board = Self::flatten(grid);
+        let ordered = Self::ordered_directions(&board, n);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
         let mut new_board = [0u32; 256];
-        for &dir in Direction::ALL.iter() {
-            let slice = &mut new_board[..n * n];
-            let gained = Self::slide_flat_into(&board, n, dir, slice);
-            if slice == board {
+        for &(dir, moved, quick_score) in ordered.iter() {
+            if !moved {
                 continue;
             }
+            if best_dir.is_some() && quick_score < best_val - PRUNE_MARGIN {
+                continue;
+            }
+            let slice = &mut new_board[..n * n];
+            let gained = Self::slide_flat_into(&board, n, dir, slice);
             let value = gained as f64
-                + Self::expectimax_chance_flat(slice, n, depth.saturating_sub(1), budget);
+                + Self::expectimax_chance_flat(slice, n, depth.saturating_sub(1), budget, 1.0);
             if value > best_val {
                 best_val = value;
                 best_dir = Some(dir);
@@ -452,6 +568,30 @@ impl Engine {
         (best_dir, val)
     }
 
+    fn best_move(
+        grid: &Vec<Vec<u32>>,
+        max_depth: usize,
+        time_budget_ms: u64,
+    ) -> (Option<Direction>, f64) {
+        let start = now_ms();
+        let mut best_dir = None;
+        let mut best_val = f64::NEG_INFINITY;
+        let mut depth = 1;
+        loop {
+            let mut budget = Self::budget_for_depth(depth);
+            let (dir, val) = Self::best_move_fixed(grid, depth, &mut budget);
+            if dir.is_some() {
+                best_dir = dir;
+                best_val = val;
+            }
+            if depth >= max_depth || now_ms() - start >= time_budget_ms as f64 {
+                break;
+            }
+            depth += 1;
+        }
+        (best_dir, best_val)
+    }
+
     pub fn suggest_action_for(
         grid: &Vec<Vec<u32>>,
         swaps_left: u32,
@@ -462,7 +602,7 @@ impl Engine {
         let d = depth.unwrap_or_else(|| Self::auto_depth(grid));
         let mut budget = Self::budget_for_depth(d);
 
-        let (best_dir, move_val) = Self::best_move(grid, d, &mut budget);
+        let (best_dir, move_val) = Self::best_move(grid, d, DEFAULT_TIME_BUDGET_MS);
 
         let stuck = best_dir.is_none();
         if !stuck && !Self::is_dangerous(grid) {
@@ -480,7 +620,7 @@ impl Engine {
                     }
                     let mut g = grid.clone();
                     g[r][c] = 0;
-                    let v = Self::best_move(&g, d, &mut budget).1;
+                    let v = Self::best_move_fixed(&g, d, &mut budget).1;
                     if v > best_delete_val {
                         best_delete_val = v;
                         best_delete = Some((r, c));
@@ -501,7 +641,7 @@ impl Engine {
                 let tmp = g[a.0][a.1];
                 g[a.0][a.1] = g[b.0][b.1];
                 g[b.0][b.1] = tmp;
-                let v = Self::best_move(&g, d, &mut budget).1;
+                let v = Self::best_move_fixed(&g, d, &mut budget).1;
                 if v > best_swap_val {
                     best_swap_val = v;
                     best_swap = Some((a, b));
@@ -569,7 +709,10 @@ impl Engine {
         } else {
             base + 5
         };
-        depth.max(2)
+        let floor = if n <= 4 { 3 } else { 2 };
+        let result = depth.max(floor);
+        debug_assert!(result >= base.saturating_sub(3));
+        result
     }
 
     fn budget_for_depth(depth: usize) -> u64 {
@@ -590,6 +733,14 @@ impl Engine {
     }
 
     fn slide_flat_into(board: &[u32], n: usize, dir: Direction, result: &mut [u32]) -> u64 {
+        #[cfg(feature = "bitboard")]
+        if n == 4 {
+            let bits = bitboard::board_to_bits(board);
+            let (new_bits, gained) = bitboard::bitboard_move(bits, dir);
+            let out = bitboard::bits_to_board(new_bits);
+            result[..16].copy_from_slice(&out);
+            return gained;
+        }
         let mut gained: u64 = 0;
         for i in 0..n {
             let mut values = [0u32; 16];
@@ -637,38 +788,53 @@ impl Engine {
         gained
     }
 
-    fn expectimax_max_flat(board: &[u32], n: usize, depth: usize, budget: &mut u64) -> f64 {
-        if depth == 0 || *budget == 0 {
+    fn expectimax_max_flat(board: &[u32], n: usize, depth: usize, budget: &mut u64, prob: f64) -> f64 {
+        if depth == 0 || *budget == 0 || prob < PROB_CUTOFF {
             return Self::heuristic_flat(board, n);
         }
-        let key = (board_hash(board), depth);
-        if let Some(cached) = TT.with(|c| c.borrow().get(&key).copied()) {
+        let hash = zobrist_hash(board);
+        if let Some(cached) = tt_get(hash, depth) {
             return cached;
         }
         *budget -= 1;
+        let ordered = Self::ordered_directions(board, n);
         let mut best = f64::NEG_INFINITY;
         let mut any_move = false;
         let mut new_board = [0u32; 256];
-        for &dir in Direction::ALL.iter() {
-            let slice = &mut new_board[..n * n];
-            let gained = Self::slide_flat_into(board, n, dir, slice);
-            if slice == board {
+        for &(dir, moved, quick_score) in ordered.iter() {
+            if !moved {
                 continue;
             }
             any_move = true;
+            if best > f64::NEG_INFINITY && quick_score < best - PRUNE_MARGIN {
+                if quick_score > best {
+                    best = quick_score;
+                }
+                continue;
+            }
+            let slice = &mut new_board[..n * n];
+            let gained = Self::slide_flat_into(board, n, dir, slice);
             let v = gained as f64
-                + Self::expectimax_chance_flat(slice, n, depth.saturating_sub(1), budget);
+                + Self::expectimax_chance_flat(slice, n, depth.saturating_sub(1), budget, prob);
             if v > best {
                 best = v;
             }
         }
         let result = if !any_move { -200000.0 } else { best };
-        TT.with(|c| c.borrow_mut().insert(key, result));
+        if prob >= PROB_CUTOFF {
+            tt_put(hash, depth, result);
+        }
         result
     }
 
-    fn expectimax_chance_flat(board: &mut [u32], n: usize, depth: usize, budget: &mut u64) -> f64 {
-        if *budget == 0 {
+    fn expectimax_chance_flat(
+        board: &mut [u32],
+        n: usize,
+        depth: usize,
+        budget: &mut u64,
+        prob: f64,
+    ) -> f64 {
+        if *budget == 0 || prob < PROB_CUTOFF {
             return Self::heuristic_flat(board, n);
         }
         let mut empties = [0usize; 256];
@@ -682,8 +848,8 @@ impl Engine {
         if num_empties == 0 || depth == 0 {
             return Self::heuristic_flat(board, n);
         }
-        let key = (board_hash(board), depth);
-        if let Some(cached) = TT.with(|c| c.borrow().get(&key).copied()) {
+        let hash = zobrist_hash(board);
+        if let Some(cached) = tt_get(hash, depth) {
             return cached;
         }
         *budget -= 1;
@@ -708,15 +874,28 @@ impl Engine {
         let next_depth = depth.saturating_sub(1);
         for i in 0..sampled_len {
             let idx = sampled[i];
+            let p2 = prob * weight_each * 0.9;
+            let p4 = prob * weight_each * 0.1;
+
             board[idx] = 2;
-            let v2 = Self::expectimax_max_flat(board, n, next_depth, budget);
+            let v2 = if p2 < PROB_CUTOFF {
+                Self::heuristic_flat(board, n)
+            } else {
+                Self::expectimax_max_flat(board, n, next_depth, budget, p2)
+            };
             board[idx] = 4;
-            let v4 = Self::expectimax_max_flat(board, n, next_depth, budget);
+            let v4 = if p4 < PROB_CUTOFF {
+                Self::heuristic_flat(board, n)
+            } else {
+                Self::expectimax_max_flat(board, n, next_depth, budget, p4)
+            };
             board[idx] = 0;
 
             total += weight_each * (0.9 * v2 + 0.1 * v4);
         }
-        TT.with(|c| c.borrow_mut().insert(key, total));
+        if prob >= PROB_CUTOFF {
+            tt_put(hash, depth, total);
+        }
         total
     }
 
@@ -799,19 +978,23 @@ impl Engine {
         const W_MONO: f64 = 25.0;
         const W_SMOOTH: f64 = 11.0;
         const W_SNAKE: f64 = 46.0;
+        const W_CONSISTENCY: f64 = 18.0;
+        const W_CORNER: f64 = 10.0;
 
         W_EMPTY * (empty + 1.0f64).log2()
             + W_MONO * mono
             + W_SMOOTH * smoothness
             + W_SNAKE * Self::snake_score_flat(board, n)
+            + W_CONSISTENCY * Self::snake_consistency_flat(board, n)
+            + W_CORNER * Self::corner_reward_flat(board, n)
     }
 
-    fn snake_score_flat(board: &[u32], n: usize) -> f64 {
+    fn snake_scores_flat(board: &[u32], n: usize) -> [f64; 4] {
+        let mut scores = [0.0f64; 4];
         if n == 0 {
-            return 0.0;
+            return scores;
         }
 
-        let mut scores = [0.0f64; 4];
         let mut w = 1.0f64;
         const RATIO: f64 = 0.5;
 
@@ -851,7 +1034,75 @@ impl Engine {
             }
         }
 
-        scores.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+        scores
+    }
+
+    fn snake_score_flat(board: &[u32], n: usize) -> f64 {
+        if n == 0 {
+            return 0.0;
+        }
+        Self::snake_scores_flat(board, n)
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+    fn snake_consistency_flat(board: &[u32], n: usize) -> f64 {
+        if n == 0 {
+            return 0.0;
+        }
+        let scores = Self::snake_scores_flat(board, n);
+        let max_score = scores.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        if max_score <= 0.0 {
+            return 0.0;
+        }
+        let threshold = max_score * 0.5;
+        scores.iter().filter(|&&s| s > threshold).count() as f64
+    }
+
+    fn corner_reward_flat(board: &[u32], n: usize) -> f64 {
+        if n < 2 {
+            return 0.0;
+        }
+        let corners = [(0usize, 0usize), (0, n - 1), (n - 1, 0), (n - 1, n - 1)];
+        let max_dist = 2.0 * (n as f64 - 1.0);
+
+        let closeness = |r: usize, c: usize| -> f64 {
+            let dist = corners
+                .iter()
+                .map(|&(cr, cc)| {
+                    let dr = (r as isize - cr as isize).unsigned_abs() as f64;
+                    let dc = (c as isize - cc as isize).unsigned_abs() as f64;
+                    dr + dc
+                })
+                .fold(f64::INFINITY, f64::min);
+            1.0 - dist / max_dist
+        };
+
+        let mut reward = 0.0;
+        let mut max_val = 0u32;
+        let mut max_pos = (0usize, 0usize);
+        for r in 0..n {
+            for c in 0..n {
+                let v = board[r * n + c];
+                if v == 0 {
+                    continue;
+                }
+                let rank = v.trailing_zeros() as f64;
+                reward += rank * closeness(r, c);
+                if v > max_val {
+                    max_val = v;
+                    max_pos = (r, c);
+                }
+            }
+        }
+
+        if max_val > 0 {
+            let max_rank = max_val.trailing_zeros() as f64;
+            reward += max_rank * closeness(max_pos.0, max_pos.1) * 1.5;
+        }
+
+        reward
     }
 
     pub fn derive_key(seed: &[u32]) -> [u32; 8] {
