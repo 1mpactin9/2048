@@ -1,9 +1,8 @@
-import { defineConfig } from "vite";
+import { defineConfig } from 'vite'
+import preact from '@preact/preset-vite'
+import tailwindcss from '@tailwindcss/vite'
 
+// https://vite.dev/config/
 export default defineConfig({
-  base: "/2048/",
-  server: {
-    host: true,
-    port: 5173,
-  },
-});
+  plugins: [preact(),tailwindcss()],
+})
