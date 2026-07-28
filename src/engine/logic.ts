@@ -15,7 +15,7 @@ import {
   slide,
 } from './grid';
 import type { Rng } from './rng';
-import type { Board, Change, Direction, Position, Tile } from './types';
+import type { Board, Change, Direction, Position } from './types';
 
 export type MoveResult = {
   board: Board;

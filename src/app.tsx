@@ -1,104 +1,50 @@
-import { useState } from 'preact/hooks'
-import preactLogo from './assets/preact.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './app.css'
+// app shell — routing + mount
+
+import { useCallback } from 'preact/hooks';
+import { GameMode } from './engine/types';
+import { useRouter } from './hooks/useRouter';
+import { Game } from './components/Game';
+import { AboutPage } from './components/AboutPage';
+import { PrivacyPage } from './components/PrivacyPage';
+import { TroubleshootingPage } from './components/TroubleshootingPage';
+
+// route path -> game mode or page name
+function routeKey(path: string): string {
+  const p = path.replace(/\/$/, '') || '/';
+  if (p === '/') return 'standard';
+  if (p === '/classic') return 'classic';
+  if (p === '/tutorial') return 'tutorial';
+  return p.slice(1); // /about, /privacy-policy, /troubleshooting
+}
 
 export function App() {
-  const [count, setCount] = useState(0)
+  const { path, navigate } = useRouter();
+  const key = routeKey(path);
 
-  return (
-    <>
-      <section id="center">
-        <div class="hero">
-          <img src={heroImg} class="base" width="170" height="179" alt="" />
-          <img src={preactLogo} class="framework" alt="Preact logo" />
-          <img src={viteLogo} class="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/app.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          class="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+  const onBack = useCallback(() => navigate('/'), [navigate]);
 
-      <div class="ticks"></div>
+  const gameMode =
+    key === 'standard'
+      ? GameMode.Standard
+      : key === 'classic'
+        ? GameMode.Classic
+        : key === 'tutorial'
+          ? GameMode.Tutorial
+          : null;
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img class="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://preactjs.com/" target="_blank">
-                <img class="button-icon" src={preactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+  // game screens remount on mode change via the key prop
+  if (gameMode) {
+    return <Game key={key} mode={gameMode} onNavigate={navigate} />;
+  }
 
-      <div class="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  switch (key) {
+    case 'about':
+      return <AboutPage onBack={onBack} />;
+    case 'privacy-policy':
+      return <PrivacyPage onBack={onBack} />;
+    case 'troubleshooting':
+      return <TroubleshootingPage onBack={onBack} />;
+    default:
+      return <Game key='standard' mode={GameMode.Standard} onNavigate={navigate} />;
+  }
 }

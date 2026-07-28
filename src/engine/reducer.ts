@@ -150,6 +150,9 @@ function applySelectTarget(sel: Selection, target: SelectTarget): Selection {
 
 export function reducer(g: Gameplay, action: Action): Gameplay {
   switch (action.type) {
+    case 'newGame':
+      return newGameplay(g.mode, action.seed);
+
     case 'move': {
       if (
         g.state === GameState.GameOver ||

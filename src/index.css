@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-// Rubik variable font (single woff2 covers all weights)
+/* Rubik variable font (single woff2 covers all weights) */
 @font-face {
   font-family: Rubik;
   src: url(/Rubik-VariableWeight.woff2) format('woff2');
@@ -9,7 +9,7 @@
   font-display: swap;
 }
 
-// custom design tokens -> tailwind utilities (bg-sand, text-tan, etc.)
+/* custom design tokens -> tailwind utilities (bg-sand, text-tan, etc.) */
 @theme {
   --font-sans: Rubik, Arial, system-ui, sans-serif;
 
@@ -33,12 +33,12 @@
     0px 10px 30px 0px rgba(140, 100, 60, 0.18);
 }
 
-// custom short-viewport variant (matches original `short:` breakpoint)
+/* custom short-viewport variant (matches original `short:` breakpoint) */
 @custom-variant short (@media (max-height: 650px));
-// pwa standalone variant
+/* pwa standalone variant */
 @custom-variant pwa (@media (display-mode: standalone));
 
-// throb pulse for freshly-earned powerups
+/* throb pulse for freshly-earned powerups */
 @keyframes throb {
   0%,
   100% {
@@ -66,7 +66,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-// full-height flex layout while playing; disable native scroll gestures
+/* full-height flex layout while playing; disable native scroll gestures */
 body.game-layout {
   touch-action: none;
   display: flex;
@@ -86,3 +86,51 @@ body.game-layout > #app {
 #app {
   width: 100%;
 }
+
+/* action button grid (game-end dialogs): 2 columns, lone button spans full */
+.actions-grid {
+  display: grid;
+  gap: 0.5rem;
+  padding-inline: 0.5rem;
+  grid-template-columns: repeat(2, 1fr);
+}
+.actions-grid > *:nth-child(odd):nth-last-child(1) {
+  grid-column: 1 / -1;
+}
+
+/* material-style tooltip popover for powerup buttons */
+.tooltip-material {
+  background: var(--color-dark-grey);
+  color: #fff;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* prose styling for static doc pages */
+.document-content h2 {
+  margin-top: 1.25rem;
+  font-size: 1.875rem;
+  font-weight: 500;
+}
+.document-content h3 {
+  margin-top: 1.25rem;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+.document-content p {
+  margin-top: 0.75rem;
+  line-height: 1.6;
+}
+.document-content a {
+  color: var(--color-64-red);
+  text-decoration: underline;
+}
+.document-content ul {
+  margin-top: 0.75rem;
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+
+

@@ -16,7 +16,7 @@ import {
   Powerup,
   RotationDirection,
 } from './types';
-import type { Board, Change, Gameplay, Position, Selection, Tile } from './types';
+import type { Board, Change, Gameplay, Position, Selection } from './types';
 
 // re-export a board stripper (defined in grid) for local convenience
 function clone(board: Board): Board {

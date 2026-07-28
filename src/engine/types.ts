@@ -14,47 +14,53 @@ export type Tile = {
 // board[y][x] — null = empty cell
 export type Board = (Tile | null)[][];
 
-export enum Direction {
-  Up = 'up',
-  Right = 'right',
-  Down = 'down',
-  Left = 'left',
-}
+export const Direction = {
+  Up: 'up',
+  Right: 'right',
+  Down: 'down',
+  Left: 'left',
+} as const;
+export type Direction = (typeof Direction)[keyof typeof Direction];
 
-export enum RotationDirection {
-  Clockwise = 'clockwise',
-  CounterClockwise = 'counterClockwise',
-}
+export const RotationDirection = {
+  Clockwise: 'clockwise',
+  CounterClockwise: 'counterClockwise',
+} as const;
+export type RotationDirection = (typeof RotationDirection)[keyof typeof RotationDirection];
 
-export enum GameState {
-  Fresh = 'fresh',
-  Playing = 'playing',
-  GameOver = 'gameOver',
-  GameWon = 'gameWon',
-  Selecting = 'selecting', // mid powerup target selection
-}
+export const GameState = {
+  Fresh: 'fresh',
+  Playing: 'playing',
+  GameOver: 'gameOver',
+  GameWon: 'gameWon',
+  Selecting: 'selecting', // mid powerup target selection
+} as const;
+export type GameState = (typeof GameState)[keyof typeof GameState];
 
-export enum Powerup {
-  Undo = 'undo',
-  TeleportTileToEmptyCell = 'teleportTileToEmptyCell',
-  RotateOuterRingOfBoard = 'rotateOuterRingOfBoard',
-  SwapTwoTiles = 'swapTwoTiles',
-  MergeAnyTwoAdjacentTiles = 'mergeAnyTwoAdjacentTiles',
-  RemoveTilesByValue = 'removeTilesByValue',
-  Bomb = 'bomb',
-}
+export const Powerup = {
+  Undo: 'undo',
+  TeleportTileToEmptyCell: 'teleportTileToEmptyCell',
+  RotateOuterRingOfBoard: 'rotateOuterRingOfBoard',
+  SwapTwoTiles: 'swapTwoTiles',
+  MergeAnyTwoAdjacentTiles: 'mergeAnyTwoAdjacentTiles',
+  RemoveTilesByValue: 'removeTilesByValue',
+  Bomb: 'bomb',
+} as const;
+export type Powerup = (typeof Powerup)[keyof typeof Powerup];
 
-export enum GameMode {
-  Tutorial = 'tutorial',
-  Standard = 'standard',
-  Classic = 'classic',
-}
+export const GameMode = {
+  Tutorial: 'tutorial',
+  Standard: 'standard',
+  Classic: 'classic',
+} as const;
+export type GameMode = (typeof GameMode)[keyof typeof GameMode];
 
 // board visual theme — standard uses dark board, classic uses light
-export enum BoardTheme {
-  Light = 'light',
-  Dark = 'dark',
-}
+export const BoardTheme = {
+  Light: 'light',
+  Dark: 'dark',
+} as const;
+export type BoardTheme = (typeof BoardTheme)[keyof typeof BoardTheme];
 
 // per-powerup runtime counters
 export type PowerupState = {
@@ -127,6 +133,7 @@ export type Gameplay = {
 
 // reducer actions
 export type Action =
+  | { type: 'newGame'; seed?: string }
   | { type: 'move'; direction: Direction }
   | { type: 'activatePowerup'; powerup: Powerup }
   | { type: 'completePowerup' }
