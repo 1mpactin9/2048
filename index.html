@@ -1,12 +1,62 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>play2048</title>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+    />
+    <title>2048 • Play the Free Online Game</title>
+    <meta
+      name="description"
+      content="Join the tiles and reach 2048! Experience this popular and addictive puzzle game in its original version, available to play completely free and loved by millions. Do you have what it takes to reach 2048?"
+    />
+    <meta name="author" content="Gabriele Cirulli" />
+    <meta name="creator" content="Gabriele Cirulli" />
+    <meta http-equiv="Content-Language" content="en" />
+    <meta
+      name="keywords"
+      content="2048, game, original, free, online, puzzle, logic, math, numbers, tiles, join, reach, gabriele cirulli"
+    />
+    <link
+      rel="preload"
+      as="font"
+      href="/Rubik-VariableWeight.woff2"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="2048" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="theme-color" content="#faf8f0" />
+    <meta property="og:title" content="2048 by Gabriele Cirulli" />
+    <meta
+      property="og:description"
+      content="Join the tiles and reach 2048! Play the free online game loved by millions."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="2048" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="2048 by Gabriele Cirulli" />
+    <meta
+      name="twitter:description"
+      content="Join the tiles and reach 2048! Play the free online game loved by millions."
+    />
+    <meta name="twitter:creator" content="@gabrielecirulli" />
   </head>
-  <body>
+  <body class="game-layout">
+    <noscript>
+      <div
+        id="noscript-alert"
+        class="mx-auto mt-8 w-screen max-w-screen-lg rounded-lg bg-sand p-4 shadow-lg"
+      >
+        <p class="text-center text-lg font-bold">Enable JavaScript to play 2048!</p>
+      </div>
+    </noscript>
     <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
