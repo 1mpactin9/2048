@@ -1,0 +1,83 @@
+<div align="center">
+    <h1>2048 Engine</h1>
+    <p>
+        <a href="#prerequisites">Prerequisites</a> •
+        <a href="#quick-start">Installation</a> •
+        <a href="#build">Development</a>
+    </p>
+</div>
+
+A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game engine.
+
+## Prerequisites
+
+| Tool | Why | Minimum version |
+|------|-----|-----------------|
+| [Node.js](https://nodejs.org) | Package manager & dev | 18+ |
+| [Rust + Cargo](https://rustup.rs) | Compile the game engine | Latest stable |
+| [wasm-pack](https://rustwasm.github.io/wasm-pack/) | Bridge Rust > webAssembly | latest |
+
+Install Rust + Cargo first, then:
+
+```bash
+cargo install wasm-pack
+```
+
+## Quick start
+
+```bash
+npm install          # install dependencies
+npm run dev          # start the dev server
+```
+
+## Build
+
+Run this sequence to start from a completely clean state:
+
+```bash
+# remove generated artifacts
+rm -rf node_modules dist engine/pkg/engine2048_bg.wasm engine/pkg/engine2048.js engine/pkg/engine2048.d.ts
+
+# reinstall dependencies
+npm install
+
+# full build
+npm run build
+```
+
+## Verification
+
+```bash
+# run test suite (281+ tests across core logic, UI, RNG, storage, engine, and Rust/WASM parity)
+npm test
+
+# build and preview
+npm run build
+npm run preview
+```
+
+In the preview, check:
+
+- **Gameplay** — tiles merge correctly on swipe / arrow-key input
+- **WASM engine** — Rust expectimax AI runs in a Web Worker without console errors
+- **Theme toggle** — light/dark mode switches cleanly
+- **Responsive** — board scales on different viewport sizes
+- **Merge animation** — tiles briefly fade during merges for smoother visual feedback
+
+## Reference
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start Vite dev server with HMR |
+| `npm run build` | WASM + type-check + Vite production build |
+| `npm run build:wasm` | Compile the Rust engine to WASM only |
+| `npm run preview` | Preview the production `dist/` bundle locally |
+| `npm test` | Run Vitest test suite (node environment) |
+| `npm run test:watch` | Run Vitest in watch mode |
+
+## Quick Access
+
+| Document | Description |
+|--------|-------------|
+| [Benchmark Result](docs/benchmark.md) | some example benchmark results |
+| [Developer Documentation](docs/dev.md) | throuogh project overview |
