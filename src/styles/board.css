@@ -125,13 +125,32 @@
 
 @keyframes tile-pop {
   0% {
-    transform: scale(1.03);
-    opacity: 0.55;
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.2);
+  }
+  60% {
+    transform: scale(1.1);
   }
   100% {
     transform: scale(1);
-    opacity: 1;
   }
+}
+
+@keyframes throb {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.animate-throb {
+  animation: throb 1s infinite;
+  transform-origin: center;
 }
 
 .tile.is-targetable .tile__face {

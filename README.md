@@ -13,9 +13,9 @@ A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game 
 
 | Tool | Why | Minimum version |
 |------|-----|-----------------|
-| [Node.js](https://nodejs.org) | Package manager & dev | 18+ |
-| [Rust + Cargo](https://rustup.rs) | Compile the game engine | Latest stable |
-| [wasm-pack](https://rustwasm.github.io/wasm-pack/) | Bridge Rust > webAssembly | latest |
+| [Node.js](https://nodejs.org) | package manager | 18+ |
+| [Rust + Cargo](https://rustup.rs) | game engine | Latest stable |
+| [wasm-pack](https://rustwasm.github.io/wasm-pack/) | rust and webAssembly | latest |
 
 Install Rust + Cargo first, then:
 
@@ -48,7 +48,7 @@ npm run build
 ## Verification
 
 ```bash
-# run test suite (281+ tests across core logic, UI, RNG, storage, engine, and Rust/WASM parity)
+# run test suite
 npm test
 
 # build and preview
@@ -56,24 +56,16 @@ npm run build
 npm run preview
 ```
 
-In the preview, check:
-
-- **Gameplay** — tiles merge correctly on swipe / arrow-key input
-- **WASM engine** — Rust expectimax AI runs in a Web Worker without console errors
-- **Theme toggle** — light/dark mode switches cleanly
-- **Responsive** — board scales on different viewport sizes
-- **Merge animation** — tiles briefly fade during merges for smoother visual feedback
-
 ## Reference
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Start Vite dev server with HMR |
-| `npm run build` | WASM + type-check + Vite production build |
-| `npm run build:wasm` | Compile the Rust engine to WASM only |
-| `npm run preview` | Preview the production `dist/` bundle locally |
-| `npm test` | Run Vitest test suite (node environment) |
-| `npm run test:watch` | Run Vitest in watch mode |
+| `npm run dev` | start dev server |
+| `npm run build` | WASM + type-check + build |
+| `npm run build:wasm` | compile the Rust engine to WASM only |
+| `npm run preview` | preview the production `dist/` bundle locally |
+| `npm test` | run Vitest test suite (node environment) |
+| `npm run test:watch` | run Vitest in watch mode |
 
 ## Quick Access
 
@@ -81,3 +73,5 @@ In the preview, check:
 |--------|-------------|
 | [Benchmark Result](docs/benchmark.md) | some example benchmark results |
 | [Developer Documentation](docs/dev.md) | throuogh project overview |
+
+one thing to note: this repository wasn't made for frontend development, the main focus is the engine, so pls ignore the bad ui quality.
