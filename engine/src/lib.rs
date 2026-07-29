@@ -11,12 +11,12 @@ mod wasm;
 mod bitboard;
 
 pub use game::{Action, Config, Direction, Engine, EngineError, MoveOutcome};
-pub(crate) use search::sampled_pairs;
-pub(crate) use deterministic::score_spawn_candidate_flat;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::deterministic::score_spawn_candidate_flat;
+    use crate::search::sampled_pairs;
 
     #[test]
     fn slide_merges_correctly() {
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn game_over_detected_on_locked_board() {
         let mut engine = Engine::with_size(3).unwrap();
-        engine.grid = vec![vec![2, 4, 2], vec![4, 2, 4], vec![2, 4, 8]];
+        engine.set_grid(vec![vec![2, 4, 2], vec![4, 2, 4], vec![2, 4, 8]]);
         assert!(engine.is_game_over());
     }
 

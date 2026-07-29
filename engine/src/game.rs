@@ -155,6 +155,10 @@ impl Engine {
         self.won
     }
 
+    pub(crate) fn set_grid(&mut self, grid: Vec<Vec<u32>>) {
+        self.grid = grid;
+    }
+
     pub fn tile_at(&self, r: usize, c: usize) -> Result<u32, EngineError> {
         self.grid
             .get(r)
