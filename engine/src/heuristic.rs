@@ -1,0 +1,210 @@
+use crate::Engine;
+
+impl Engine {
+    pub(crate) fn heuristic_flat(board: &[u32], n: usize) -> f64 {
+        let mut empty = 0.0;
+        for &v in board.iter() {
+            if v == 0 {
+                empty += 1.0;
+            }
+        }
+
+        let log = |v: u32| -> f64 {
+            if v == 0 {
+                0.0
+            } else {
+                v.trailing_zeros() as f64
+            }
+        };
+
+        let mut smoothness = 0.0;
+        for r in 0..n {
+            for c in 0..n {
+                let v_raw = board[r * n + c];
+                if v_raw == 0 {
+                    continue;
+                }
+                let v = log(v_raw);
+                if c + 1 < n {
+                    let mut next_c = c + 1;
+                    while next_c < n && board[r * n + next_c] == 0 {
+                        next_c += 1;
+                    }
+                    if next_c < n {
+                        smoothness -= (v - log(board[r * n + next_c])).abs();
+                    }
+                }
+                if r + 1 < n {
+                    let mut next_r = r + 1;
+                    while next_r < n && board[next_r * n + c] == 0 {
+                        next_r += 1;
+                    }
+                    if next_r < n {
+                        smoothness -= (v - log(board[next_r * n + c])).abs();
+                    }
+                }
+            }
+        }
+
+        let mut mono = 0.0;
+        for r in 0..n {
+            let mut inc = 0.0;
+            let mut dec = 0.0;
+            for c in 0..n - 1 {
+                let a = log(board[r * n + c]);
+                let b = log(board[r * n + c + 1]);
+                if a > b {
+                    dec += a - b;
+                } else {
+                    inc += b - a;
+                }
+            }
+            mono -= inc.min(dec);
+        }
+        for c in 0..n {
+            let mut inc = 0.0;
+            let mut dec = 0.0;
+            for r in 0..n - 1 {
+                let a = log(board[r * n + c]);
+                let b = log(board[(r + 1) * n + c]);
+                if a > b {
+                    dec += a - b;
+                } else {
+                    inc += b - a;
+                }
+            }
+            mono -= inc.min(dec);
+        }
+
+        const W_EMPTY: f64 = 270.0;
+        const W_MONO: f64 = 25.0;
+        const W_SMOOTH: f64 = 11.0;
+        const W_SNAKE: f64 = 46.0;
+        const W_CONSISTENCY: f64 = 18.0;
+        const W_CORNER: f64 = 10.0;
+
+        W_EMPTY * (empty + 1.0f64).log2()
+            + W_MONO * mono
+            + W_SMOOTH * smoothness
+            + W_SNAKE * Self::snake_score_flat(board, n)
+            + W_CONSISTENCY * Self::snake_consistency_flat(board, n)
+            + W_CORNER * Self::corner_reward_flat(board, n)
+    }
+
+    fn snake_scores_flat(board: &[u32], n: usize) -> [f64; 4] {
+        let mut scores = [0.0f64; 4];
+        if n == 0 {
+            return scores;
+        }
+
+        let mut w = 1.0f64;
+        const RATIO: f64 = 0.5;
+
+        for r in 0..n {
+            for c_idx in 0..n {
+                let c = if r % 2 == 0 { c_idx } else { n - 1 - c_idx };
+
+                let v = board[r * n + c];
+                scores[0] += (if v == 0 {
+                    0.0
+                } else {
+                    v.trailing_zeros() as f64
+                }) * w;
+
+                let v90 = board[c * n + (n - 1 - r)];
+                scores[1] += (if v90 == 0 {
+                    0.0
+                } else {
+                    v90.trailing_zeros() as f64
+                }) * w;
+
+                let v180 = board[(n - 1 - r) * n + (n - 1 - c)];
+                scores[2] += (if v180 == 0 {
+                    0.0
+                } else {
+                    v180.trailing_zeros() as f64
+                }) * w;
+
+                let v270 = board[(n - 1 - c) * n + r];
+                scores[3] += (if v270 == 0 {
+                    0.0
+                } else {
+                    v270.trailing_zeros() as f64
+                }) * w;
+
+                w *= RATIO;
+            }
+        }
+
+        scores
+    }
+
+    pub(crate) fn snake_score_flat(board: &[u32], n: usize) -> f64 {
+        if n == 0 {
+            return 0.0;
+        }
+        Self::snake_scores_flat(board, n)
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+    fn snake_consistency_flat(board: &[u32], n: usize) -> f64 {
+        if n == 0 {
+            return 0.0;
+        }
+        let scores = Self::snake_scores_flat(board, n);
+        let max_score = scores.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        if max_score <= 0.0 {
+            return 0.0;
+        }
+        let threshold = max_score * 0.5;
+        scores.iter().filter(|&&s| s > threshold).count() as f64
+    }
+
+    fn corner_reward_flat(board: &[u32], n: usize) -> f64 {
+        if n < 2 {
+            return 0.0;
+        }
+        let corners = [(0usize, 0usize), (0, n - 1), (n - 1, 0), (n - 1, n - 1)];
+        let max_dist = 2.0 * (n as f64 - 1.0);
+
+        let closeness = |r: usize, c: usize| -> f64 {
+            let dist = corners
+                .iter()
+                .map(|&(cr, cc)| {
+                    let dr = (r as isize - cr as isize).unsigned_abs() as f64;
+                    let dc = (c as isize - cc as isize).unsigned_abs() as f64;
+                    dr + dc
+                })
+                .fold(f64::INFINITY, f64::min);
+            1.0 - dist / max_dist
+        };
+
+        let mut reward = 0.0;
+        let mut max_val = 0u32;
+        let mut max_pos = (0usize, 0usize);
+        for r in 0..n {
+            for c in 0..n {
+                let v = board[r * n + c];
+                if v == 0 {
+                    continue;
+                }
+                let rank = v.trailing_zeros() as f64;
+                reward += rank * closeness(r, c);
+                if v > max_val {
+                    max_val = v;
+                    max_pos = (r, c);
+                }
+            }
+        }
+
+        if max_val > 0 {
+            let max_rank = max_val.trailing_zeros() as f64;
+            reward += max_rank * closeness(max_pos.0, max_pos.1) * 1.5;
+        }
+
+        reward
+    }
+
+}
