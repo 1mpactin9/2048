@@ -134,7 +134,7 @@
     position: absolute;
     top: 0;
     left: 0;
-    background: rgba(238, 228, 218, 0.35);
+    background: color-mix(in srgb, var(--accent) 40%, transparent);
     border-radius: var(--tile-radius);
   }
 

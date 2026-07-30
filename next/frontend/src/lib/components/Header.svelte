@@ -178,10 +178,10 @@
     flex-direction: column;
     align-items: center;
     gap: 0;
-    padding: 6px 12px;
+    padding: 6px 16px;
     background: var(--score-bg);
     color: var(--score-text);
-    border-radius: 12px;
+    border-radius: 14px;
     font-weight: 700;
     min-width: 80px;
   }
