@@ -17,7 +17,7 @@
   });
 </script>
 
-<div class="game-body">
+<div class="game-body" class:plus={mode === "plus"}>
   <Board />
 </div>
 <div class="game-foot">
@@ -32,6 +32,16 @@
     justify-content: center;
     min-height: 0;
     padding: 0 8px;
+  }
+
+  /* Plus mode: darken the board area regardless of the active theme. */
+  .game-body.plus :global(.board) {
+    background: #2a2620;
+    box-shadow: var(--shadow-board), inset 0 2px 6px rgba(0, 0, 0, 0.55);
+  }
+
+  .game-body.plus :global(.cell) {
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .game-foot {

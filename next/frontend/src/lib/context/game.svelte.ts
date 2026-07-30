@@ -12,7 +12,7 @@ import type {
 import { DEFAULT_MODE, DEFAULT_SIZE, WIN_VALUE } from "../game/constants";
 import { GameSession, restoreSession } from "../game/session";
 import { createSeed, makeRng } from "../game/rng";
-import { getGame, loadSettings, putGame, saveSettings } from "../game/storage";
+import { getGame, putGame, saveSettings } from "../game/storage";
 import { applyTheme } from "./theme";
 
 const KEY = Symbol("game");
@@ -97,7 +97,6 @@ export class GameContext {
   start(size: number, mode: GameMode, allowResume = true): void {
     this.activeTool = "none";
     this.swapFirst = null;
-    const settings = loadSettings();
     const best = this.readBest(size, mode);
 
     if (allowResume) {
@@ -114,7 +113,7 @@ export class GameContext {
     this.seed = createSeed();
     this.session = GameSession.newGame(size, mode, best, makeRng(this.seed));
     this.sync(null);
-    void settings;
+    saveSettings({ lastSize: size, lastMode: mode });
     saveSettings({ lastSize: size, lastMode: mode });
   }
 

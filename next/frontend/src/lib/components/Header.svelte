@@ -47,7 +47,7 @@
     <div class="scores">
       <div class="score-card">
         <span class="score-label">Score</span>
-        <span class="score-value">{game.score}</span>
+        <span class="score-value" aria-live="polite">{game.score}</span>
       </div>
       <div class="score-card best">
         <span class="score-label">Best</span>
@@ -62,8 +62,7 @@
   </div>
 
   {#if menuOpen}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="menu-backdrop" onclick={toggleMenu} onkeydown={(e) => e.key === 'Escape' && toggleMenu()}></div>
+    <div class="menu-backdrop" role="presentation" onclick={toggleMenu} onkeydown={(e) => e.key === 'Escape' && toggleMenu()}></div>
     <div class="menu" role="dialog" aria-label="Game menu">
       <ul class="menu-list">
         <li>

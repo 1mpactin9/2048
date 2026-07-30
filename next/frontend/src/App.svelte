@@ -19,9 +19,9 @@
     <Router {routes} />
   </main>
   <footer class="footer">
-    <a href="/#/about">About</a>
+    <a href="#/about">About</a>
     <span>&middot;</span>
-    <a href="/#/learn">How to play</a>
+    <a href="#/learn">How to play</a>
   </footer>
 </div>
 

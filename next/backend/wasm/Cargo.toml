@@ -1,0 +1,10 @@
+[package]
+name = "engine2048-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+engine2048-core = { path = "../core" }

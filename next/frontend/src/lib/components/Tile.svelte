@@ -24,65 +24,70 @@
   }: Props = $props();
 
   let el = $state<HTMLButtonElement>();
-  let prevRow = $state(tile.row);
-  let prevCol = $state(tile.col);
+  // Track the previous grid position to animate from; mutated inside $effect.
+  // svelte-ignore state_referenced_locally
+  let prevRow = tile.row;
+  // svelte-ignore state_referenced_locally
+  let prevCol = tile.col;
 
   const colors = $derived(tileColors(tile.value));
   const fontScale = $derived(tileFontScale(tile.value));
 
-  function x(col: number): number {
+  function tx(col: number): number {
     return pad + col * unit;
   }
-  function y(row: number): number {
+  function ty(row: number): number {
     return pad + row * unit;
   }
 
-  function reduceMotion(): boolean {
+  function reducedMotion(): boolean {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
-  // Slide animation: runs when grid position changes.
+  // Combined position + scale effect. We write both transforms at once to avoid
+  // one overriding the other.
   $effect(() => {
     const node = el;
-    if (!node) return;
-    const toX = x(tile.col);
-    const toY = y(tile.row);
+    if (!node) return undefined;
+    const toX = tx(tile.col);
+    const toY = ty(tile.row);
 
     if (tile.row === prevRow && tile.col === prevCol) {
-      node.style.transform = `translate(${toX}px, ${toY}px)`;
-      return;
+      node.style.transform = `translate(${toX}px, ${toY}px) scale(var(--ts,1))`;
+      return undefined;
     }
 
-    const fromX = x(prevCol);
-    const fromY = y(prevRow);
+    const fromX = tx(prevCol);
+    const fromY = ty(prevRow);
     prevRow = tile.row;
     prevCol = tile.col;
 
-    if (reduceMotion()) {
-      node.style.transform = `translate(${toX}px, ${toY}px)`;
-      return;
+    if (reducedMotion()) {
+      node.style.transform = `translate(${toX}px, ${toY}px) scale(var(--ts,1))`;
+      return undefined;
     }
 
     const controls = animate({
-      from: { tx: fromX, ty: fromY },
-      to: { tx: toX, ty: toY },
+      from: { x: fromX, y: fromY },
+      to: { x: toX, y: toY },
       type: "spring",
       stiffness: 380,
       damping: 34,
       mass: 0.9,
-      onUpdate: (v: { tx: number; ty: number }) => {
-        node.style.transform = `translate(${v.tx}px, ${v.ty}px)`;
+      onUpdate: (v: { x: number; y: number }) => {
+        node.style.transform = `translate(${v.x}px, ${v.y}px) scale(var(--ts,1))`;
       },
     });
     return () => controls.stop();
   });
 
-  // Spawn / merge pop animation.
+  // Scale pop for spawn or merge.
   $effect(() => {
     const node = el;
-    if (!node) return;
-    if (reduceMotion()) return;
+    if (!node) return undefined;
+    if (reducedMotion()) return undefined;
+
     if (tile.isNew) {
       const controls = animate({
         from: 0.3,
@@ -91,16 +96,29 @@
         stiffness: 460,
         damping: 26,
         onUpdate: (s: number) => {
-          node.style.setProperty("--tile-scale", String(s));
+          node.style.setProperty("--ts", String(s));
         },
       });
       return () => controls.stop();
     }
+
     if (tile.isMerged) {
-      node.style.animation = "tile-pop 0.18s ease";
-      return () => { node.style.animation = ""; };
+      node.style.setProperty("--ts", "1.18");
+      const controls = animate({
+        from: 1.18,
+        to: 1,
+        type: "spring",
+        stiffness: 600,
+        damping: 22,
+        onUpdate: (s: number) => {
+          node.style.setProperty("--ts", String(s));
+        },
+      });
+      return () => controls.stop();
     }
-    node.style.setProperty("--tile-scale", "1");
+
+    node.style.setProperty("--ts", "1");
+    return undefined;
   });
 
   function handleClick() {
@@ -123,7 +141,7 @@
   style:font-size="{cell * 0.42 * fontScale}px"
   aria-label="Tile {tile.value}"
 >
-  <span class="tile-value">{tile.value}</span>
+  {tile.value}
 </button>
 
 <style>
@@ -143,11 +161,6 @@
     transform-origin: center;
     padding: 0;
     user-select: none;
-  }
-
-  .tile-value {
-    display: block;
-    transform: scale(var(--tile-scale, 1));
   }
 
   .tile:disabled {
