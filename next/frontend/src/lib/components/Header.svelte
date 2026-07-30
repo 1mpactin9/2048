@@ -3,14 +3,16 @@
   import { loadSettings, saveSettings } from "$lib/game/storage";
   import { applyTheme } from "$lib/context/theme";
   import { SIZES } from "$lib/game/constants";
-  import type { GameMode } from "$lib/types/game";
+  import type { GameMode, Theme } from "$lib/types/game";
 
   const game = getGameContext();
 
-  let theme = $state(loadSettings().theme ?? "system");
+  const THEMES: Theme[] = ["system", "light", "dark"];
+
+  let theme = $state<Theme>(loadSettings().theme ?? "system");
   let menuOpen = $state(false);
 
-  function setTheme(t: typeof theme) {
+  function setTheme(t: Theme) {
     theme = t;
     applyTheme(t);
     saveSettings({ theme: t });
@@ -28,12 +30,6 @@
 
   function toggleMenu() {
     menuOpen = !menuOpen;
-  }
-
-  function themeIcon(t: typeof theme): string {
-    if (t === "dark") return "dark";
-    if (t === "light") return "light";
-    return "system";
   }
 </script>
 
@@ -66,8 +62,9 @@
   </div>
 
   {#if menuOpen}
-    <div class="menu-backdrop" onclick={toggleMenu}></div>
-    <nav class="menu" role="dialog" aria-label="Game menu">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="menu-backdrop" onclick={toggleMenu} onkeydown={(e) => e.key === 'Escape' && toggleMenu()}></div>
+    <div class="menu" role="dialog" aria-label="Game menu">
       <ul class="menu-list">
         <li>
           <button class="menu-item" class:active={game.mode === "standard"} onclick={() => setMode("standard")}>
@@ -101,7 +98,7 @@
       <hr class="menu-divider" />
 
       <div class="menu-section">
-        <label class="menu-section-label">Board size</label>
+        <span class="menu-section-label">Board size</span>
         <div class="size-grid">
           {#each SIZES as s}
             <button
@@ -118,9 +115,9 @@
       <hr class="menu-divider" />
 
       <div class="menu-section">
-        <label class="menu-section-label">Theme</label>
+        <span class="menu-section-label">Theme</span>
         <div class="size-grid">
-          {#each ["system", "light", "dark"] as t}
+          {#each THEMES as t}
             <button
               class="size-btn"
               class:active={theme === t}
@@ -131,7 +128,7 @@
           {/each}
         </div>
       </div>
-    </nav>
+    </div>
   {/if}
 </div>
 

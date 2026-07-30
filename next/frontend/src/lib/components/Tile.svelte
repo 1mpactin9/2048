@@ -24,8 +24,8 @@
   }: Props = $props();
 
   let el = $state<HTMLButtonElement>();
-  let prevRow = tile.row;
-  let prevCol = tile.col;
+  let prevRow = $state(tile.row);
+  let prevCol = $state(tile.col);
 
   const colors = $derived(tileColors(tile.value));
   const fontScale = $derived(tileFontScale(tile.value));
@@ -37,11 +37,12 @@
     return pad + row * unit;
   }
 
-  const reduceMotion = () =>
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function reduceMotion(): boolean {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
 
-  // Slide: animate transform when the tile's grid position changes.
+  // Slide animation: runs when grid position changes.
   $effect(() => {
     const node = el;
     if (!node) return;
@@ -77,7 +78,7 @@
     return () => controls.stop();
   });
 
-  // Spawn / merge pop.
+  // Spawn / merge pop animation.
   $effect(() => {
     const node = el;
     if (!node) return;
@@ -96,17 +97,8 @@
       return () => controls.stop();
     }
     if (tile.isMerged) {
-      const controls = animate({
-        from: 1,
-        to: 1,
-        type: "keyframes",
-        values: [1, 1.18, 1],
-        duration: 180,
-        onUpdate: (s: number) => {
-          node.style.setProperty("--tile-scale", String(s));
-        },
-      });
-      return () => controls.stop();
+      node.style.animation = "tile-pop 0.18s ease";
+      return () => { node.style.animation = ""; };
     }
     node.style.setProperty("--tile-scale", "1");
   });
