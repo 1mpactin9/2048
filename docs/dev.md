@@ -60,7 +60,7 @@
 │   │   ├── move.ts          # Pure move function (slide + merge)
 │   │   ├── session.ts       # GameSession — mutable game state
 │   │   ├── storage.ts       # localStorage persistence
-│   │   ├── rng.ts           # ChaCha20 CSPRNG for spawns
+│   │   ├── rng.ts           # seedrandom (ARC4-drop[256]) for spawns
 │   │   ├── engine.ts        # PlaceholderEngine (random legal moves)
 │   │   ├── wasm-engine.ts   # WasmEngine (Rust expectimax via worker)
 │   │   └── engine.worker.ts # Web Worker host for WASM engine
@@ -93,7 +93,7 @@ The codebase is split into two layers with a hard dependency boundary:
 1. **`src/core/`** — Pure game logic. No DOM, no side effects. Safe to import from tests, the UI, or external runtimes (e.g., a future CLI tool). Contains:
    - Grid representation and manipulation
    - Move resolution (slide + merge)
-   - Tile spawning with ChaCha20 CSPRNG
+   - Tile spawning with seedrandom (ARC4-drop[256])
    - Game session state management with undo history
    - Persistence (localStorage)
    - Two engine implementations: `PlaceholderEngine` (random legal moves) and `WasmEngine` (Rust expectimax AI)
@@ -250,20 +250,19 @@ interface Settings {
 
 ### RNG (`src/core/rng.ts`)
 
-ChaCha20-based CSPRNG for deterministic, unpredictable tile spawns:
+seedrandom (ARC4-drop[256]) for deterministic tile spawns:
 
 **Algorithm:**
 1. A per-game 256-bit seed is generated at game start (via `crypto.getRandomValues` or `Math.random` fallback).
-2. The seed is XOR-ed with a hardcoded 32-byte `KEY_MATERIAL` constant to produce the ChaCha20 key.
-3. `SecureRng` runs ChaCha20 in counter mode, generating 16 uint32 values per block.
-4. Each call to `next()` returns `blockValue / 2^32` as a float in `[0, 1)`.
+2. The seed is hex-encoded to a string, mixed through `mixkey` to derive a 256-byte ARC4 key.
+3. `SecureRng` runs ARC4 in counter mode, dropping the first 256 outputs.
+4. Each call to `next()` returns a double in `[0, 1)`.
 5. The `calls` property tracks how many values have been consumed — this is persisted so a reloaded game resumes the exact stream position.
 
 **Key properties:**
-- Without the source code (specifically `KEY_MATERIAL`), reproducing the stream is computationally infeasible.
-- With the source code + persisted seed + stream position, every future spawn is fully predictable.
+- The stream is fully determined by the seed string + stream position.
 - `createRngSeed()` generates a fresh 8-uint32 seed.
-- `deriveKey(seed)` produces the 256-bit ChaCha20 key from a seed.
+- `deriveKey(seed)` is no longer needed — the seed string is consumed directly by seedrandom.
 
 ### Placeholder Engine (`src/core/engine.ts`)
 
@@ -307,7 +306,7 @@ interface WasmEngine implements Engine {
 - `[2, r1, c1, r2, c2]` → swap tiles
 - `[3]` or anything else → stop
 
-**Deterministic mode (`manipulate`):** When enabled, the worker calls `suggest_move_det` / `suggest_action_det` which use the predictive `suggest_*_det` entry points. These peek the exact next spawn from the ChaCha20 stream instead of averaging over random spawns — faster and sharper search.
+**Deterministic mode (`manipulate`):** When enabled, the worker calls `suggest_move_det` / `suggest_action_det` which use the predictive `suggest_*_det` entry points. These peek the exact next spawn from the seedrandom stream instead of averaging over random spawns — faster and sharper search.
 
 ### Worker (`src/core/engine.worker.ts`)
 
@@ -770,7 +769,7 @@ dev.noDelay()  // Engine plays as fast as possible
 
 #### `dev.nextNumber()` — Predict next spawn value
 
-Peeks into the ChaCha20 CSPRNG stream to predict the next tile value (2 or 4) without advancing game state. Logs the raw RNG value and probability to the console.
+Peeks into the seedrandom stream to predict the next tile value (2 or 4) without advancing game state. Logs the raw RNG value and probability to the console.
 
 **Returns:** `number` — 2 or 4, or -1 if no RNG seed is available.
 
@@ -781,7 +780,7 @@ dev.nextNumber()  // → 4 (rng=0.0823, p(4)=0.1)
 
 #### `dev.nextLocation()` — Predict next spawn position
 
-Peeks into the ChaCha20 CSPRNG stream to predict which empty cell will receive the next tile, without advancing game state.
+Peeks into the seedrandom stream to predict which empty cell will receive the next tile, without advancing game state.
 
 **Returns:** `{ row: number, col: number }` — the predicted position, or `{ row: -1, col: -1 }` if the board is full or no RNG seed is available.
 
@@ -862,7 +861,7 @@ Returns a comprehensive object with every relevant piece of information about th
 | `position.over` / `won` / `wonAcknowledged` | Game state flags |
 | `position.moveCount` | Total moves played |
 | `position.hasLegalMoves` | Whether any move is possible |
-| `rng.seed` | ChaCha20 seed (8 uint32) or null |
+| `rng.seed` | seedrandom seed (8 uint32) or null |
 | `rng.calls` | Stream position |
 | `rng.nextPredictedValue` | Next spawn value (2 or 4), or -1 |
 | `rng.nextPredictedLocation` | Predicted spawn position |
@@ -1154,7 +1153,7 @@ This biases outcomes in the player's favor without inventing spawns the stream d
 
 ### Deterministic Prediction
 
-Because the ChaCha20 stream is fully determined by `(seed, calls)`, the next spawn can be predicted by:
+Because the seedrandom stream is fully determined by `(seed, calls)`, the next spawn can be predicted by:
 
 1. Creating a `SecureRng` clone with the current game's `rngSeed` and `rngCalls`
 2. Advancing past all past spawns: `totalSpawns = 2 (initial) + moveCount`

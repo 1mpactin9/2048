@@ -4,7 +4,6 @@ use crate::{Action, Direction, Engine};
 const WIDTH: usize = 256;
 const MASK: u32 = 255;
 const CHUNKS: u32 = 6;
-const DIGITS: u32 = 52;
 const START_DENOM: u64 = 1u64 << 48;
 const SIGNIFICANCE: u64 = 1u64 << 52;
 const OVERFLOW: u64 = 1u64 << 53;
@@ -22,12 +21,14 @@ impl Arc4 {
             s[i] = i as u8;
         }
         let keylen = key.len().max(1);
+        let mut i: u32 = 0;
         let mut j: u32 = 0;
-        for i in 0..WIDTH {
-            let t = s[i];
-            j = (j as u32 + key[i % keylen] as u32 + t as u32) & MASK;
-            s[i] = s[j as usize];
+        while i < WIDTH as u32 {
+            let t = s[i as usize];
+            j = (j + key[i as usize % keylen] as u32 + t as u32) & MASK;
+            s[i as usize] = s[j as usize];
             s[j as usize] = t;
+            i += 1;
         }
         let mut arc4 = Arc4 { i: 0, j: 0, s };
         arc4.g(WIDTH as u32);
@@ -43,7 +44,8 @@ impl Arc4 {
             let s_j = self.s[self.j as usize];
             self.s[self.i as usize] = s_j;
             self.s[self.j as usize] = t;
-            r = r * (WIDTH as f64) + s_j as f64;
+            let idx = ((s_j as u32) + (t as u32)) & MASK;
+            r = r * (WIDTH as f64) + self.s[idx as usize] as f64;
         }
         r
     }
@@ -66,20 +68,18 @@ impl Arc4 {
     }
 }
 
-fn mixkey(stringseed: &str, key: &mut [u8; WIDTH]) -> String {
-    let mut smear: u8 = 0;
+fn mixkey(stringseed: &str, key: &mut [u8; WIDTH]) -> usize {
+    let mut smear: i32 = 0;
     for (j, ch) in stringseed.chars().enumerate() {
         let j_idx = (j as u32 & MASK) as usize;
-        let cur = key[j_idx];
+        let cur = key[j_idx] as i32;
+        let ch_code = ch as i32;
         let new_smear = smear ^ cur.wrapping_mul(19);
-        key[j_idx] = new_smear.wrapping_add(ch as u8);
+        key[j_idx] = (new_smear.wrapping_add(ch_code) & (MASK as i32)) as u8;
         smear = new_smear;
     }
-    let mut out = String::with_capacity(WIDTH);
-    for k in key.iter() {
-        out.push(*k as char);
-    }
-    out
+    let n = stringseed.chars().count();
+    n.min(WIDTH)
 }
 
 fn seed_to_string(seed: &[u32; 8]) -> String {
@@ -99,8 +99,8 @@ impl SeedRng {
     pub fn new(seed: &[u32; 8], calls: u64) -> Self {
         let seed_str = seed_to_string(seed);
         let mut key = [0u8; WIDTH];
-        let _short = mixkey(&seed_str, &mut key);
-        let mut arc4 = Arc4::new(&key[..]);
+        let key_len = mixkey(&seed_str, &mut key);
+        let mut arc4 = Arc4::new(&key[..key_len]);
         for _ in 0..calls {
             arc4.next_double();
         }

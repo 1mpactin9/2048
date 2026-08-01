@@ -477,6 +477,7 @@ export class App {
     const setPower = (btn: HTMLElement, count: number, enabled: boolean) => {
       btn.querySelector(".powerup-btn__count")!.textContent = String(count);
       (btn as HTMLButtonElement).disabled = !enabled;
+      btn.classList.toggle("animate-throb", enabled && count > 0);
     };
     setPower(this.undoBtn, s.powerups.undo, this.session.canUndo);
     setPower(this.swapBtn, s.powerups.swap, this.session.canSwap);

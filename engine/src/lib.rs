@@ -297,6 +297,46 @@ mod tests {
     }
 
     #[test]
+    fn seedrandom_resume_from_offset() {
+        use crate::deterministic::SeedRng;
+        let seed = [1u32, 2, 3, 4, 5, 6, 7, 8];
+        let key = Engine::derive_key(&seed);
+        let mut a = SeedRng::new(&key, 0);
+        for _ in 0..5 {
+            a.next();
+        }
+        let mut b = SeedRng::new(&key, 5);
+        for _ in 0..10 {
+            let va = a.next();
+            let vb = b.next();
+            assert!((va - vb).abs() < 1e-12, "{} vs {}", va, vb);
+        }
+    }
+
+    #[test]
+    fn seedrandom_matches_js_reference() {
+        use crate::deterministic::SeedRng;
+        let seed = [1u32, 2, 3, 4, 5, 6, 7, 8];
+        let key = Engine::derive_key(&seed);
+        let mut rng = SeedRng::new(&key, 0);
+        let expected = [
+            0.812495365840605f64,
+            0.147393390487252,
+            0.187630772499566,
+            0.992027953955305,
+            0.676524052093521,
+        ];
+        for (i, &want) in expected.iter().enumerate() {
+            let got = rng.next();
+            assert!(
+                (got - want).abs() < 1e-12,
+                "mismatch at index {}: got {} want {}",
+                i, got, want
+            );
+        }
+    }
+
+    #[test]
     fn undo_respects_max_history() {
         let mut engine = Engine::new(Config {
             size: 4,

@@ -54,8 +54,8 @@ describe("SecureRng calls tracking and resume", () => {
   });
 });
 
-describe("SecureRng block boundary", () => {
-  it("switches to a new ChaCha block after 16 values", () => {
+describe("SecureRng stream position", () => {
+  it("values at different positions are not equal", () => {
     const gen = new SecureRng(
       [
         0xdeadc0de, 0xbeefcafe, 0x12345678, 0x9abcdef0, 0xfedcba98,
@@ -69,7 +69,7 @@ describe("SecureRng block boundary", () => {
     expect(afterFirst).not.toBe(before[0]);
   });
 
-  it("produces the same value at the same offset across two block boundaries", () => {
+  it("produces the same value at the same offset across two positions", () => {
     const seed = [42, 42, 42, 42, 42, 42, 42, 42];
     const gen1 = new SecureRng(seed, 0);
     for (let i = 0; i < 16; i++) gen1.next();
