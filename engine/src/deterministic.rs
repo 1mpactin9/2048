@@ -1,27 +1,126 @@
 use crate::search::sampled_pairs;
 use crate::{Action, Direction, Engine};
 
+const WIDTH: usize = 256;
+const MASK: u32 = 255;
+const CHUNKS: u32 = 6;
+const DIGITS: u32 = 52;
+const START_DENOM: u64 = 1u64 << 48;
+const SIGNIFICANCE: u64 = 1u64 << 52;
+const OVERFLOW: u64 = 1u64 << 53;
+
+struct Arc4 {
+    i: u32,
+    j: u32,
+    s: [u8; WIDTH],
+}
+
+impl Arc4 {
+    fn new(key: &[u8]) -> Self {
+        let mut s = [0u8; WIDTH];
+        for i in 0..WIDTH {
+            s[i] = i as u8;
+        }
+        let keylen = key.len().max(1);
+        let mut j: u32 = 0;
+        for i in 0..WIDTH {
+            let t = s[i];
+            j = (j as u32 + key[i % keylen] as u32 + t as u32) & MASK;
+            s[i] = s[j as usize];
+            s[j as usize] = t;
+        }
+        let mut arc4 = Arc4 { i: 0, j: 0, s };
+        arc4.g(WIDTH as u32);
+        arc4
+    }
+
+    fn g(&mut self, count: u32) -> f64 {
+        let mut r: f64 = 0.0;
+        for _ in 0..count {
+            self.i = (self.i + 1) & MASK;
+            let t = self.s[self.i as usize];
+            self.j = (self.j + t as u32) & MASK;
+            let s_j = self.s[self.j as usize];
+            self.s[self.i as usize] = s_j;
+            self.s[self.j as usize] = t;
+            r = r * (WIDTH as f64) + s_j as f64;
+        }
+        r
+    }
+
+    fn next_double(&mut self) -> f64 {
+        let mut n: f64 = self.g(CHUNKS);
+        let mut d: f64 = START_DENOM as f64;
+        let mut x: f64 = 0.0;
+        while n < SIGNIFICANCE as f64 {
+            n = (n + x) * (WIDTH as f64);
+            d *= WIDTH as f64;
+            x = self.g(1);
+        }
+        while n >= OVERFLOW as f64 {
+            n *= 0.5;
+            d *= 0.5;
+            x *= 0.5;
+        }
+        (n + x) / d
+    }
+}
+
+fn mixkey(stringseed: &str, key: &mut [u8; WIDTH]) -> String {
+    let mut smear: u8 = 0;
+    for (j, ch) in stringseed.chars().enumerate() {
+        let j_idx = (j as u32 & MASK) as usize;
+        let cur = key[j_idx];
+        let new_smear = smear ^ cur.wrapping_mul(19);
+        key[j_idx] = new_smear.wrapping_add(ch as u8);
+        smear = new_smear;
+    }
+    let mut out = String::with_capacity(WIDTH);
+    for k in key.iter() {
+        out.push(*k as char);
+    }
+    out
+}
+
+fn seed_to_string(seed: &[u32; 8]) -> String {
+    let mut s = String::with_capacity(64);
+    for v in seed {
+        s.push_str(&format!("{:08x}", v));
+    }
+    s
+}
+
+pub struct SeedRng {
+    arc4: Arc4,
+    pub calls: u64,
+}
+
+impl SeedRng {
+    pub fn new(seed: &[u32; 8], calls: u64) -> Self {
+        let seed_str = seed_to_string(seed);
+        let mut key = [0u8; WIDTH];
+        let _short = mixkey(&seed_str, &mut key);
+        let mut arc4 = Arc4::new(&key[..]);
+        for _ in 0..calls {
+            arc4.next_double();
+        }
+        SeedRng { arc4, calls }
+    }
+
+    pub fn next(&mut self) -> f64 {
+        let v = self.arc4.next_double();
+        self.calls += 1;
+        v
+    }
+}
+
 impl Engine {
     pub fn derive_key(seed: &[u32]) -> [u32; 8] {
-        let mut seed_bytes = [0u8; 32];
-        for i in 0..8 {
-            let v = seed.get(i).copied().unwrap_or(0);
-            seed_bytes[i * 4..i * 4 + 4].copy_from_slice(&v.to_le_bytes());
+        let mut out = [0u32; 8];
+        for (i, v) in seed.iter().enumerate().take(8) {
+            out[i] = *v;
         }
-        let mut key_bytes = [0u8; 32];
-        for i in 0..32 {
-            key_bytes[i] = seed_bytes[i] ^ KEY_MATERIAL[i];
-        }
-        let mut key = [0u32; 8];
-        for i in 0..8 {
-            key[i] = u32::from_le_bytes([
-                key_bytes[i * 4],
-                key_bytes[i * 4 + 1],
-                key_bytes[i * 4 + 2],
-                key_bytes[i * 4 + 3],
-            ]);
-        }
-        key
+        out
     }
 
     pub fn predict_spawn_flat(
@@ -42,7 +141,7 @@ impl Engine {
         if num_empties == 0 {
             return None;
         }
-        let mut rng = ChaChaGen::new(key, calls);
+        let mut rng = SeedRng::new(key, calls);
         const PROB_4: f64 = 0.1;
         let (spot, value) = if manipulate && num_empties > 1 {
             let rounds = 5_usize.min(num_empties);
@@ -276,86 +375,6 @@ impl Engine {
             chosen = Action::Swap(a, b);
         }
         chosen
-    }
-}
-
-const KEY_MATERIAL: [u8; 32] = [
-    0x9e, 0x37, 0x79, 0xb9, 0x8f, 0x1c, 0x4d, 0xa2, 0x55, 0x71, 0x03, 0x96, 0xc4, 0x6e, 0x20, 0xf1,
-    0x4a, 0xd8, 0x7b, 0xe5, 0x19, 0xa0, 0x66, 0x3c, 0xf2, 0x4b, 0x88, 0x0d, 0xe6, 0x11, 0xc7, 0x5a,
-];
-const CHACHA_SIGMA: [u32; 4] = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574];
-const CHACHA_NONCE: [u32; 2] = [0, 0];
-const VALUES_PER_BLOCK: u64 = 16;
-
-fn rotl32(x: u32, n: u32) -> u32 {
-    x.rotate_left(n)
-}
-
-fn chacha_quarter_round(x: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize) {
-    x[a] = x[a].wrapping_add(x[b]);
-    x[d] = rotl32(x[d] ^ x[a], 16);
-    x[c] = x[c].wrapping_add(x[d]);
-    x[b] = rotl32(x[b] ^ x[c], 12);
-    x[a] = x[a].wrapping_add(x[b]);
-    x[d] = rotl32(x[d] ^ x[a], 8);
-    x[c] = x[c].wrapping_add(x[d]);
-    x[b] = rotl32(x[b] ^ x[c], 7);
-}
-
-fn chacha20_block(key: &[u32; 8], counter: u32, nonce: &[u32; 2], out: &mut [u32; 16]) {
-    let mut s = [0u32; 16];
-    s[0..4].copy_from_slice(&CHACHA_SIGMA);
-    s[4..12].copy_from_slice(key);
-    s[12] = counter;
-    s[13] = 0;
-    s[14] = nonce[0];
-    s[15] = nonce[1];
-    let mut x = s;
-    for _ in 0..10 {
-        chacha_quarter_round(&mut x, 0, 4, 8, 12);
-        chacha_quarter_round(&mut x, 1, 5, 9, 13);
-        chacha_quarter_round(&mut x, 2, 6, 10, 14);
-        chacha_quarter_round(&mut x, 3, 7, 11, 15);
-        chacha_quarter_round(&mut x, 0, 5, 10, 15);
-        chacha_quarter_round(&mut x, 1, 6, 11, 12);
-        chacha_quarter_round(&mut x, 2, 7, 8, 13);
-        chacha_quarter_round(&mut x, 3, 4, 9, 14);
-    }
-    for i in 0..16 {
-        out[i] = x[i].wrapping_add(s[i]);
-    }
-}
-
-struct ChaChaGen<'a> {
-    key: &'a [u32; 8],
-    block: [u32; 16],
-    block_index: u64,
-    calls: u64,
-}
-
-impl<'a> ChaChaGen<'a> {
-    fn new(key: &'a [u32; 8], calls: u64) -> Self {
-        ChaChaGen {
-            key,
-            block: [0; 16],
-            block_index: u64::MAX,
-            calls,
-        }
-    }
-
-    fn ensure_block(&mut self) {
-        let idx = self.calls / VALUES_PER_BLOCK;
-        if idx != self.block_index {
-            chacha20_block(self.key, idx as u32, &CHACHA_NONCE, &mut self.block);
-            self.block_index = idx;
-        }
-    }
-
-    fn next(&mut self) -> f64 {
-        self.ensure_block();
-        let w = self.block[(self.calls % VALUES_PER_BLOCK) as usize];
-        self.calls += 1;
-        w as f64 / 4_294_967_296.0
     }
 }
 

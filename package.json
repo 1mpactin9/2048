@@ -18,5 +18,9 @@
     "typescript": "^5.8.3",
     "vite": "^7.1.0",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@types/seedrandom": "^3.0.8",
+    "seedrandom": "^3.0.5"
   }
 }
