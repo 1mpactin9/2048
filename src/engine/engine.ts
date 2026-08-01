@@ -1,6 +1,6 @@
-import type { AutoAction, Engine, EngineContext } from "./types";
-import { DIRECTIONS } from "./types";
-import { move } from "./move";
+import type { AutoAction, Engine, EngineContext } from "../core/types";
+import { DIRECTIONS } from "../core/types";
+import { move } from "../core/move";
 
 export const PlaceholderEngine: Engine = {
   name: "Placeholder (random legal)",

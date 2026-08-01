@@ -1,4 +1,4 @@
-import type { AutoAction, Direction, Engine, EngineContext } from "./types";
+import type { AutoAction, Direction, Engine, EngineContext } from "../core/types";
 import { PlaceholderEngine } from "./engine";
 
 const DIR_BY_CODE: readonly Direction[] = ["up", "down", "left", "right"];
@@ -40,7 +40,7 @@ function getWorker(): Worker | null {
   if (workerDead) return null;
   if (worker) return worker;
   try {
-    const w = new Worker(new URL("./engine.worker.ts", import.meta.url), {
+    const w = new Worker(new URL("./worker.ts", import.meta.url), {
       type: "module",
     });
     w.onmessage = (e: MessageEvent<WorkerReply>): void => {

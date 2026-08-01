@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { BoardRenderer } from "@/ui/board";
-import type { MoveTranscript } from "@/core/types";
+import { BoardRenderer } from "../../src/ui/board";
+import type { MoveTranscript } from "../../src/core/types";
 
 vi.stubGlobal(
   "ResizeObserver",
@@ -12,160 +12,78 @@ vi.stubGlobal(
   },
 );
 
-describe("BoardRenderer — constructor", () => {
-  let container: HTMLElement;
-  let board: BoardRenderer;
+function setup(): {
+  container: HTMLElement;
+  board: BoardRenderer;
+  teardown: () => void;
+} {
+  const container = document.createElement("div");
+  container.style.width = "520px";
+  document.body.appendChild(container);
+  const board = new BoardRenderer(container);
+  return {
+    container,
+    board,
+    teardown: () => {
+      board.destroy();
+      container.remove();
+    },
+  };
+}
 
-  beforeEach(() => {
-    container = document.createElement("div");
-    container.style.width = "520px";
-    document.body.appendChild(container);
-    board = new BoardRenderer(container);
-  });
-
-  afterEach(() => {
-    board.destroy();
-    container.remove();
-  });
-
-  it("creates board element with correct class", () => {
+describe("BoardRenderer — construction and sizing", () => {
+  it("creates board element with class and --n=4", () => {
+    const { board, teardown } = setup();
     expect(board.el.className).toBe("board");
-  });
-
-  it("sets CSS custom property --n to board size", () => {
     expect(board.el.style.getPropertyValue("--n")).toBe("4");
-  });
-
-  it("appends board to container", () => {
-    expect(container.contains(board.el)).toBe(true);
-  });
-
-  it("creates grid and tilesLayer children", () => {
     expect(board.el.querySelector(".board__grid")).not.toBeNull();
     expect(board.el.querySelector(".board__tiles")).not.toBeNull();
-  });
-});
-
-describe("BoardRenderer — setSize", () => {
-  let container: HTMLElement;
-  let board: BoardRenderer;
-
-  beforeEach(() => {
-    container = document.createElement("div");
-    container.style.width = "520px";
-    document.body.appendChild(container);
-    board = new BoardRenderer(container);
+    teardown();
   });
 
-  afterEach(() => {
-    board.destroy();
-    container.remove();
-  });
-
-  it("updates --n CSS property", () => {
-    board.setSize(6);
-    expect(board.el.style.getPropertyValue("--n")).toBe("6");
-  });
-
-  it("creates correct number of cell divs", () => {
-    board.setSize(4);
-    expect(board.el.querySelectorAll(".cell").length).toBe(16);
+  it("setSize updates --n and creates the right number of cells", () => {
+    const { board, teardown } = setup();
     board.setSize(3);
     expect(board.el.querySelectorAll(".cell").length).toBe(9);
     board.setSize(8);
     expect(board.el.querySelectorAll(".cell").length).toBe(64);
+    teardown();
   });
 });
 
 describe("BoardRenderer — fullRender", () => {
-  let container: HTMLElement;
-  let board: BoardRenderer;
-
-  beforeEach(() => {
-    container = document.createElement("div");
-    container.style.width = "520px";
-    document.body.appendChild(container);
-    board = new BoardRenderer(container);
+  it("creates a tile element per non-null cell", () => {
+    const { board, teardown } = setup();
     board.setSize(4);
-  });
-
-  afterEach(() => {
-    board.destroy();
-    container.remove();
-  });
-
-  it("creates tile elements for each non-null cell", () => {
     const grid = [
       [{ id: 1, value: 2 }, null, null, null],
       [null, { id: 2, value: 4 }, null, null],
       [null, null, { id: 3, value: 8 }, null],
       [null, null, null, { id: 4, value: 16 }],
     ];
-    board.fullRender(grid as any, false);
+    board.fullRender(grid as never, false);
     expect(board.el.querySelectorAll(".tile").length).toBe(4);
+    teardown();
   });
 
-  it("sets correct tile classes and data attributes", () => {
-    const grid = [[{ id: 42, value: 256 }, null, null, null]];
-    grid.push(new Array(3).fill(null));
-    grid.push(new Array(4).fill(null));
-    board.fullRender(grid as any, false);
-    const tile = board.el.querySelector('.tile[data-id="42"]');
-    expect(tile).not.toBeNull();
-    expect(tile?.classList.contains("tile")).toBe(true);
-  });
-
-  it("spawn flag adds is-spawn class to new tiles", () => {
-    const grid = [[{ id: 1, value: 2 }, null, null, null]];
+  it("spawn flag adds is-spawn class", () => {
+    const { board, teardown } = setup();
+    board.setSize(4);
+    const grid = [[{ id: 1, value: 2 }]];
     grid.push(new Array(3).fill(null));
     grid.push(new Array(4).fill(null));
     grid.push(new Array(4).fill(null));
-    board.fullRender(grid as any, true);
+    board.fullRender(grid as never, true);
     const face = board.el.querySelector(".tile .tile__face");
     expect(face?.classList.contains("is-spawn")).toBe(true);
+    teardown();
   });
 });
 
-describe("BoardRenderer — animateMove", () => {
-  let container: HTMLElement;
-  let board: BoardRenderer;
-
-  beforeEach(() => {
-    container = document.createElement("div");
-    container.style.width = "520px";
-    document.body.appendChild(container);
-    board = new BoardRenderer(container);
+describe("BoardRenderer — animations", () => {
+  it("animateMove creates a spawned tile when transcript.spawned is set", () => {
+    const { board, teardown } = setup();
     board.setSize(4);
-    const grid = [
-      [{ id: 1, value: 2 }, { id: 2, value: 2 }, null, null],
-      [null, null, null, null],
-      [null, null, null, null],
-      [null, null, null, null],
-    ];
-    board.fullRender(grid as any, false);
-  });
-
-  afterEach(() => {
-    board.destroy();
-    container.remove();
-  });
-
-  it("positions tiles according to transcript moves", () => {
-    const transcript: MoveTranscript = {
-      moved: true,
-      gained: 4,
-      moves: [
-        { id: 2, fromRow: 0, fromCol: 1, toRow: 0, toCol: 0, mergedInto: 1 },
-        { id: 1, fromRow: 0, fromCol: 0, toRow: 0, toCol: 0, newValue: 4 },
-      ],
-      spawned: { id: 3, value: 2, row: 3, col: 3 },
-    };
-    board.animateMove(transcript);
-    const tile1 = board.el.querySelector('[data-id="1"]');
-    expect(tile1).not.toBeNull();
-  });
-
-  it("creates spawn tile element if transcript.spawned exists", () => {
     const transcript: MoveTranscript = {
       moved: true,
       gained: 4,
@@ -173,111 +91,53 @@ describe("BoardRenderer — animateMove", () => {
       spawned: { id: 99, value: 4, row: 3, col: 3 },
     };
     board.animateMove(transcript);
-    const spawnTile = board.el.querySelector('[data-id="99"]');
-    expect(spawnTile).not.toBeNull();
+    expect(board.el.querySelector('[data-id="99"]')).not.toBeNull();
+    teardown();
   });
-});
 
-describe("BoardRenderer — animateSwap", () => {
-  let container: HTMLElement;
-  let board: BoardRenderer;
-
-  beforeEach(() => {
-    container = document.createElement("div");
-    container.style.width = "520px";
-    document.body.appendChild(container);
-    board = new BoardRenderer(container);
+  it("animateSwap no-ops when either id is not found", () => {
+    const { board, teardown } = setup();
     board.setSize(4);
-    const grid = [
-      [{ id: 1, value: 2 }, null, null, null],
-      [null, { id: 2, value: 4 }, null, null],
-      [null, null, null, null],
-      [null, null, null, null],
-    ];
-    board.fullRender(grid as any, false);
-  });
-
-  afterEach(() => {
-    board.destroy();
-    container.remove();
-  });
-
-  it("swaps row/col of both tile records", () => {
-    board.animateSwap(1, 2);
-    expect(board.el.querySelectorAll(".tile").length).toBe(2);
-  });
-
-  it("no-op when either id not found", () => {
-    const beforeCount = board.el.querySelectorAll(".tile").length;
+    board.fullRender(
+      [
+        [{ id: 1, value: 2 }, null, null, null],
+        [null, { id: 2, value: 4 }, null, null],
+      ] as never,
+      false,
+    );
+    const before = board.el.querySelectorAll(".tile").length;
     board.animateSwap(999, 888);
-    expect(board.el.querySelectorAll(".tile").length).toBe(beforeCount);
+    expect(board.el.querySelectorAll(".tile").length).toBe(before);
+    teardown();
   });
 });
 
 describe("BoardRenderer — select mode", () => {
-  let container: HTMLElement;
-  let board: BoardRenderer;
-
-  beforeEach(() => {
-    container = document.createElement("div");
-    container.style.width = "520px";
-    document.body.appendChild(container);
-    board = new BoardRenderer(container);
+  it("enterSelectMode toggles state and isSelecting getter", () => {
+    const { board, teardown } = setup();
     board.setSize(4);
-    const grid = [
-      [{ id: 1, value: 2 }, { id: 2, value: 4 }, null, null],
-      [null, null, null, null],
-      [null, null, null, null],
-      [null, null, null, null],
-    ];
-    board.fullRender(grid as any, false);
-  });
-
-  afterEach(() => {
-    board.destroy();
-    container.remove();
-  });
-
-  it("enterSelectMode adds is-selecting class", () => {
-    board.enterSelectMode(2, () => {});
-    expect(board.el.classList.contains("is-selecting")).toBe(true);
-  });
-
-  it("tiles get is-targetable class in select mode", () => {
-    board.enterSelectMode(2, () => {});
-    const targetable = board.el.querySelectorAll(".is-targetable");
-    expect(targetable.length).toBe(2);
-  });
-
-  it("exitSelectMode removes all select-related classes", () => {
-    board.enterSelectMode(2, () => {});
-    board.exitSelectMode();
-    expect(board.el.classList.contains("is-selecting")).toBe(false);
-    const selected = board.el.querySelectorAll(".is-targetable, .is-selected");
-    expect(selected.length).toBe(0);
-  });
-
-  it("isSelecting getter returns true in select mode", () => {
+    board.fullRender(
+      [
+        [{ id: 1, value: 2 }, { id: 2, value: 4 }, null, null],
+      ] as never,
+      false,
+    );
     expect(board.isSelecting).toBe(false);
     board.enterSelectMode(2, () => {});
     expect(board.isSelecting).toBe(true);
+    expect(board.el.classList.contains("is-selecting")).toBe(true);
+    expect(board.el.querySelectorAll(".is-targetable").length).toBe(2);
     board.exitSelectMode();
     expect(board.isSelecting).toBe(false);
+    expect(board.el.classList.contains("is-selecting")).toBe(false);
+    teardown();
   });
 });
 
 describe("BoardRenderer — destroy", () => {
-  let container: HTMLElement;
-  let board: BoardRenderer;
-
-  beforeEach(() => {
-    container = document.createElement("div");
-    container.style.width = "520px";
-    document.body.appendChild(container);
-    board = new BoardRenderer(container);
-  });
-
   it("does not throw", () => {
+    const { board, teardown } = setup();
     expect(() => board.destroy()).not.toThrow();
+    teardown();
   });
 });

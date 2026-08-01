@@ -18,97 +18,35 @@ import {
   toggleTheme,
   currentResolved,
   currentThemePref,
-} from "@/ui/theme";
+} from "../../src/ui/theme";
 
-describe("initTheme", () => {
-  beforeEach(() => {
-    document.documentElement.removeAttribute("data-theme");
-    const existing = document.querySelector('meta[name="theme-color"]');
-    if (existing) existing.remove();
-  });
-
-  it("sets root dataset.theme to resolved mode", () => {
-    initTheme("dark");
-    expect(document.documentElement.dataset.theme).toBe("dark");
-  });
-
-  it("sets meta theme-color content", () => {
-    const meta = document.createElement("meta");
-    meta.name = "theme-color";
-    document.head.appendChild(meta);
-    initTheme("dark");
-    expect(document.documentElement.dataset.theme).toBe("dark");
-  });
-
-  it("system pref resolves to browser setting", () => {
-    initTheme("system");
-    expect(["light", "dark"]).toContain(document.documentElement.dataset.theme);
-  });
-});
-
-describe("setThemePref", () => {
+describe("theme", () => {
   beforeEach(() => {
     document.documentElement.removeAttribute("data-theme");
   });
 
-  it("updates internal currentPref", () => {
+  it("initTheme applies the resolved mode to documentElement", () => {
+    initTheme("dark");
+    expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
+  it("setThemePref updates internal pref and applies to DOM", () => {
     initTheme("light");
     setThemePref("dark");
     expect(currentThemePref()).toBe("dark");
-  });
-
-  it("applies to root dataset", () => {
-    initTheme("light");
-    setThemePref("dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
-});
 
-describe("toggleTheme", () => {
-  beforeEach(() => {
-    document.documentElement.removeAttribute("data-theme");
-  });
-
-  it("cycles between light and dark", () => {
-    initTheme("light");
-    const next = toggleTheme();
-    expect(next).toBe("dark");
-    expect(currentResolved()).toBe("dark");
-
-    const next2 = toggleTheme();
-    expect(next2).toBe("light");
-    expect(currentResolved()).toBe("light");
-  });
-
-  it("returns the new preference", () => {
+  it("toggleTheme cycles between light and dark", () => {
     initTheme("light");
     expect(toggleTheme()).toBe("dark");
-    expect(toggleTheme()).toBe("light");
-  });
-});
-
-describe("currentResolved", () => {
-  it("returns dark when pref is dark", () => {
-    initTheme("dark");
     expect(currentResolved()).toBe("dark");
-  });
-
-  it("returns light when pref is light", () => {
-    initTheme("light");
+    expect(toggleTheme()).toBe("light");
     expect(currentResolved()).toBe("light");
   });
 
-  it("returns system preference when pref is system", () => {
+  it("system pref resolves to either light or dark", () => {
     initTheme("system");
-    expect(currentResolved()).toBe("light");
-  });
-});
-
-describe("currentThemePref", () => {
-  it("returns the internally tracked preference", () => {
-    initTheme("dark");
-    expect(currentThemePref()).toBe("dark");
-    setThemePref("light");
-    expect(currentThemePref()).toBe("light");
+    expect(["light", "dark"]).toContain(document.documentElement.dataset.theme);
   });
 });

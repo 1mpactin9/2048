@@ -4,10 +4,9 @@ import type {
   EngineContext,
   GameMode,
   GameState,
-  Powerups,
   Grid,
 } from "../core/types";
-import { DEFAULT_MODE, DEFAULT_SIZE, MAX_HISTORY } from "../core/constants";
+import { DEFAULT_MODE, DEFAULT_SIZE, SPAWN_PROB_4 } from "../core/constants";
 import {
   type StoredData,
   clearGames,
@@ -19,6 +18,7 @@ import {
 import { GameSession, restoreSession } from "../core/session";
 import { hasMoves, emptyCells, createGrid } from "../core/grid";
 import { move } from "../core/move";
+import { SecureRng } from "../core/rng";
 import {
   clampScoreToWindow,
   planBypass,
@@ -26,27 +26,17 @@ import {
   validatePosition,
   type ValidationResult,
 } from "../core/validate";
-import { SecureRng } from "../core/rng";
-import { SPAWN_PROB_4 } from "../core/constants";
-import { WasmEngine } from "../core/wasm-engine";
+import { WasmEngine } from "../engine/wasm";
 import { BoardRenderer } from "./board";
 import { Input } from "./input";
 import { SettingsPopover } from "./controls";
 import { NotificationCenter } from "./notify";
 import { Icons } from "./icons";
-import { currentResolved, initTheme, setThemePref, toggleTheme } from "./theme";
+import { currentResolved, setThemePref, toggleTheme } from "./theme";
+import { Overlay } from "./overlay";
+import { animateModeBadge, bumpScore, setScore } from "./scores";
 
 type Armed = "none" | "swap" | "delete";
-
-function modeOrder(m: GameMode): number {
-  return m === "standard" ? 0 : 1;
-}
-
-interface OverlayAction {
-  label: string;
-  primary?: boolean;
-  onClick: () => void;
-}
 
 export class App {
   private data: StoredData;
@@ -55,22 +45,22 @@ export class App {
   private input!: Input;
   private popover!: SettingsPopover;
   private notifications!: NotificationCenter;
+  private overlay = new Overlay();
 
   private size: number;
   private mode: GameMode;
   private pendingNew = false;
   private armed: Armed = "none";
   private autoOn = false;
+  private autoTimer: ReturnType<typeof setTimeout> | null = null;
   private autoLoopTarget: number | null = null;
+  private autoLoopStart: number | null = null;
+  private wasOver = false;
   private lastScore = 0;
   private lastBest = 0;
   private lastSize: number;
   private lastMode: GameMode;
   private lastBadgeMode: string | null = null;
-  private autoTimer: ReturnType<typeof setTimeout> | null = null;
-  private autoLoopStart: number | null = null;
-  private currentOverlay: HTMLElement | null = null;
-  private wasOver = false;
 
   private scoreVal!: HTMLElement;
   private bestVal!: HTMLElement;
@@ -93,7 +83,7 @@ export class App {
   }
 
   start(): void {
-    initTheme(this.data.settings.theme);
+    setThemePref(this.data.settings.theme);
     this.buildDOM();
     this.loadGame(this.size, this.mode);
     if (this.data.settings.autoOn) this.startAuto();
@@ -221,7 +211,6 @@ export class App {
     this.gameOverBar = gameOverBar;
 
     stage.append(hintEl, powerups, gameOverBar);
-
     shell.append(stage);
     app.append(topbar, shell);
 
@@ -312,7 +301,7 @@ export class App {
   private switchTo(size: number, mode: GameMode): void {
     if (size === this.size && mode === this.mode) return;
     this.saveCurrent();
-    this.closeOverlay();
+    this.overlay.close();
     this.cancelPowerup();
     this.data.settings.lastSize = size;
     this.data.settings.lastMode = mode;
@@ -327,7 +316,7 @@ export class App {
     const transcript = this.session.applyMove(dir);
     if (!transcript) return;
     this.board.animateMove(transcript);
-    this.bumpScore();
+    bumpScore(this.scoreVal);
     if (this.pendingNew) this.pendingNew = false;
     this.saveCurrent();
     this.updateUI();
@@ -338,11 +327,11 @@ export class App {
     const s = this.session.state;
     const inProgress = !s.over && s.moveCount > 0 && !this.pendingNew;
     if (inProgress) {
-      this.showOverlay({
+      this.overlay.show({
         title: "Start a new game?",
         message: "Your current game will be replaced.",
         actions: [
-          { label: "Cancel", onClick: () => this.closeOverlay() },
+          { label: "Cancel", onClick: () => this.overlay.close() },
           { label: "New Game", primary: true, onClick: () => this.newGame() },
         ],
       });
@@ -352,7 +341,7 @@ export class App {
   }
 
   private newGame(): void {
-    this.closeOverlay();
+    this.overlay.close();
     this.cancelPowerup();
     const prevOver = this.session.state.over;
     const best = this.session.state.best;
@@ -451,8 +440,8 @@ export class App {
 
   private updateUI(): void {
     const s = this.session.state;
-
-    const switched = this.lastSize !== this.size || this.lastMode !== this.mode;
+    const switched =
+      this.lastSize !== this.size || this.lastMode !== this.mode;
     let dir: "down" | "up" = "down";
     if (switched) {
       dir =
@@ -460,13 +449,13 @@ export class App {
           ? this.size > this.lastSize
             ? "down"
             : "up"
-          : modeOrder(this.mode) > modeOrder(this.lastMode)
+          : this.mode > this.lastMode
             ? "down"
             : "up";
     }
     const anim = switched ? { force: true, dir } : undefined;
-    this.setScore(this.scoreVal, s.score, this.lastScore, anim);
-    this.setScore(this.bestVal, s.best, this.lastBest, anim);
+    setScore(this.scoreVal, s.score, this.lastScore, anim);
+    setScore(this.bestVal, s.best, this.lastBest, anim);
     this.lastScore = s.score;
     this.lastBest = s.best;
     this.lastSize = this.size;
@@ -474,7 +463,7 @@ export class App {
 
     if (this.lastBadgeMode !== this.mode) {
       if (this.lastBadgeMode === null) this.modeBadge.textContent = this.mode;
-      else this.animateModeBadge(this.mode);
+      else animateModeBadge(this.modeBadge, this.mode);
       this.lastBadgeMode = this.mode;
     }
 
@@ -508,86 +497,6 @@ export class App {
     }
   }
 
-  private bumpScore(): void {
-    this.scoreVal.classList.remove("is-bump");
-    void this.scoreVal.offsetWidth;
-    this.scoreVal.classList.add("is-bump");
-  }
-
-  private setScore(
-    el: HTMLElement,
-    value: number,
-    prev: number,
-    anim?: { force?: boolean; dir?: "down" | "up" },
-  ): void {
-    const text = String(value);
-    if (anim?.force) {
-      this.scrollScoreTo(el, text, anim.dir ?? "down");
-    } else if (value < prev) {
-      this.scrollScoreTo(el, text, "down");
-    } else {
-      el.textContent = text;
-    }
-  }
-
-  private scrollScoreTo(
-    el: HTMLElement,
-    text: string,
-    dir: "down" | "up",
-  ): void {
-    const prev = el.textContent ?? "";
-    el.textContent = "";
-    const reel = document.createElement("span");
-    reel.className = "score-reel";
-    const top = document.createElement("span");
-    const bottom = document.createElement("span");
-    if (dir === "down") {
-      top.textContent = prev;
-      bottom.textContent = text;
-      reel.style.transform = "translateY(0)";
-    } else {
-      top.textContent = text;
-      bottom.textContent = prev;
-      reel.style.transform = "translateY(-50%)";
-    }
-    reel.append(top, bottom);
-    el.appendChild(reel);
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        reel.style.transform =
-          dir === "down" ? "translateY(-50%)" : "translateY(0)";
-      }),
-    );
-    window.setTimeout(() => {
-      if (el.firstElementChild === reel) el.textContent = text;
-    }, 420);
-  }
-
-  private animateModeBadge(newMode: string): void {
-    const badge = this.modeBadge;
-    const oldText = badge.textContent ?? "";
-    if (oldText === newMode) return;
-
-    badge.classList.add("mode-badge--fading");
-    void badge.offsetWidth;
-
-    setTimeout(() => {
-      badge.textContent = newMode;
-      badge.classList.remove("mode-badge--fading");
-    }, 120);
-
-    setTimeout(() => {
-      badge.style.width = "";
-    }, 240);
-  }
-
-  private clearPendingNew(): void {
-    if (!this.pendingNew) return;
-    this.pendingNew = false;
-    this.saveCurrent();
-    this.updatePrimaryButton();
-  }
-
   private updatePrimaryButton(): void {
     if (this.pendingNew) {
       this.newGameBtn.textContent = "Resume";
@@ -604,12 +513,12 @@ export class App {
     const s = this.session.state;
     if (s.over) {
       if (!this.wasOver && !this.autoOn) {
-        this.showOverlay({
+        this.overlay.show({
           title: "Game over!",
           message: "No moves left.",
           score: s.score,
           actions: [
-            { label: "Keep board", onClick: () => this.closeOverlay() },
+            { label: "Keep board", onClick: () => this.overlay.close() },
             { label: "New Game", primary: true, onClick: () => this.newGame() },
           ],
         });
@@ -620,7 +529,7 @@ export class App {
         this.session.acknowledgeWin();
         this.saveCurrent();
       } else {
-        this.showOverlay({
+        this.overlay.show({
           title: "You win!",
           titleClass: "overlay__title--win",
           message: "You reached 2048!",
@@ -641,7 +550,7 @@ export class App {
   private acknowledgeWin(): void {
     this.session.acknowledgeWin();
     this.saveCurrent();
-    this.closeOverlay();
+    this.overlay.close();
   }
 
   private setFrozen(frozen: boolean): void {
@@ -649,71 +558,156 @@ export class App {
     this.gameOverBar.classList.toggle("is-visible", frozen);
   }
 
-  private showOverlay(opts: {
-    title: string;
-    titleClass?: string;
-    message?: string;
-    score?: number;
-    danger?: boolean;
-    actions: OverlayAction[];
-  }): void {
-    this.closeOverlay();
-    const overlay = document.createElement("div");
-    overlay.className = "overlay";
-    const card = document.createElement("div");
-    card.className =
-      "overlay__card" + (opts.danger ? " overlay__card--danger" : "");
-    const closeBtn = document.createElement("button");
-    closeBtn.type = "button";
-    closeBtn.className = "overlay__close";
-    closeBtn.setAttribute("aria-label", "Close");
-    closeBtn.innerHTML = Icons.close;
-    closeBtn.addEventListener("click", () => this.closeOverlay());
-    card.appendChild(closeBtn);
-    const title = document.createElement("div");
-    title.className =
-      "overlay__title" + (opts.titleClass ? ` ${opts.titleClass}` : "");
-    title.textContent = opts.title;
-    card.appendChild(title);
-    if (opts.score !== undefined) {
-      const sc = document.createElement("div");
-      sc.className = "overlay__score";
-      sc.textContent = String(opts.score);
-      card.appendChild(sc);
-    }
-    if (opts.message) {
-      const msg = document.createElement("div");
-      msg.className = "overlay__msg";
-      msg.textContent = opts.message;
-      card.appendChild(msg);
-    }
-    const actWrap = document.createElement("div");
-    actWrap.className = "overlay__actions";
-    for (const a of opts.actions) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className =
-        "btn" +
-        (a.primary
-          ? opts.danger
-            ? " btn--danger"
-            : " btn--primary"
-          : " btn--ghost");
-      b.textContent = a.label;
-      b.addEventListener("click", () => a.onClick());
-      actWrap.appendChild(b);
-    }
-    card.appendChild(actWrap);
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    this.currentOverlay = overlay;
+  private showBacktrackDisableDialog(): void {
+    const hasData = (this.session.state.deltaHistory?.length ?? 0) > 0;
+    this.overlay.show({
+      title: "Disable backtrack?",
+      danger: true,
+      message: hasData
+        ? "You have backtrack data stored. Do you want to keep it or clear it?"
+        : "Backtrack data will be cleared.",
+      actions: [
+        { label: "Cancel", onClick: () => this.overlay.close() },
+        ...(hasData
+          ? [
+              {
+                label: "Keep & Disable",
+                onClick: () => this.disableBacktrack(false),
+              },
+              {
+                label: "Clear & Disable",
+                primary: true,
+                onClick: () => this.disableBacktrack(true),
+              },
+            ]
+          : [
+              {
+                label: "Disable",
+                primary: true,
+                onClick: () => this.disableBacktrack(false),
+              },
+            ]),
+      ],
+    });
   }
 
-  private closeOverlay(): void {
-    if (this.currentOverlay) {
-      this.currentOverlay.remove();
-      this.currentOverlay = null;
+  private disableBacktrack(clearCache: boolean): void {
+    if (clearCache && this.session.state.deltaHistory) {
+      this.session.state.deltaHistory.length = 0;
     }
+    this.data.settings.backtrackEnabled = false;
+    this.persist();
+    this.popover.update({ backtrackEnabled: false });
+    this.overlay.close();
+    console.log(
+      "[dev] Backtrack disabled" +
+        (clearCache ? " (cache cleared)" : " (cache kept)"),
+    );
+  }
+
+  private confirmClearAll(): void {
+    this.popover.close();
+    this.overlay.show({
+      title: "Clear all progress?",
+      danger: true,
+      message:
+        "Every saved game and best score, across all sizes and modes, will be erased.",
+      actions: [
+        { label: "Cancel", onClick: () => this.overlay.close() },
+        {
+          label: "Clear everything",
+          primary: true,
+          onClick: () => {
+            clearGames(this.data);
+            this.persist();
+            this.overlay.close();
+            this.loadGame(this.size, this.mode);
+          },
+        },
+      ],
+    });
+  }
+
+  private clearPendingNew(): void {
+    if (!this.pendingNew) return;
+    this.pendingNew = false;
+    this.saveCurrent();
+    this.updatePrimaryButton();
+  }
+
+  private saveCurrent(): void {
+    putGame(this.data, this.session.state);
+    this.persist();
+  }
+
+  private persist(): void {
+    save(this.data);
+  }
+
+  private onAutoSpeed(ms: number): void {
+    this.data.settings.autoSpeed = ms;
+    this.persist();
+    this.popover.update({ autoSpeed: ms });
+  }
+
+  private onAutoDepth(depth: number): void {
+    this.data.settings.autoDepth = depth;
+    this.persist();
+    this.popover.update({ autoDepth: depth });
+  }
+
+  private onAutoPowerups(on: boolean): void {
+    this.data.settings.autoPowerups = on;
+    this.persist();
+    this.popover.update({ autoPowerups: on });
+  }
+
+  private onRngManip(on: boolean): void {
+    this.data.settings.rngManip = on;
+    this.session.setRngManipulation(on);
+    this.persist();
+    this.popover.update({ rngManip: on });
+    this.notify(
+      on ? "RNG Manipulation enabled" : "RNG Manipulation disabled",
+      Icons.dice,
+    );
+  }
+
+  private onDeterministic(on: boolean): void {
+    this.data.settings.deterministic = on;
+    this.persist();
+    this.popover.update({ deterministic: on });
+    this.notify(
+      on ? "Deterministic Algorithm enabled" : "Deterministic Algorithm disabled",
+      Icons.dice,
+    );
+  }
+
+  private onBacktrack(on: boolean): void {
+    this.data.settings.backtrackEnabled = on;
+    this.persist();
+    this.popover.update({ backtrackEnabled: on });
+    console.log(`[dev] Backtrack ${on ? "enabled" : "disabled"}`);
+  }
+
+  private onThemeToggle(): void {
+    this.clearPendingNew();
+    const pref = toggleTheme();
+    this.data.settings.theme = pref;
+    this.persist();
+    this.themeBtn.innerHTML =
+      currentResolved() === "dark" ? Icons.sun : Icons.moon;
+    this.popover.update({ theme: pref });
+  }
+
+  private onThemePref(pref: "light" | "dark" | "system"): void {
+    this.clearPendingNew();
+    setThemePref(pref);
+    this.data.settings.theme = pref;
+    this.persist();
+    this.themeBtn.innerHTML =
+      currentResolved() === "dark" ? Icons.sun : Icons.moon;
+    this.popover.update({ theme: pref });
   }
 
   private notify(message: string, icon?: string): void {
@@ -765,7 +759,7 @@ export class App {
       this.autoTimer = null;
       if (!this.autoOn) return;
       const s = this.session.state;
-      if (this.board.isSelecting || this.currentOverlay) {
+      if (this.board.isSelecting || this.overlay.isOpen) {
         this.stopAuto();
         return;
       }
@@ -784,9 +778,7 @@ export class App {
             return;
           }
           this.newGame();
-          if (this.autoOn && !this.session.state.over) {
-            this.autoTick();
-          }
+          if (this.autoOn && !this.session.state.over) this.autoTick();
           return;
         }
         this.stopAuto();
@@ -907,156 +899,20 @@ export class App {
     }
   }
 
-  private onAutoSpeed(ms: number): void {
-    this.data.settings.autoSpeed = ms;
-    this.persist();
-    this.popover.update({ autoSpeed: ms });
-  }
-
-  private onAutoDepth(depth: number): void {
-    this.data.settings.autoDepth = depth;
-    this.persist();
-    this.popover.update({ autoDepth: depth });
-  }
-
-  private onAutoPowerups(on: boolean): void {
-    this.data.settings.autoPowerups = on;
-    this.persist();
-    this.popover.update({ autoPowerups: on });
-  }
-
-  private onRngManip(on: boolean): void {
-    this.data.settings.rngManip = on;
-    this.session.setRngManipulation(on);
-    this.persist();
-    this.popover.update({ rngManip: on });
-    this.notify(
-      on ? "RNG Manipulation enabled" : "RNG Manipulation disabled",
-      Icons.dice,
-    );
-  }
-
-  private onDeterministic(on: boolean): void {
-    this.data.settings.deterministic = on;
-    this.persist();
-    this.popover.update({ deterministic: on });
-    this.notify(
-      on ? "Deterministic Algorithm enabled" : "Deterministic Algorithm disabled",
-      Icons.dice,
-    );
-  }
-
-  private onBacktrack(on: boolean): void {
-    this.data.settings.backtrackEnabled = on;
-    this.persist();
-    this.popover.update({ backtrackEnabled: on });
-    console.log(`[dev] Backtrack ${on ? "enabled" : "disabled"}`);
-  }
-
-  private showBacktrackDisableDialog(): void {
-    const hasData = (this.session.state.deltaHistory?.length ?? 0) > 0;
-    this.showOverlay({
-      title: "Disable backtrack?",
-      danger: true,
-      message: hasData
-        ? "You have backtrack data stored. Do you want to keep it or clear it?"
-        : "Backtrack data will be cleared.",
-      actions: [
-        { label: "Cancel", onClick: () => this.closeOverlay() },
-        ...(hasData
-          ? [
-              {
-                label: "Keep & Disable",
-                onClick: () => this.disableBacktrack(false),
-              },
-              {
-                label: "Clear & Disable",
-                primary: true,
-                onClick: () => this.disableBacktrack(true),
-              },
-            ]
-          : [
-              {
-                label: "Disable",
-                primary: true,
-                onClick: () => this.disableBacktrack(false),
-              },
-            ]),
-      ],
-    });
-  }
-
-  private disableBacktrack(clearCache: boolean): void {
-    if (clearCache && this.session.state.deltaHistory) {
-      this.session.state.deltaHistory.length = 0;
-    }
-    this.data.settings.backtrackEnabled = false;
-    this.persist();
-    this.popover.update({ backtrackEnabled: false });
-    this.closeOverlay();
-    console.log(
-      "[dev] Backtrack disabled" +
-        (clearCache ? " (cache cleared)" : " (cache kept)"),
-    );
-  }
-
-  private onThemeToggle(): void {
-    this.clearPendingNew();
-    const pref = toggleTheme();
-    this.data.settings.theme = pref;
-    this.persist();
-    this.themeBtn.innerHTML =
-      currentResolved() === "dark" ? Icons.sun : Icons.moon;
-    this.popover.update({ theme: pref });
-  }
-
-  private onThemePref(pref: "light" | "dark" | "system"): void {
-    this.clearPendingNew();
-    setThemePref(pref);
-    this.data.settings.theme = pref;
-    this.persist();
-    this.themeBtn.innerHTML =
-      currentResolved() === "dark" ? Icons.sun : Icons.moon;
-    this.popover.update({ theme: pref });
-  }
-
-  private confirmClearAll(): void {
-    this.popover.close();
-    this.showOverlay({
-      title: "Clear all progress?",
-      danger: true,
-      message:
-        "Every saved game and best score, across all sizes and modes, will be erased.",
-      actions: [
-        { label: "Cancel", onClick: () => this.closeOverlay() },
-        {
-          label: "Clear everything",
-          primary: true,
-          onClick: () => {
-            clearGames(this.data);
-            this.persist();
-            this.closeOverlay();
-            this.loadGame(this.size, this.mode);
-          },
-        },
-      ],
-    });
-  }
-
-  private saveCurrent(): void {
-    putGame(this.data, this.session.state);
-    this.persist();
-  }
-
-  private persist(): void {
-    save(this.data);
+  private recomputeOver(): void {
+    this.session.state.over = !hasMoves(this.session.state.grid);
   }
 
   destroy(): void {
     this.stopAuto();
-    this.closeOverlay();
+    this.overlay.close();
     this.input.destroy();
     this.board.destroy();
+  }
+
+  private _devId = 1;
+  private freshDevId(): number {
+    return this._devId++;
   }
 
   __undo(steps?: number): void {
@@ -1065,7 +921,7 @@ export class App {
       const count = Math.abs(n);
       this.data.settings.autoOn = true;
       let done = 0;
-      const tick = () => {
+      const tick = (): void => {
         if (
           done >= count ||
           this.session.state.over ||
@@ -1219,7 +1075,7 @@ export class App {
     }
     for (let i = 0; i < count; i++) {
       const spot = empties[i];
-      g[spot.r][spot.c] = { id: freshDevId(), value: 2 };
+      g[spot.r][spot.c] = { id: this.freshDevId(), value: 2 };
     }
     this.saveCurrent();
     this.board.fullRender(g);
@@ -1265,70 +1121,62 @@ export class App {
     console.log(`[dev] __score → set to ${n}`);
   }
 
-  __add(a: number, b?: number, c?: number, _replace?: number): void {
+  __add(a: number, b?: number, c?: number, replace?: number): void {
     const g = this.session.state.grid;
 
-    if (b !== undefined && c !== undefined && _replace !== undefined) {
-      const val = a as number;
-      const x = b as number;
-      const y = c as number;
-      if (x < 0 || x >= g.length || y < 0 || y >= g[x].length) {
-        console.warn(`[dev] __add → out of bounds (${x},${y})`);
+    if (b !== undefined && c !== undefined && replace !== undefined) {
+      if (b < 0 || b >= g.length || c < 0 || c >= g[b].length) {
+        console.warn(`[dev] __add → out of bounds (${b},${c})`);
         return;
       }
-      if (g[x][y] && !_replace) {
+      if (g[b][c] && !replace) {
         console.warn(
-          `[dev] __add → cell (${x},${y}) already occupied — pass 1 as 4th arg to force-replace`,
+          `[dev] __add → cell (${b},${c}) already occupied — pass 1 as 4th arg to force-replace`,
         );
         return;
       }
-      g[x][y] = { id: freshDevId(), value: val };
+      g[b][c] = { id: this.freshDevId(), value: a };
       this.saveCurrent();
       this.board.fullRender(g);
       this.updateUI();
       console.log(
-        `[dev] __add → placed ${val} at ${x},${y}${_replace ? " (replaced)" : ""}`,
+        `[dev] __add → placed ${a} at ${b},${c}${replace ? " (replaced)" : ""}`,
       );
       return;
     }
 
     if (b !== undefined && c === undefined) {
-      const x = a as number;
-      const y = b as number;
-      if (x < 0 || x >= g.length || y < 0 || y >= g[x].length) {
-        console.warn(`[dev] __add → out of bounds (${x},${y})`);
+      if (a < 0 || a >= g.length || b < 0 || b >= g[a].length) {
+        console.warn(`[dev] __add → out of bounds (${a},${b})`);
         return;
       }
-      if (g[x][y]) {
-        console.warn(`[dev] __add → cell (${x},${y}) already occupied`);
+      if (g[a][b]) {
+        console.warn(`[dev] __add → cell (${a},${b}) already occupied`);
         return;
       }
-      g[x][y] = { id: freshDevId(), value: 2 };
+      g[a][b] = { id: this.freshDevId(), value: 2 };
       this.saveCurrent();
       this.board.fullRender(g);
       this.updateUI();
-      console.log(`[dev] __add → placed 2 at ${x},${y}`);
+      console.log(`[dev] __add → placed 2 at ${a},${b}`);
       return;
     }
 
-    {
-      const val = a as number;
-      for (let r = 0; r < g.length; r++) {
-        for (let c = 0; c < g[r].length; c++) {
-          if (!g[r][c]) {
-            g[r][c] = { id: freshDevId(), value: val };
-            this.saveCurrent();
-            this.board.fullRender(g);
-            this.updateUI();
-            console.log(
-              `[dev] __add → placed ${val} at first empty cell (${r},${c})`,
-            );
-            return;
-          }
+    for (let r = 0; r < g.length; r++) {
+      for (let c = 0; c < g[r].length; c++) {
+        if (!g[r][c]) {
+          g[r][c] = { id: this.freshDevId(), value: a };
+          this.saveCurrent();
+          this.board.fullRender(g);
+          this.updateUI();
+          console.log(
+            `[dev] __add → placed ${a} at first empty cell (${r},${c})`,
+          );
+          return;
         }
       }
-      console.warn("[dev] __add → board is full");
     }
+    console.warn("[dev] __add → board is full");
   }
 
   __max(row: number, col: number, val = 2048): void {
@@ -1337,7 +1185,7 @@ export class App {
       console.warn(`[dev] __max → out of bounds (${row},${col})`);
       return;
     }
-    g[row][col] = { id: freshDevId(), value: val };
+    g[row][col] = { id: this.freshDevId(), value: val };
     this.saveCurrent();
     this.board.fullRender(g);
     this.updateUI();
@@ -1383,7 +1231,7 @@ export class App {
       return;
     }
     const spot = empties[Math.floor(Math.random() * empties.length)];
-    g[spot.r][spot.c] = { id: freshDevId(), value: 2048 };
+    g[spot.r][spot.c] = { id: this.freshDevId(), value: 2048 };
     this.session.state.won = true;
     this.session.state.wonAcknowledged = false;
     this.saveCurrent();
@@ -1561,85 +1409,7 @@ export class App {
     };
   }
 
-  __getStats(): {
-    board: {
-      type: string;
-      size: number;
-      mode: GameMode;
-      fullness: number;
-      emptyCells: number;
-      tileCount: number;
-      maxTile: number;
-      minTile: number;
-      avgTile: number;
-      uniqueValues: number[];
-      valueDistribution: Record<string, number>;
-      bitboard: number[][];
-      tileIds: number[][];
-      log2Grid: number[][];
-      smoothness: number;
-      monotonicity: number;
-      openLines: number;
-      mergeablePairs: number;
-    };
-    scores: {
-      current: number;
-      best: number;
-      delta: number;
-      windowMin: number;
-      windowMax: number;
-      valid: boolean;
-      belowBy: number;
-      aboveBy: number;
-    };
-    position: {
-      over: boolean;
-      won: boolean;
-      wonAcknowledged: boolean;
-      moveCount: number;
-      hasLegalMoves: boolean;
-    };
-    rng: {
-      seed: number[] | null;
-      calls: number;
-      nextPredictedValue: number;
-      nextPredictedLocation: { row: number; col: number } | null;
-    };
-    engine: {
-      name: string;
-      autoOn: boolean;
-      autoSpeed: number;
-      autoDepth: number;
-      autoPowerups: boolean;
-      manipulate: boolean;
-    };
-    powerups: Powerups;
-    history: {
-      length: number;
-      maxHistory: number;
-      canUndo: boolean;
-    };
-    ui: {
-      armed: Armed;
-      pendingNew: boolean;
-      hasOverlay: boolean;
-      isSelecting: boolean;
-      theme: "light" | "dark";
-      lastScore: number;
-      lastBest: number;
-      gameOverBarVisible: boolean;
-    };
-    validation: {
-      valid: boolean;
-      score: number;
-      min: number;
-      max: number;
-      belowBy: number;
-      aboveBy: number;
-      tileCount: number;
-    };
-    timestamp: number;
-  } {
+  __getStats(): Record<string, unknown> {
     const s = this.session.state;
     const g = s.grid;
     const size = s.size;
@@ -1725,7 +1495,6 @@ export class App {
     }
 
     const vr = validatePosition(g, s.score);
-
     const seed = s.rngSeed ?? null;
     const calls = s.rngCalls ?? 0;
     let predValue = -1;
@@ -1801,13 +1570,13 @@ export class App {
       powerups: { ...s.powerups },
       history: {
         length: s.history.length,
-        maxHistory: MAX_HISTORY,
+        maxHistory: 16,
         canUndo: this.session.canUndo,
       },
       ui: {
         armed: this.armed,
         pendingNew: this.pendingNew,
-        hasOverlay: !!this.currentOverlay,
+        hasOverlay: this.overlay.isOpen,
         isSelecting: this.board.isSelecting,
         theme: currentResolved(),
         lastScore: this.lastScore,
@@ -1852,7 +1621,7 @@ export class App {
         const col = i % size;
         const val = flat[i];
         if (typeof val === "number" && val > 0) {
-          grid[row][col] = { id: freshDevId(), value: val };
+          grid[row][col] = { id: this.freshDevId(), value: val };
         }
       }
     } else if (Array.isArray(b)) {
@@ -1868,7 +1637,7 @@ export class App {
       for (let r = 0; r < size; r++) {
         for (let c = 0; c < size; c++) {
           if (vals[r][c] > 0) {
-            grid[r][c] = { id: freshDevId(), value: vals[r][c] };
+            grid[r][c] = { id: this.freshDevId(), value: vals[r][c] };
           }
         }
       }
@@ -1885,7 +1654,7 @@ export class App {
       for (let r = 0; r < size; r++) {
         for (let c = 0; c < size; c++) {
           if (vals[r][c] > 0) {
-            grid[r][c] = { id: freshDevId(), value: vals[r][c] };
+            grid[r][c] = { id: this.freshDevId(), value: vals[r][c] };
           }
         }
       }
@@ -2034,12 +1803,26 @@ export class App {
       2,
       Math.log2(maxT) + Math.floor(estMerges / 2),
     );
-
     const win = scoreWindow(g);
-
     const calcTimeMs = parseFloat((performance.now() - t0).toFixed(3));
 
-    const result = {
+    console.log(
+      `%c[dev] __evalPosition%c`,
+      "font-weight:bold",
+      "",
+      `\n  Score: ${s.score} / Best: ${s.best}`,
+      `\n  Board: ${size}x${size} | Tiles: ${tileCount} | Empty: ${emptyCells}`,
+      `\n  Max tile: ${maxT} | Sum: ${sumT}`,
+      `\n  Smoothness: ${smoothness.toFixed(2)} | Monotonicity: ${mono}`,
+      `\n  Mergeable pairs: ${mergeable} | Open lines: ${openLines}`,
+      `\n  Max in corner: ${maxCorner}`,
+      `\n  Composite score: ${composite.toFixed(2)}`,
+      `\n  Est. highest possible tile: ~${estHighestTile.toLocaleString()}`,
+      `\n  Score window: [${win.min}, ${win.max}] (valid: ${s.score >= win.min && s.score <= win.max})`,
+      `\n  Calc time: ${calcTimeMs}ms`,
+    );
+
+    return {
       calcTimeMs,
       currentScore: s.score,
       bestScore: s.best,
@@ -2065,24 +1848,6 @@ export class App {
         compositeScore: composite,
       },
     };
-
-    console.log(
-      `%c[dev] __evalPosition%c`,
-      "font-weight:bold",
-      "",
-      `\n  Score: ${s.score} / Best: ${s.best}`,
-      `\n  Board: ${size}x${size} | Tiles: ${tileCount} | Empty: ${emptyCells}`,
-      `\n  Max tile: ${maxT} | Sum: ${sumT}`,
-      `\n  Smoothness: ${smoothness.toFixed(2)} | Monotonicity: ${mono}`,
-      `\n  Mergeable pairs: ${mergeable} | Open lines: ${openLines}`,
-      `\n  Max in corner: ${maxCorner}`,
-      `\n  Composite score: ${composite.toFixed(2)}`,
-      `\n  Est. highest possible tile: ~${estHighestTile.toLocaleString()}`,
-      `\n  Score window: [${win.min}, ${win.max}] (valid: ${s.score >= win.min && s.score <= win.max})`,
-      `\n  Calc time: ${calcTimeMs}ms`,
-    );
-
-    return result;
   }
 
   async __afkHighScore(): Promise<void> {
@@ -2106,19 +1871,18 @@ export class App {
     let gamesPlayed = 0;
     const startTime = Date.now();
 
-    const loop = async () => {
+    const loop = async (): Promise<void> => {
       if (this.session.state.over || this.session.state.moveCount === 0) {
         this.newGame();
         gamesPlayed++;
       }
-
       this.data.settings.autoOn = true;
       this.data.settings.autoDepth = depth;
       this.data.settings.rngManip = manipulate;
       this.startAuto();
 
       await new Promise<void>((resolve) => {
-        const check = () => {
+        const check = (): void => {
           if (!this.autoOn || this.session.state.over) {
             resolve();
             return;
@@ -2176,18 +1940,6 @@ export class App {
     loop();
   }
 
-  __fixBest(): void {
-    const s = this.session.state;
-    if (typeof s.best === "number" && !isNaN(s.best)) {
-      console.log("[dev] __fixBest → best score is already valid");
-      return;
-    }
-    s.best = s.score;
-    this.saveCurrent();
-    this.updateUI();
-    console.log(`[dev] __fixBest → recovered best from NaN to ${s.best}`);
-  }
-
   __refreshScore(): {
     from: number;
     to: number;
@@ -2230,6 +1982,18 @@ export class App {
     };
   }
 
+  __fixBest(): void {
+    const s = this.session.state;
+    if (typeof s.best === "number" && !isNaN(s.best)) {
+      console.log("[dev] __fixBest → best score is already valid");
+      return;
+    }
+    s.best = s.score;
+    this.saveCurrent();
+    this.updateUI();
+    console.log(`[dev] __fixBest → recovered best from NaN to ${s.best}`);
+  }
+
   __refreshPlayAgainStatus(): void {
     const isDead = !hasMoves(this.session.state.grid);
     this.gameOverBar.classList.toggle("is-visible", isDead);
@@ -2239,8 +2003,6 @@ export class App {
   }
 
   __help(): void {
-    console.log("%c2048 Developer Console%c", "font-weight:bold;font-size:14px;", "");
-    console.log("");
     const lines = [
       "dev.undo()                  Undo last move (no powerup cost)",
       "dev.undo(n)                 Undo n steps at once",
@@ -2280,19 +2042,10 @@ export class App {
       "dev.runAutoLoop(score)      Run AI until target score reached",
       "dev.help()                  Show this message",
     ];
-    for (const line of lines) {
-      console.log(line);
-    }
+    console.log("%c2048 Developer Console%c", "font-weight:bold;font-size:14px;", "");
+    console.log("");
+    for (const line of lines) console.log(line);
     console.log("");
     console.log("All methods also accessible via window.__app.__methodName().");
   }
-
-  private recomputeOver(): void {
-    this.session.state.over = !hasMoves(this.session.state.grid);
-  }
-}
-
-let _devId = 1;
-function freshDevId(): number {
-  return _devId++;
 }
