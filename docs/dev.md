@@ -48,42 +48,42 @@
 ## Project Structure
 
 ```
-2048/
-├── engine/                  # Rust WASM game engine (expectimax AI)
-│   ├── src/lib.rs
-│   └── pkg/                 # Generated WASM bindings (built by wasm-pack)
-├── src/
-│   ├── core/                # Game logic — zero DOM dependencies
-│   │   ├── types.ts         # Shared type definitions
-│   │   ├── constants.ts     # Game constants, tile colors
-│   │   ├── grid.ts          # Grid creation, spawning, utilities
-│   │   ├── move.ts          # Pure move function (slide + merge)
-│   │   ├── session.ts       # GameSession — mutable game state
-│   │   ├── storage.ts       # localStorage persistence
-│   │   ├── rng.ts           # seedrandom (ARC4-drop[256]) for spawns
-│   │   ├── engine.ts        # PlaceholderEngine (random legal moves)
-│   │   ├── wasm-engine.ts   # WasmEngine (Rust expectimax via worker)
-│   │   └── engine.worker.ts # Web Worker host for WASM engine
-│   ├── ui/                  # DOM layer
-│   │   ├── app.ts           # App class — main controller
-│   │   ├── board.ts         # BoardRenderer — tile rendering & animations
-│   │   ├── input.ts         # Input — keyboard + touch swipe handling
-│   │   ├── controls.ts      # SettingsPopover — gear menu UI
-│   │   ├── notify.ts        # NotificationCenter — toast popups
-│   │   ├── theme.ts         # Theme management (light/dark/system)
-│   │   └── icons.ts         # SVG icon strings
-│   ├── styles/              # CSS files
-│   │   ├── main.css         # Entry point (imports others)
-│   │   ├── base.css         # Reset, theme tokens, typography
-│   │   ├── layout.css       # Component layouts, buttons, overlays
-│   │   ├── board.css        # Board grid, cells, tiles
-│   │   └── ...
-│   ├── main.ts              # Bootstraps App, exposes globals
-│   └── vite-env.d.ts        # Vite type declarations
-├── tests/                   # Vitest test suite
-├── docs/dev.md              # This file
-├── package.json
-└── tsconfig.json
+2048/  
+├── engine/                  # Rust WASM game engine (expectimax AI)  
+│   ├── src/lib.rs  
+│   └── pkg/                 # Generated WASM bindings (built by wasm-pack)  
+├── src/  
+│   ├── core/                # Game logic — zero DOM dependencies  
+│   │   ├── types.ts         # Shared type definitions  
+│   │   ├── constants.ts     # Game constants, tile colors  
+│   │   ├── grid.ts          # Grid creation, spawning, utilities  
+│   │   ├── move.ts          # Pure move function (slide + merge)  
+│   │   ├── session.ts       # GameSession — mutable game state  
+│   │   ├── storage.ts       # localStorage persistence  
+│   │   ├── rng.ts           # seedrandom (ARC4-drop[256]) for spawns  
+│   │   ├── engine.ts        # PlaceholderEngine (random legal moves)  
+│   │   ├── wasm-engine.ts   # WasmEngine (Rust expectimax via worker)  
+│   │   └── engine.worker.ts # Web Worker host for WASM engine  
+│   ├── ui/                  # DOM layer  
+│   │   ├── app.ts           # App class — main controller  
+│   │   ├── board.ts         # BoardRenderer — tile rendering & animations  
+│   │   ├── input.ts         # Input — keyboard + touch swipe handling  
+│   │   ├── controls.ts      # SettingsPopover — gear menu UI  
+│   │   ├── notify.ts        # NotificationCenter — toast popups  
+│   │   ├── theme.ts         # Theme management (light/dark/system)  
+│   │   └── icons.ts         # SVG icon strings  
+│   ├── styles/              # CSS files  
+│   │   ├── main.css         # Entry point (imports others)  
+│   │   ├── base.css         # Reset, theme tokens, typography  
+│   │   ├── layout.css       # Component layouts, buttons, overlays  
+│   │   ├── board.css        # Board grid, cells, tiles  
+│   │   └── ...  
+│   ├── main.ts              # Bootstraps App, exposes globals  
+│   └── vite-env.d.ts        # Vite type declarations  
+├── tests/                   # Vitest test suite  
+├── docs/dev.md              # This file  
+├── package.json  
+└── tsconfig.json  
 ```
 
 ## Architecture Overview

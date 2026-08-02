@@ -3,9 +3,7 @@
     <p>
         <a href="#phase-1-directional-move-speed-plain-expectimax">Part 01</a> -
         <a href="#phase-2-power-up-evaluation-full-action-search">02</a> -
-        <a href="#phase-3-predictive-search-rng-manipulation-mode">03</a> -
-        <a href="#phase-5-optimized-predictive-search-shared-seedrng">05</a> -
-        <a href="#phase-6-snake-weight-precomputation--budget-break">06</a>
+        <a href="#phase-3-predictive-search-rng-manipulation-mode">03</a>
     </p>
 </div>
 
@@ -28,7 +26,7 @@ All timings are single-core, release build (`--release`), averaged over 20 decis
 - **Danger** — Nearly full board, high tiles along a snake path, 2 cells empty. Adaptive depth ramps up hard.
 - **Stuck** — 4×4 board, alternating 2/4 pattern, no legal moves. Forces power-up evaluation in `suggest_action_for`.
 
-## 🔴 IMPORTANT: Benchmark Refactoring Results
+## IMPORTANT: Benchmark Refactoring Results
 
 The engine was significantly refactored in commit f0581bf (Jul 29, 2026) with major improvements including:
 
@@ -92,8 +90,6 @@ Time per decision when only picking a direction. No power-up evaluation.
 - **4×4 stays bounded**. Decisions are consistently under 20 μs regardless of difficulty.
 - **Bitboard impact**: The precomputed row-swap table (`left_table()`) in `bitboard.rs` eliminates per-move branching; a 64K-entry lookup replaces O(4) conditional checks per direction. Combined with transpose/RUN patterns for Right/Down/Up, every move is a constant-time table scan on packed 64-bit words.
 
----
-
 ## Phase 2: Power-Up Evaluation (Full Action Search)
 
 Time per decision when `suggest_action_for` evaluates delete and swap candidates. Tested on a stuck board, so power-up search always triggers.
@@ -154,8 +150,6 @@ Time per decision when `suggest_action_for` evaluates delete and swap candidates
 
 Even the worst-case medium depth on 3×3 is only ~289 μs, well within the 2-second worker timeout. Power-up evaluation at basic depth is sub-100 μs on all board sizes.
 
----
-
 ## Phase 3: Predictive Search (RNG Manipulation Mode)
 
 Compares plain expectimax against the deterministic "cheat" variant, which peeks the ChaCha20 spawn stream.
@@ -195,8 +189,6 @@ Compares plain expectimax against the deterministic "cheat" variant, which peeks
 The plain search is now so fast (single-digit μs on most cases) that the relative speedup factor appears smaller, but **absolute times are dramatically lower**. On 5×5 danger, predictive search went from 77 ms (old) to just 22 μs (new) — a ~3,500× improvement in absolute terms.
 
 The predictive mode remains equally effective: it collapses chance-node branching from up to 12 branches down to exactly 1, allowing deeper plies within the same budget. Since planar moves are so cheap now, the benefit is reaching much further.
-
----
 
 ## Configuration Reference
 
@@ -255,8 +247,6 @@ The move generator uses a packed `Board64` representation where each 4-bit nibbl
 
 This eliminates per-move branches and memory access patterns entirely, making move generation essentially a few register operations.
 
----
-
 ## How to Run
 
 ```bash
@@ -274,8 +264,6 @@ cargo run --release --bin bench -- 10    # fewer games
 
 All benchmarks require `--release`. Debug builds are 10–50× slower and not representative.
 
----
-
 ## JavaScript Benchmark (bench)
 
 A JavaScript reference implementation is available at `engine/bench/`:
@@ -286,8 +274,6 @@ node engine/bench/simulate.mjs [games] [depth] [maxCells] [--verbose]
 ```
 
 This provides a cross-implementation sanity check comparing the Rust engine behavior against a pure-JS expectimax reference with the same heuristic weights. It's useful for verifying algorithmic correctness independent of low-level optimizations.
-
----
 
 ## Phase 5: Optimized Predictive Search (shared SeedRng)
 
@@ -377,8 +363,6 @@ The shared RNG removes the O(calls) sequential skip from every chance node. At d
 ### Tests
 
 All 43 Rust unit tests pass. All 109 TypeScript tests pass. Determinism verified: same seed produces same sequence.
-
----
 
 ## Phase 6: Snake Weight Precomputation + Budget Break
 
