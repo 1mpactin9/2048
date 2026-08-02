@@ -1,4 +1,5 @@
 pub mod bits4;
+pub mod heur4;
 pub mod wide;
 
 use crate::Direction;

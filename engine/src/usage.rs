@@ -24,17 +24,17 @@ impl UsageMode {
 
     pub fn time_budget_ms(self) -> u64 {
         match self {
-            UsageMode::Max => 800,
-            UsageMode::Balanced => 200,
-            UsageMode::Limit => 45,
+            UsageMode::Max => 1500,
+            UsageMode::Balanced => 300,
+            UsageMode::Limit => 60,
         }
     }
 
     pub fn node_budget_scale(self) -> f64 {
         match self {
-            UsageMode::Max => 2.5,
-            UsageMode::Balanced => 1.0,
-            UsageMode::Limit => 0.35,
+            UsageMode::Max => 4.0,
+            UsageMode::Balanced => 1.6,
+            UsageMode::Limit => 0.5,
         }
     }
 
@@ -48,17 +48,17 @@ impl UsageMode {
 
     pub fn max_sampled_cells(self) -> usize {
         match self {
-            UsageMode::Max => 8,
-            UsageMode::Balanced => 6,
-            UsageMode::Limit => 4,
+            UsageMode::Max => 12,
+            UsageMode::Balanced => 8,
+            UsageMode::Limit => 5,
         }
     }
 
     pub fn manipulation_rounds_cap(self) -> usize {
         match self {
-            UsageMode::Max => 12,
-            UsageMode::Balanced => 5,
-            UsageMode::Limit => 3,
+            UsageMode::Max => usize::MAX,
+            UsageMode::Balanced => usize::MAX,
+            UsageMode::Limit => 6,
         }
     }
 }

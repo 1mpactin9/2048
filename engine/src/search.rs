@@ -1,7 +1,7 @@
-const ENDGAME_EMPTY_THRESHOLD: usize = 2;
-const ENDGAME_EXTRA_DEPTH: usize = 30;
-const PROB_CUTOFF: f64 = 1e-4;
-const PRUNE_MARGIN: f64 = 400.0;
+const ENDGAME_EMPTY_THRESHOLD: usize = 4;
+const ENDGAME_EXTRA_DEPTH: usize = 48;
+const PROB_CUTOFF: f64 = 5e-6;
+const PRUNE_MARGIN: f64 = 600.0;
 const MAX_SAMPLED_CELLS_CAP: usize = 16;
 
 #[cfg(target_arch = "wasm32")]
@@ -45,7 +45,7 @@ impl Engine {
         Self::best_move(grid, search_depth, usage).0
     }
 
-    fn ordered_directions(board: &[u32], n: usize) -> [(Direction, bool, f64); 4] {
+    pub(crate) fn ordered_directions(board: &[u32], n: usize) -> [(Direction, bool, f64); 4] {
         let mut new_board = [0u32; 256];
         let mut out = [(Direction::Up, false, f64::NEG_INFINITY); 4];
         for (i, &dir) in Direction::ALL.iter().enumerate() {
@@ -240,19 +240,19 @@ impl Engine {
         let ratio = empty as f64 / area as f64;
 
         let depth = if ratio > 0.55 {
-            base.saturating_sub(3)
-        } else if ratio > 0.35 {
             base.saturating_sub(2)
-        } else if ratio > 0.22 {
+        } else if ratio > 0.35 {
             base.saturating_sub(1)
-        } else if ratio > 0.12 {
+        } else if ratio > 0.22 {
             base
-        } else if ratio > 0.07 {
+        } else if ratio > 0.12 {
             base + 1
-        } else if ratio > 0.035 {
+        } else if ratio > 0.07 {
             base + 3
-        } else {
+        } else if ratio > 0.035 {
             base + 5
+        } else {
+            base + 8
         };
         let floor = if n <= 4 { 3 } else { 2 };
         let result = depth.max(floor);
@@ -262,12 +262,13 @@ impl Engine {
 
     pub(crate) fn budget_for_depth(depth: usize) -> u64 {
         match depth {
-            0..=2 => 15_000,
-            3 => 40_000,
-            4 => 90_000,
-            5..=6 => 150_000,
-            7..=8 => 220_000,
-            _ => 320_000,
+            0..=2 => 20_000,
+            3 => 60_000,
+            4 => 140_000,
+            5..=6 => 260_000,
+            7..=8 => 420_000,
+            9..=12 => 650_000,
+            _ => 1_000_000,
         }
     }
 

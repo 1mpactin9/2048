@@ -199,7 +199,7 @@ mod tests {
             );
             let empties = board.iter().filter(|&&v| v == 0).count();
             let expected = if manipulate && empties > 1 {
-                2 * 5_usize.min(empties)
+                2 * 64_usize.min(empties)
             } else {
                 2
             };

@@ -1,3 +1,4 @@
+use crate::board as bitboard_mod;
 use crate::Engine;
 
 const MAX_BOARD_SIZE: usize = 8;
@@ -55,6 +56,21 @@ static SNAKE_WEIGHTS: [[f64; MAX_CELLS]; 4 * MAX_BOARD_SIZE] = build_all_snake_w
 
 impl Engine {
     pub(crate) fn heuristic_flat(board: &[u32], n: usize) -> f64 {
+        if n == 4 && bitboard_mod::all_powers_of_two(board) {
+            let bits = bitboard_mod::bits4::from_flat(board);
+            let fast = bitboard_mod::heur4::heur_score_board4(bits);
+            const W_CORNER: f64 = 14.0;
+            const W_SNAKE: f64 = 18.0;
+            const W_CONSISTENCY: f64 = 6.0;
+            return fast
+                + W_CORNER * Self::corner_reward_flat(board, n)
+                + W_SNAKE * Self::snake_score_flat(board, n)
+                + W_CONSISTENCY * Self::snake_consistency_flat(board, n);
+        }
+        Self::heuristic_flat_generic(board, n)
+    }
+
+    fn heuristic_flat_generic(board: &[u32], n: usize) -> f64 {
         let mut empty = 0.0;
         for &v in board.iter() {
             if v == 0 {
@@ -129,12 +145,29 @@ impl Engine {
             mono -= inc.min(dec);
         }
 
-        const W_EMPTY: f64 = 270.0;
-        const W_MONO: f64 = 25.0;
+        let mut merge_potential = 0.0;
+        for r in 0..n {
+            for c in 0..n {
+                let v = board[r * n + c];
+                if v == 0 {
+                    continue;
+                }
+                if c + 1 < n && board[r * n + c + 1] == v {
+                    merge_potential += log(v) + 1.0;
+                }
+                if r + 1 < n && board[(r + 1) * n + c] == v {
+                    merge_potential += log(v) + 1.0;
+                }
+            }
+        }
+
+        const W_EMPTY: f64 = 300.0;
+        const W_MONO: f64 = 32.0;
         const W_SMOOTH: f64 = 11.0;
-        const W_SNAKE: f64 = 46.0;
-        const W_CONSISTENCY: f64 = 18.0;
-        const W_CORNER: f64 = 10.0;
+        const W_SNAKE: f64 = 52.0;
+        const W_CONSISTENCY: f64 = 20.0;
+        const W_CORNER: f64 = 14.0;
+        const W_MERGE: f64 = 14.0;
 
         W_EMPTY * (empty + 1.0f64).log2()
             + W_MONO * mono
@@ -142,6 +175,7 @@ impl Engine {
             + W_SNAKE * Self::snake_score_flat(board, n)
             + W_CONSISTENCY * Self::snake_consistency_flat(board, n)
             + W_CORNER * Self::corner_reward_flat(board, n)
+            + W_MERGE * merge_potential
     }
 
     fn snake_scores_flat(board: &[u32], n: usize) -> [f64; 4] {

@@ -27,6 +27,7 @@ dist-ssr
 engine/pkg/
 engine/target/
 
+engine/changes.md
 external/
 legacy/
 spec/

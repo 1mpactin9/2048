@@ -1,5 +1,17 @@
 use crate::search::sampled_pairs;
+use crate::transposition::{tt_get, tt_put, zobrist_hash};
 use crate::{Action, Direction, Engine, UsageMode};
+
+const DET_PRUNE_MARGIN: f64 = 600.0;
+const DET_DEPTH_BONUS: usize = 4;
+
+fn mix_calls(hash: u64, calls: u64) -> u64 {
+    let c = calls
+        .wrapping_mul(0x9E3779B97F4A7C15)
+        .rotate_left(17)
+        .wrapping_add(0xBF58476D1CE4E5B9);
+    hash ^ c
+}
 
 const WIDTH: usize = 256;
 const MASK: u32 = 255;
@@ -163,7 +175,10 @@ impl Engine {
         let start_calls = rng.calls;
         const PROB_4: f64 = 0.1;
         let (spot, value) = if manipulate && num_empties > 1 {
-            let cap = usage.manipulation_rounds_cap().max(MANIPULATION_ROUNDS_DEFAULT);
+            let cap = usage
+                .manipulation_rounds_cap()
+                .max(MANIPULATION_ROUNDS_DEFAULT)
+                .min(64);
             let rounds = cap.min(num_empties);
             let mut best_spot = empties[0];
             let mut best_value: u32 = 2;
@@ -176,7 +191,7 @@ impl Engine {
                 let cand_spot = empties[(rng.next() * num_empties as f64) as usize];
                 let cand_value: u32 = if rng.next() < PROB_4 { 4 } else { 2 };
                 board[cand_spot] = cand_value;
-                let score = score_spawn_candidate_flat(board, n);
+                let score = Self::heuristic_flat(board, n);
                 board[cand_spot] = 0;
                 if score > best_score {
                     best_score = score;
@@ -206,17 +221,28 @@ impl Engine {
         if depth == 0 || *budget == 0 {
             return Self::heuristic_flat(board, n);
         }
+        let hash = mix_calls(zobrist_hash(board), rng.calls);
+        if let Some(cached) = tt_get(hash, depth) {
+            return cached;
+        }
         *budget -= 1;
+        let ordered = Self::ordered_directions(board, n);
         let mut best = f64::NEG_INFINITY;
         let mut any_move = false;
         let mut new_board = [0u32; 256];
-        for &dir in Direction::ALL.iter() {
-            let slice = &mut new_board[..n * n];
-            let gained = Self::slide_flat_into(board, n, dir, slice);
-            if slice == board {
+        for &(dir, moved, quick_score) in ordered.iter() {
+            if !moved {
                 continue;
             }
             any_move = true;
+            if best > f64::NEG_INFINITY && quick_score < best - DET_PRUNE_MARGIN {
+                if quick_score > best {
+                    best = quick_score;
+                }
+                continue;
+            }
+            let slice = &mut new_board[..n * n];
+            let gained = Self::slide_flat_into(board, n, dir, slice);
             let v = gained as f64
                 + Self::expectimax_chance_flat_det(
                     slice,
@@ -231,10 +257,9 @@ impl Engine {
                 best = v;
             }
         }
-        if !any_move {
-            return -200000.0;
-        }
-        best
+        let result = if !any_move { -200000.0 } else { best };
+        tt_put(hash, depth, result);
+        result
     }
 
     fn expectimax_chance_flat_det(
@@ -253,6 +278,10 @@ impl Engine {
         if empties == 0 || depth == 0 {
             return Self::heuristic_flat(board, n);
         }
+        let hash = mix_calls(zobrist_hash(board), rng.calls);
+        if let Some(cached) = tt_get(hash, depth) {
+            return cached;
+        }
         *budget -= 1;
         let (idx, value, draws) =
             Self::predict_spawn_flat_with_usage(board, n, rng, manipulate, usage, budget)
@@ -269,6 +298,7 @@ impl Engine {
         );
         board[idx] = 0;
         let _ = draws;
+        tt_put(hash, depth, v);
         v
     }
 
@@ -332,8 +362,8 @@ impl Engine {
         manipulate: bool,
         usage: UsageMode,
     ) -> Option<Direction> {
-        let search_depth =
-            Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
+        let search_depth = Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)))
+            + DET_DEPTH_BONUS;
         let mut budget = Self::scaled_budget_for_depth(search_depth, usage.node_budget_scale());
         let mut rng = SeedRng::init(key, calls);
         Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage).0
@@ -371,7 +401,7 @@ impl Engine {
         usage: UsageMode,
     ) -> Action {
         let size = grid.len();
-        let d = depth.unwrap_or_else(|| Self::auto_depth(grid));
+        let d = depth.unwrap_or_else(|| Self::auto_depth(grid)) + DET_DEPTH_BONUS;
         let mut budget = Self::scaled_budget_for_depth(d, usage.node_budget_scale());
         let mut rng = SeedRng::init(key, calls);
 
