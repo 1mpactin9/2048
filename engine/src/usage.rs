@@ -24,17 +24,17 @@ impl UsageMode {
 
     pub fn time_budget_ms(self) -> u64 {
         match self {
-            UsageMode::Max => 1500,
-            UsageMode::Balanced => 300,
-            UsageMode::Limit => 60,
+            UsageMode::Max => 800,
+            UsageMode::Balanced => 50,
+            UsageMode::Limit => 20,
         }
     }
 
     pub fn node_budget_scale(self) -> f64 {
         match self {
             UsageMode::Max => 4.0,
-            UsageMode::Balanced => 1.6,
-            UsageMode::Limit => 0.5,
+            UsageMode::Balanced => 1.0,
+            UsageMode::Limit => 0.3,
         }
     }
 

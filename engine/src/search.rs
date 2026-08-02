@@ -1,5 +1,5 @@
-const ENDGAME_EMPTY_THRESHOLD: usize = 4;
-const ENDGAME_EXTRA_DEPTH: usize = 48;
+const ENDGAME_EMPTY_THRESHOLD: usize = 3;
+const ENDGAME_EXTRA_DEPTH: usize = 30;
 const PROB_CUTOFF: f64 = 5e-6;
 const PRUNE_MARGIN: f64 = 600.0;
 const MAX_SAMPLED_CELLS_CAP: usize = 16;

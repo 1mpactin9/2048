@@ -461,15 +461,15 @@ mod tests {
 
     #[test]
     fn budget_for_depth_values() {
-        assert_eq!(Engine::budget_for_depth(0), 15_000);
-        assert_eq!(Engine::budget_for_depth(2), 15_000);
-        assert_eq!(Engine::budget_for_depth(3), 40_000);
-        assert_eq!(Engine::budget_for_depth(4), 90_000);
-        assert_eq!(Engine::budget_for_depth(5), 150_000);
-        assert_eq!(Engine::budget_for_depth(6), 150_000);
-        assert_eq!(Engine::budget_for_depth(7), 220_000);
-        assert_eq!(Engine::budget_for_depth(8), 220_000);
-        assert_eq!(Engine::budget_for_depth(10), 320_000);
+        assert_eq!(Engine::budget_for_depth(0), 20_000);
+        assert_eq!(Engine::budget_for_depth(2), 20_000);
+        assert_eq!(Engine::budget_for_depth(3), 60_000);
+        assert_eq!(Engine::budget_for_depth(4), 140_000);
+        assert_eq!(Engine::budget_for_depth(5), 260_000);
+        assert_eq!(Engine::budget_for_depth(6), 260_000);
+        assert_eq!(Engine::budget_for_depth(7), 420_000);
+        assert_eq!(Engine::budget_for_depth(8), 420_000);
+        assert_eq!(Engine::budget_for_depth(10), 650_000);
     }
 
     #[test]
@@ -520,8 +520,16 @@ mod tests {
         board[1] = 1024;
         board[3] = 512;
         board[2] = 256;
-        let h = Engine::heuristic_flat(&board, 4);
-        assert!(h > 0.0);
+        let sorted = Engine::heuristic_flat(&board, 4);
+        let mut scrambled = board.clone();
+        scrambled[1] = 256;
+        scrambled[2] = 1024;
+        let unsorted = Engine::heuristic_flat(&scrambled, 4);
+        assert!(
+            sorted > unsorted,
+            "snake-ordered board should beat scrambled: sorted={} unsorted={}",
+            sorted, unsorted
+        );
     }
 }
 
