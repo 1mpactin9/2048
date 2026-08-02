@@ -7,7 +7,7 @@
     </p>
 </div>
 
-A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game engine. Still in progress, but it works!
+A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game engine. Still in progress, but it works! Currently has a guarantee high success rate for 4x4 boards to get to **8192**!
 
 ## Prerequisites
 

@@ -1,4 +1,4 @@
-use crate::{Action, Direction, Engine, UsageMode};
+use crate::{Action, Direction, Engine, SeedRng, UsageMode};
 use wasm_bindgen::prelude::*;
 
 fn direction_code(dir: Direction) -> u32 {
@@ -157,8 +157,7 @@ pub fn predict_spawn(
     match Engine::predict_spawn_flat_with_usage(
         &mut board,
         n,
-        &key,
-        calls as u64,
+        &mut SeedRng::init(&key, calls as u64),
         manipulate,
         usage,
     ) {

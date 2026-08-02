@@ -11,6 +11,7 @@ mod wasm;
 
 pub use game::{Action, Config, Direction, Engine, EngineError, MoveOutcome};
 pub use usage::UsageMode;
+pub use deterministic::SeedRng;
 
 #[cfg(test)]
 mod tests {
