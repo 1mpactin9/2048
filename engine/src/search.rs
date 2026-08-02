@@ -1,4 +1,4 @@
-const ENDGAME_EMPTY_THRESHOLD: usize = 3;
+const ENDGAME_EMPTY_THRESHOLD: usize = 2;
 const ENDGAME_EXTRA_DEPTH: usize = 30;
 const PROB_CUTOFF: f64 = 5e-6;
 const PRUNE_MARGIN: f64 = 600.0;
