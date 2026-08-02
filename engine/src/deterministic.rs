@@ -137,7 +137,8 @@ impl Engine {
         manipulate: bool,
     ) -> Option<(usize, u32, u64)> {
         let mut rng = SeedRng::init(key, calls);
-        Self::predict_spawn_flat_with_usage(board, n, &mut rng, manipulate, UsageMode::Balanced)
+        let mut budget = u64::MAX;
+        Self::predict_spawn_flat_with_usage(board, n, &mut rng, manipulate, UsageMode::Balanced, &mut budget)
     }
 
     pub fn predict_spawn_flat_with_usage(
@@ -146,6 +147,7 @@ impl Engine {
         rng: &mut SeedRng,
         manipulate: bool,
         usage: UsageMode,
+        budget: &mut u64,
     ) -> Option<(usize, u32, u64)> {
         let mut empties = [0usize; 256];
         let mut num_empties = 0;
@@ -167,6 +169,10 @@ impl Engine {
             let mut best_value: u32 = 2;
             let mut best_score = f64::NEG_INFINITY;
             for _ in 0..rounds {
+                if *budget == 0 {
+                    break;
+                }
+                *budget -= 1;
                 let cand_spot = empties[(rng.next() * num_empties as f64) as usize];
                 let cand_value: u32 = if rng.next() < PROB_4 { 4 } else { 2 };
                 board[cand_spot] = cand_value;
@@ -249,7 +255,7 @@ impl Engine {
         }
         *budget -= 1;
         let (idx, value, draws) =
-            Self::predict_spawn_flat_with_usage(board, n, rng, manipulate, usage)
+            Self::predict_spawn_flat_with_usage(board, n, rng, manipulate, usage, budget)
                 .expect("non-empty board has a spawn");
         board[idx] = value;
         let v = Self::expectimax_max_flat_det(

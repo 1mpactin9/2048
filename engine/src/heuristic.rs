@@ -1,5 +1,58 @@
 use crate::Engine;
 
+const MAX_BOARD_SIZE: usize = 8;
+const MAX_CELLS: usize = MAX_BOARD_SIZE * MAX_BOARD_SIZE;
+
+const fn build_snake_weights_for_n(n: usize) -> [f64; MAX_CELLS] {
+    let mut w = [0.0f64; MAX_CELLS];
+    let mut val = 1.0f64;
+    const RATIO: f64 = 0.5;
+    let mut r = 0;
+    while r < n {
+        let start = if r % 2 == 0 { 0 } else { n - 1 };
+        let mut k = 0;
+        while k < n {
+            let c = if r % 2 == 0 { start + k } else { start - k };
+            w[r * n + c] = val;
+            k += 1;
+        }
+        val *= RATIO;
+        r += 1;
+    }
+    w
+}
+
+const fn build_all_snake_weights() -> [[f64; MAX_CELLS]; 4 * MAX_BOARD_SIZE] {
+    let mut all = [[0.0f64; MAX_CELLS]; 4 * MAX_BOARD_SIZE];
+    let mut n = 1;
+    while n <= MAX_BOARD_SIZE {
+        let idx = (n - 1) * 4;
+        let w0 = build_snake_weights_for_n(n);
+        all[idx] = w0;
+        all[idx + 1] = rotate_90_const(&w0, n);
+        all[idx + 2] = rotate_90_const(&all[idx + 1], n);
+        all[idx + 3] = rotate_90_const(&all[idx + 2], n);
+        n += 1;
+    }
+    all
+}
+
+const fn rotate_90_const(w: &[f64; MAX_CELLS], n: usize) -> [f64; MAX_CELLS] {
+    let mut out = [0.0f64; MAX_CELLS];
+    let mut r = 0;
+    while r < n {
+        let mut c = 0;
+        while c < n {
+            out[c * n + (n - 1 - r)] = w[r * n + c];
+            c += 1;
+        }
+        r += 1;
+    }
+    out
+}
+
+static SNAKE_WEIGHTS: [[f64; MAX_CELLS]; 4 * MAX_BOARD_SIZE] = build_all_snake_weights();
+
 impl Engine {
     pub(crate) fn heuristic_flat(board: &[u32], n: usize) -> f64 {
         let mut empty = 0.0;
@@ -96,46 +149,16 @@ impl Engine {
         if n == 0 {
             return scores;
         }
-
-        let mut w = 1.0f64;
-        const RATIO: f64 = 0.5;
-
-        for r in 0..n {
-            for c_idx in 0..n {
-                let c = if r % 2 == 0 { c_idx } else { n - 1 - c_idx };
-
-                let v = board[r * n + c];
-                scores[0] += (if v == 0 {
-                    0.0
-                } else {
-                    v.trailing_zeros() as f64
-                }) * w;
-
-                let v90 = board[c * n + (n - 1 - r)];
-                scores[1] += (if v90 == 0 {
-                    0.0
-                } else {
-                    v90.trailing_zeros() as f64
-                }) * w;
-
-                let v180 = board[(n - 1 - r) * n + (n - 1 - c)];
-                scores[2] += (if v180 == 0 {
-                    0.0
-                } else {
-                    v180.trailing_zeros() as f64
-                }) * w;
-
-                let v270 = board[(n - 1 - c) * n + r];
-                scores[3] += (if v270 == 0 {
-                    0.0
-                } else {
-                    v270.trailing_zeros() as f64
-                }) * w;
-
-                w *= RATIO;
-            }
+        let base = (n - 1) * 4;
+        let n2 = n * n;
+        for i in 0..n2 {
+            let v = board[i];
+            let lv = if v == 0 { 0.0 } else { v.trailing_zeros() as f64 };
+            scores[0] += lv * SNAKE_WEIGHTS[base][i];
+            scores[1] += lv * SNAKE_WEIGHTS[base + 1][i];
+            scores[2] += lv * SNAKE_WEIGHTS[base + 2][i];
+            scores[3] += lv * SNAKE_WEIGHTS[base + 3][i];
         }
-
         scores
     }
 
@@ -206,5 +229,4 @@ impl Engine {
 
         reward
     }
-
 }
