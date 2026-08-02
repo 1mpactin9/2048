@@ -1,9 +1,8 @@
-const SEARCH_NODE_BUDGET: u64 = 500_000;
 const ENDGAME_EMPTY_THRESHOLD: usize = 2;
 const ENDGAME_EXTRA_DEPTH: usize = 30;
-const DEFAULT_TIME_BUDGET_MS: u64 = 200;
 const PROB_CUTOFF: f64 = 1e-4;
 const PRUNE_MARGIN: f64 = 400.0;
+const MAX_SAMPLED_CELLS_CAP: usize = 16;
 
 #[cfg(target_arch = "wasm32")]
 fn now_ms() -> f64 {
@@ -20,7 +19,7 @@ fn now_ms() -> f64 {
 }
 
 use crate::transposition::{tt_get, tt_put, zobrist_hash};
-use crate::{Action, Direction, Engine};
+use crate::{Action, Direction, Engine, UsageMode};
 
 impl Engine {
     pub(crate) fn endgame_depth(grid: &Vec<Vec<u32>>, depth: usize) -> usize {
@@ -33,9 +32,17 @@ impl Engine {
     }
 
     pub fn suggest_move_for(grid: &Vec<Vec<u32>>, depth: Option<usize>) -> Option<Direction> {
+        Self::suggest_move_with_usage(grid, depth, UsageMode::Balanced)
+    }
+
+    pub fn suggest_move_with_usage(
+        grid: &Vec<Vec<u32>>,
+        depth: Option<usize>,
+        usage: UsageMode,
+    ) -> Option<Direction> {
         let search_depth =
             Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
-        Self::best_move(grid, search_depth, DEFAULT_TIME_BUDGET_MS).0
+        Self::best_move(grid, search_depth, usage).0
     }
 
     fn ordered_directions(board: &[u32], n: usize) -> [(Direction, bool, f64); 4] {
@@ -56,7 +63,12 @@ impl Engine {
         out
     }
 
-    fn best_move_fixed(grid: &Vec<Vec<u32>>, depth: usize, budget: &mut u64) -> (Option<Direction>, f64) {
+    fn best_move_fixed(
+        grid: &Vec<Vec<u32>>,
+        depth: usize,
+        budget: &mut u64,
+        max_cells: usize,
+    ) -> (Option<Direction>, f64) {
         let n = grid.len();
         let board = Self::flatten(grid);
         let ordered = Self::ordered_directions(&board, n);
@@ -73,7 +85,14 @@ impl Engine {
             let slice = &mut new_board[..n * n];
             let gained = Self::slide_flat_into(&board, n, dir, slice);
             let value = gained as f64
-                + Self::expectimax_chance_flat(slice, n, depth.saturating_sub(1), budget, 1.0);
+                + Self::expectimax_chance_flat(
+                    slice,
+                    n,
+                    depth.saturating_sub(1),
+                    budget,
+                    1.0,
+                    max_cells,
+                );
             if value > best_val {
                 best_val = value;
                 best_dir = Some(dir);
@@ -90,15 +109,18 @@ impl Engine {
     fn best_move(
         grid: &Vec<Vec<u32>>,
         max_depth: usize,
-        time_budget_ms: u64,
+        usage: UsageMode,
     ) -> (Option<Direction>, f64) {
         let start = now_ms();
+        let time_budget_ms = usage.time_budget_ms();
+        let scale = usage.node_budget_scale();
+        let max_cells = usage.max_sampled_cells().min(MAX_SAMPLED_CELLS_CAP);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
         let mut depth = 1;
         loop {
-            let mut budget = Self::budget_for_depth(depth);
-            let (dir, val) = Self::best_move_fixed(grid, depth, &mut budget);
+            let mut budget = Self::scaled_budget_for_depth(depth, scale);
+            let (dir, val) = Self::best_move_fixed(grid, depth, &mut budget, max_cells);
             if dir.is_some() {
                 best_dir = dir;
                 best_val = val;
@@ -117,11 +139,22 @@ impl Engine {
         deletes_left: u32,
         depth: Option<usize>,
     ) -> Action {
+        Self::suggest_action_with_usage(grid, swaps_left, deletes_left, depth, UsageMode::Balanced)
+    }
+
+    pub fn suggest_action_with_usage(
+        grid: &Vec<Vec<u32>>,
+        swaps_left: u32,
+        deletes_left: u32,
+        depth: Option<usize>,
+        usage: UsageMode,
+    ) -> Action {
         let size = grid.len();
         let d = depth.unwrap_or_else(|| Self::auto_depth(grid));
-        let mut budget = Self::budget_for_depth(d);
+        let max_cells = usage.max_sampled_cells().min(MAX_SAMPLED_CELLS_CAP);
+        let mut budget = Self::scaled_budget_for_depth(d, usage.node_budget_scale());
 
-        let (best_dir, move_val) = Self::best_move(grid, d, DEFAULT_TIME_BUDGET_MS);
+        let (best_dir, move_val) = Self::best_move(grid, d, usage);
 
         let stuck = best_dir.is_none();
         if !stuck && !Self::is_dangerous(grid) {
@@ -139,7 +172,7 @@ impl Engine {
                     }
                     let mut g = grid.clone();
                     g[r][c] = 0;
-                    let v = Self::best_move_fixed(&g, d, &mut budget).1;
+                    let v = Self::best_move_fixed(&g, d, &mut budget, max_cells).1;
                     if v > best_delete_val {
                         best_delete_val = v;
                         best_delete = Some((r, c));
@@ -160,7 +193,7 @@ impl Engine {
                 let tmp = g[a.0][a.1];
                 g[a.0][a.1] = g[b.0][b.1];
                 g[b.0][b.1] = tmp;
-                let v = Self::best_move_fixed(&g, d, &mut budget).1;
+                let v = Self::best_move_fixed(&g, d, &mut budget, max_cells).1;
                 if v > best_swap_val {
                     best_swap_val = v;
                     best_swap = Some((a, b));
@@ -238,7 +271,19 @@ impl Engine {
         }
     }
 
-    fn expectimax_max_flat(board: &[u32], n: usize, depth: usize, budget: &mut u64, prob: f64) -> f64 {
+    pub(crate) fn scaled_budget_for_depth(depth: usize, scale: f64) -> u64 {
+        let base = Self::budget_for_depth(depth) as f64;
+        (base * scale).round().max(1000.0) as u64
+    }
+
+    fn expectimax_max_flat(
+        board: &[u32],
+        n: usize,
+        depth: usize,
+        budget: &mut u64,
+        prob: f64,
+        max_cells: usize,
+    ) -> f64 {
         if depth == 0 || *budget == 0 || prob < PROB_CUTOFF {
             return Self::heuristic_flat(board, n);
         }
@@ -265,7 +310,14 @@ impl Engine {
             let slice = &mut new_board[..n * n];
             let gained = Self::slide_flat_into(board, n, dir, slice);
             let v = gained as f64
-                + Self::expectimax_chance_flat(slice, n, depth.saturating_sub(1), budget, prob);
+                + Self::expectimax_chance_flat(
+                    slice,
+                    n,
+                    depth.saturating_sub(1),
+                    budget,
+                    prob,
+                    max_cells,
+                );
             if v > best {
                 best = v;
             }
@@ -283,6 +335,7 @@ impl Engine {
         depth: usize,
         budget: &mut u64,
         prob: f64,
+        max_cells: usize,
     ) -> f64 {
         if *budget == 0 || prob < PROB_CUTOFF {
             return Self::heuristic_flat(board, n);
@@ -304,19 +357,19 @@ impl Engine {
         }
         *budget -= 1;
 
-        const MAX_CELLS: usize = 6;
-        let mut sampled = [0usize; MAX_CELLS];
-        let sampled_len = if num_empties <= MAX_CELLS {
+        let cap = max_cells.clamp(1, MAX_SAMPLED_CELLS_CAP);
+        let mut sampled = [0usize; MAX_SAMPLED_CELLS_CAP];
+        let sampled_len = if num_empties <= cap {
             for i in 0..num_empties {
                 sampled[i] = empties[i];
             }
             num_empties
         } else {
-            let stride = num_empties as f64 / MAX_CELLS as f64;
-            for i in 0..MAX_CELLS {
+            let stride = num_empties as f64 / cap as f64;
+            for i in 0..cap {
                 sampled[i] = empties[(i as f64 * stride) as usize];
             }
-            MAX_CELLS
+            cap
         };
 
         let mut total = 0.0;
@@ -331,13 +384,13 @@ impl Engine {
             let v2 = if p2 < PROB_CUTOFF {
                 Self::heuristic_flat(board, n)
             } else {
-                Self::expectimax_max_flat(board, n, next_depth, budget, p2)
+                Self::expectimax_max_flat(board, n, next_depth, budget, p2, max_cells)
             };
             board[idx] = 4;
             let v4 = if p4 < PROB_CUTOFF {
                 Self::heuristic_flat(board, n)
             } else {
-                Self::expectimax_max_flat(board, n, next_depth, budget, p4)
+                Self::expectimax_max_flat(board, n, next_depth, budget, p4, max_cells)
             };
             board[idx] = 0;
 

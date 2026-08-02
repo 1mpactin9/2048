@@ -1,5 +1,6 @@
 import type { Grid, SpawnedTile } from "./types";
 import { SPAWN_PROB_4 } from "./constants";
+import { usageProfile, type UsageMode } from "./usage";
 
 let nextId = 1;
 
@@ -60,14 +61,16 @@ export interface SpawnOptions {
   at?: { row: number; col: number };
   rng?: () => number;
   manipulate?: boolean;
+  usageMode?: UsageMode;
 }
 
-const MANIPULATION_CANDIDATES = 5;
+const MANIPULATION_CANDIDATES_DEFAULT = 5;
 
 function scoreSpawnCandidate(grid: Grid): number {
   const n = grid.length;
   let empty = 0;
   let smoothness = 0;
+  let monoPenalty = 0;
   const log2 = (v: number) => (v > 0 ? Math.log2(v) : 0);
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
@@ -77,13 +80,23 @@ function scoreSpawnCandidate(grid: Grid): number {
         continue;
       }
       const v = log2(cell.value);
-      const right = grid[r][c + 1];
-      if (right) smoothness -= Math.abs(v - log2(right.value));
-      const down = grid[r + 1]?.[c];
-      if (down) smoothness -= Math.abs(v - log2(down.value));
+      let rightC = c + 1;
+      while (rightC < n && !grid[r][rightC]) rightC++;
+      if (rightC < n) {
+        const rv = log2(grid[r][rightC]!.value);
+        smoothness -= Math.abs(v - rv);
+        if (rv > v) monoPenalty += rv - v;
+      }
+      let downR = r + 1;
+      while (downR < n && !grid[downR]?.[c]) downR++;
+      if (downR < n) {
+        const dv = log2(grid[downR][c]!.value);
+        smoothness -= Math.abs(v - dv);
+        if (dv > v) monoPenalty += dv - v;
+      }
     }
   }
-  return empty * 4 + smoothness;
+  return empty * 4 + smoothness - monoPenalty * 0.25;
 }
 
 export function spawnTile(
@@ -101,7 +114,10 @@ export function spawnTile(
     spot = opts.at;
     value = opts.value ?? (rng() < SPAWN_PROB_4 ? 4 : 2);
   } else if (opts.manipulate && empties.length > 1) {
-    const rounds = Math.min(MANIPULATION_CANDIDATES, empties.length);
+    const cap = opts.usageMode
+      ? usageProfile(opts.usageMode).manipulationRoundsCap
+      : MANIPULATION_CANDIDATES_DEFAULT;
+    const rounds = Math.min(Math.max(cap, MANIPULATION_CANDIDATES_DEFAULT), empties.length);
     let bestSpot = empties[0];
     let bestValue: number = opts.value ?? 2;
     let bestScore = -Infinity;

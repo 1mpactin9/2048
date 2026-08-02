@@ -1,8 +1,7 @@
 use rand::Rng;
 use std::collections::VecDeque;
 use std::fmt;
-#[cfg(feature = "bitboard")]
-use crate::bitboard;
+use crate::board as bitboard_mod;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
@@ -384,6 +383,14 @@ impl Engine {
     pub fn suggest_move(&self, depth: Option<usize>) -> Option<Direction> {
         Self::suggest_move_for(&self.grid, depth)
     }
+
+    pub fn suggest_move_for_usage(
+        &self,
+        depth: Option<usize>,
+        usage: crate::UsageMode,
+    ) -> Option<Direction> {
+        Self::suggest_move_with_usage(&self.grid, depth, usage)
+    }
     pub(crate) fn flatten(grid: &Vec<Vec<u32>>) -> Vec<u32> {
         let n = grid.len();
         let mut out = Vec::with_capacity(n * n);
@@ -400,6 +407,15 @@ impl Engine {
         self.suggest_move(depth).map(|dir| self.make_move(dir))
     }
 
+    pub fn auto_play_step_with_usage(
+        &mut self,
+        depth: Option<usize>,
+        usage: crate::UsageMode,
+    ) -> Option<Result<MoveOutcome, EngineError>> {
+        self.suggest_move_for_usage(depth, usage)
+            .map(|dir| self.make_move(dir))
+    }
+
     pub(crate) fn slide_flat(board: &[u32], n: usize, dir: Direction) -> (Vec<u32>, u64) {
         let mut result = vec![0u32; n * n];
         let gained = Self::slide_flat_into(board, n, dir, &mut result);
@@ -407,12 +423,7 @@ impl Engine {
     }
 
     pub(crate) fn slide_flat_into(board: &[u32], n: usize, dir: Direction, result: &mut [u32]) -> u64 {
-        #[cfg(feature = "bitboard")]
-        if n == 4 && board.iter().all(|&v| v == 0 || v.is_power_of_two()) {
-            let bits = bitboard::board_to_bits(board);
-            let (new_bits, gained) = bitboard::bitboard_move(bits, dir);
-            let out = bitboard::bits_to_board(new_bits);
-            result[..16].copy_from_slice(&out);
+        if let Some(gained) = bitboard_mod::slide_bits_into(board, n, dir, result) {
             return gained;
         }
         let mut gained: u64 = 0;

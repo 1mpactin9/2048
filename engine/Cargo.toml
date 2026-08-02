@@ -6,9 +6,6 @@ edition = "2021"
 [dependencies]
 rand = "0.8"
 
-[features]
-bitboard = []
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 getrandom = { version = "0.2", features = ["js"] }

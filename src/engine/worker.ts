@@ -31,6 +31,7 @@ interface Inbound {
   manipulate: boolean;
   seed: Uint32Array;
   calls: number;
+  usageCode: number;
 }
 
 const ctx = self as unknown as {
@@ -50,6 +51,7 @@ ctx.onmessage = async (e: MessageEvent<Inbound>): Promise<void> => {
     manipulate,
     seed,
     calls,
+    usageCode,
   } = e.data;
   try {
     await ensure();
@@ -64,13 +66,14 @@ ctx.onmessage = async (e: MessageEvent<Inbound>): Promise<void> => {
             seed,
             calls,
             true,
+            usageCode,
           )
-        : suggest_action(flat, size, swaps, deletes, depth);
+        : suggest_action(flat, size, swaps, deletes, depth, usageCode);
       ctx.postMessage({ id, ok: true, action });
     } else {
       const code = manipulate
-        ? suggest_move_det(flat, size, depth, seed, calls, true)
-        : suggest_move(flat, size, depth);
+        ? suggest_move_det(flat, size, depth, seed, calls, true, usageCode)
+        : suggest_move(flat, size, depth, usageCode);
       ctx.postMessage({ id, ok: true, code });
     }
   } catch (err) {

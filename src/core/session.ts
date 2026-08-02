@@ -24,6 +24,7 @@ import {
 } from "./grid";
 import { move } from "./move";
 import { SecureRng, createRngSeed } from "./rng";
+import { DEFAULT_USAGE_MODE, type UsageMode } from "./usage";
 
 function emptyPowerups(): Powerups {
   return { undo: 0, swap: 0, delete: 0 };
@@ -33,6 +34,7 @@ export class GameSession {
   state: GameState;
   private rng: () => number;
   private manipulate = false;
+  private usageMode: UsageMode = DEFAULT_USAGE_MODE;
 
   constructor(state: GameState, rng?: () => number) {
     this.state = state;
@@ -54,6 +56,14 @@ export class GameSession {
 
   setRngManipulation(on: boolean): void {
     this.manipulate = on;
+  }
+
+  setUsageMode(mode: UsageMode): void {
+    this.usageMode = mode;
+  }
+
+  getUsageMode(): UsageMode {
+    return this.usageMode;
   }
 
   static newGame(
@@ -85,8 +95,16 @@ export class GameSession {
     };
     const session = new GameSession(state, rng);
     session.manipulate = manipulate;
-    spawnTile(grid, { rng: session.rng, manipulate: session.manipulate });
-    spawnTile(grid, { rng: session.rng, manipulate: session.manipulate });
+    spawnTile(grid, {
+      rng: session.rng,
+      manipulate: session.manipulate,
+      usageMode: session.usageMode,
+    });
+    spawnTile(grid, {
+      rng: session.rng,
+      manipulate: session.manipulate,
+      usageMode: session.usageMode,
+    });
     return session;
   }
 
@@ -158,8 +176,11 @@ export class GameSession {
     this.state.best = Math.max(this.state.best, this.state.score);
     const prevGridForDelta = cloneGrid(next);
     transcript.spawned =
-      spawnTile(next, { rng: this.rng, manipulate: this.manipulate }) ??
-      undefined;
+      spawnTile(next, {
+        rng: this.rng,
+        manipulate: this.manipulate,
+        usageMode: this.usageMode,
+      }) ?? undefined;
     this.state.moveCount++;
     if (!this.state.won && hasTile(next, WIN_VALUE)) this.state.won = true;
     this.recomputeOver();
@@ -248,6 +269,7 @@ export class GameSession {
       score: this.state.score,
       powerups: this.state.powerups,
       manipulate: this.manipulate,
+      usageMode: this.usageMode,
       rngSeed: this.state.rngSeed,
       rngCalls: this.state.rngCalls,
     };

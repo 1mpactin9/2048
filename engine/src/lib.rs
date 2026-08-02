@@ -1,16 +1,16 @@
+mod board;
 mod game;
 mod search;
 mod heuristic;
 mod transposition;
 mod deterministic;
+mod usage;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
-#[cfg(feature = "bitboard")]
-mod bitboard;
-
 pub use game::{Action, Config, Direction, Engine, EngineError, MoveOutcome};
+pub use usage::UsageMode;
 
 #[cfg(test)]
 mod tests {
@@ -172,8 +172,8 @@ mod tests {
     #[test]
     fn score_spawn_candidate_matches_grid_ts() {
         assert_eq!(score_spawn_candidate_flat(&[2, 0, 0, 4], 2), 8.0);
-        assert_eq!(score_spawn_candidate_flat(&[2, 2, 0, 4], 2), 3.0);
-        assert_eq!(score_spawn_candidate_flat(&[2, 4, 0, 8], 2), 2.0);
+        assert_eq!(score_spawn_candidate_flat(&[2, 2, 0, 4], 2), 2.75);
+        assert_eq!(score_spawn_candidate_flat(&[2, 4, 0, 8], 2), 1.5);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use crate::search::sampled_pairs;
-use crate::{Action, Direction, Engine};
+use crate::{Action, Direction, Engine, UsageMode};
 
 const WIDTH: usize = 256;
 const MASK: u32 = 255;
@@ -114,6 +114,8 @@ impl SeedRng {
     }
 }
 
+const MANIPULATION_ROUNDS_DEFAULT: usize = 5;
+
 impl Engine {
     pub fn derive_key(seed: &[u32]) -> [u32; 8] {
         let mut out = [0u32; 8];
@@ -130,6 +132,17 @@ impl Engine {
         calls: u64,
         manipulate: bool,
     ) -> Option<(usize, u32, u64)> {
+        Self::predict_spawn_flat_with_usage(board, n, key, calls, manipulate, UsageMode::Balanced)
+    }
+
+    pub fn predict_spawn_flat_with_usage(
+        board: &mut [u32],
+        n: usize,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+        usage: UsageMode,
+    ) -> Option<(usize, u32, u64)> {
         let mut empties = [0usize; 256];
         let mut num_empties = 0;
         for (idx, &v) in board.iter().enumerate() {
@@ -144,7 +157,8 @@ impl Engine {
         let mut rng = SeedRng::new(key, calls);
         const PROB_4: f64 = 0.1;
         let (spot, value) = if manipulate && num_empties > 1 {
-            let rounds = 5_usize.min(num_empties);
+            let cap = usage.manipulation_rounds_cap().max(MANIPULATION_ROUNDS_DEFAULT);
+            let rounds = cap.min(num_empties);
             let mut best_spot = empties[0];
             let mut best_value: u32 = 2;
             let mut best_score = f64::NEG_INFINITY;
@@ -178,6 +192,7 @@ impl Engine {
         key: &[u32; 8],
         calls: u64,
         manipulate: bool,
+        usage: UsageMode,
     ) -> f64 {
         if depth == 0 || *budget == 0 {
             return Self::heuristic_flat(board, n);
@@ -202,6 +217,7 @@ impl Engine {
                     key,
                     calls,
                     manipulate,
+                    usage,
                 );
             if v > best {
                 best = v;
@@ -221,6 +237,7 @@ impl Engine {
         key: &[u32; 8],
         calls: u64,
         manipulate: bool,
+        usage: UsageMode,
     ) -> f64 {
         if *budget == 0 {
             return Self::heuristic_flat(board, n);
@@ -230,8 +247,9 @@ impl Engine {
             return Self::heuristic_flat(board, n);
         }
         *budget -= 1;
-        let (idx, value, draws) = Self::predict_spawn_flat(board, n, key, calls, manipulate)
-            .expect("non-empty board has a spawn");
+        let (idx, value, draws) =
+            Self::predict_spawn_flat_with_usage(board, n, key, calls, manipulate, usage)
+                .expect("non-empty board has a spawn");
         board[idx] = value;
         let v = Self::expectimax_max_flat_det(
             board,
@@ -241,6 +259,7 @@ impl Engine {
             key,
             calls + draws,
             manipulate,
+            usage,
         );
         board[idx] = 0;
         v
@@ -253,6 +272,7 @@ impl Engine {
         key: &[u32; 8],
         calls: u64,
         manipulate: bool,
+        usage: UsageMode,
     ) -> (Option<Direction>, f64) {
         let n = grid.len();
         let board = Self::flatten(grid);
@@ -274,6 +294,7 @@ impl Engine {
                     key,
                     calls,
                     manipulate,
+                    usage,
                 );
             if value > best_val {
                 best_val = value;
@@ -295,10 +316,21 @@ impl Engine {
         calls: u64,
         manipulate: bool,
     ) -> Option<Direction> {
+        Self::suggest_move_det_with_usage(grid, depth, key, calls, manipulate, UsageMode::Balanced)
+    }
+
+    pub fn suggest_move_det_with_usage(
+        grid: &Vec<Vec<u32>>,
+        depth: Option<usize>,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+        usage: UsageMode,
+    ) -> Option<Direction> {
         let search_depth =
             Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
-        let mut budget = Self::budget_for_depth(search_depth);
-        Self::best_move_det(grid, search_depth, &mut budget, key, calls, manipulate).0
+        let mut budget = Self::scaled_budget_for_depth(search_depth, usage.node_budget_scale());
+        Self::best_move_det(grid, search_depth, &mut budget, key, calls, manipulate, usage).0
     }
 
     pub fn suggest_action_det_for(
@@ -310,12 +342,34 @@ impl Engine {
         calls: u64,
         manipulate: bool,
     ) -> Action {
+        Self::suggest_action_det_with_usage(
+            grid,
+            swaps_left,
+            deletes_left,
+            depth,
+            key,
+            calls,
+            manipulate,
+            UsageMode::Balanced,
+        )
+    }
+
+    pub fn suggest_action_det_with_usage(
+        grid: &Vec<Vec<u32>>,
+        swaps_left: u32,
+        deletes_left: u32,
+        depth: Option<usize>,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+        usage: UsageMode,
+    ) -> Action {
         let size = grid.len();
         let d = depth.unwrap_or_else(|| Self::auto_depth(grid));
-        let mut budget = Self::budget_for_depth(d);
+        let mut budget = Self::scaled_budget_for_depth(d, usage.node_budget_scale());
 
         let (best_dir, move_val) =
-            Self::best_move_det(grid, d, &mut budget, key, calls, manipulate);
+            Self::best_move_det(grid, d, &mut budget, key, calls, manipulate, usage);
 
         let stuck = best_dir.is_none();
         if !stuck && !Self::is_dangerous(grid) {
@@ -334,7 +388,8 @@ impl Engine {
                     }
                     let mut g = grid.clone();
                     g[r][c] = 0;
-                    let v = Self::best_move_det(&g, d, &mut budget, key, calls, manipulate).1;
+                    let v =
+                        Self::best_move_det(&g, d, &mut budget, key, calls, manipulate, usage).1;
                     if v > best_delete_val {
                         best_delete_val = v;
                         best_delete = Some((r, c));
@@ -355,7 +410,8 @@ impl Engine {
                 let tmp = g[a.0][a.1];
                 g[a.0][a.1] = g[b.0][b.1];
                 g[b.0][b.1] = tmp;
-                let v = Self::best_move_det(&g, d, &mut budget, key, calls, manipulate).1;
+                let v =
+                    Self::best_move_det(&g, d, &mut budget, key, calls, manipulate, usage).1;
                 if v > best_swap_val {
                     best_swap_val = v;
                     best_swap = Some((a, b));
@@ -388,6 +444,7 @@ pub(crate) fn score_spawn_candidate_flat(board: &[u32], n: usize) -> f64 {
     };
     let mut empty = 0.0;
     let mut smoothness = 0.0;
+    let mut mono_penalty = 0.0;
     for r in 0..n {
         for c in 0..n {
             let v_raw = board[r * n + c];
@@ -402,7 +459,11 @@ pub(crate) fn score_spawn_candidate_flat(board: &[u32], n: usize) -> f64 {
                     right_c += 1;
                 }
                 if right_c < n {
-                    smoothness -= (v - log(board[r * n + right_c])).abs();
+                    let rv = log(board[r * n + right_c]);
+                    smoothness -= (v - rv).abs();
+                    if rv > v {
+                        mono_penalty += rv - v;
+                    }
                 }
             }
             if r + 1 < n {
@@ -411,10 +472,14 @@ pub(crate) fn score_spawn_candidate_flat(board: &[u32], n: usize) -> f64 {
                     down_r += 1;
                 }
                 if down_r < n {
-                    smoothness -= (v - log(board[down_r * n + c])).abs();
+                    let dv = log(board[down_r * n + c]);
+                    smoothness -= (v - dv).abs();
+                    if dv > v {
+                        mono_penalty += dv - v;
+                    }
                 }
             }
         }
     }
-    empty * 4.0 + smoothness
+    empty * 4.0 + smoothness - mono_penalty * 0.25
 }

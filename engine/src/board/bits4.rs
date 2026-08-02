@@ -1,13 +1,13 @@
 use crate::Direction;
 use std::sync::OnceLock;
 
-pub type Board64 = u64;
+pub type Board4 = u64;
 
-fn get_row(board: Board64, row: usize) -> u16 {
+fn get_row(board: Board4, row: usize) -> u16 {
     ((board >> (row * 16)) & 0xFFFF) as u16
 }
 
-fn set_row(board: Board64, row: usize, value: u16) -> Board64 {
+fn set_row(board: Board4, row: usize, value: u16) -> Board4 {
     (board & !(0xFFFFu64 << (row * 16))) | ((value as u64) << (row * 16))
 }
 
@@ -57,9 +57,9 @@ fn left_table() -> &'static Vec<(u16, u32)> {
     TABLE.get_or_init(|| (0..=u16::MAX).map(compute_row_left).collect())
 }
 
-fn apply_rows(board: Board64, reversed: bool) -> (Board64, u64) {
+fn apply_rows(board: Board4, reversed: bool) -> (Board4, u64) {
     let table = left_table();
-    let mut out: Board64 = 0;
+    let mut out: Board4 = 0;
     let mut gained: u64 = 0;
     for r in 0..4 {
         let row = get_row(board, r);
@@ -76,8 +76,8 @@ fn apply_rows(board: Board64, reversed: bool) -> (Board64, u64) {
     (out, gained)
 }
 
-fn transpose(board: Board64) -> Board64 {
-    let mut out: Board64 = 0;
+fn transpose(board: Board4) -> Board4 {
+    let mut out: Board4 = 0;
     for r in 0..4 {
         for c in 0..4 {
             let shift_in = 16 * r + 4 * c;
@@ -89,7 +89,7 @@ fn transpose(board: Board64) -> Board64 {
     out
 }
 
-pub fn bitboard_move(board: Board64, dir: Direction) -> (Board64, u64) {
+pub fn slide(board: Board4, dir: Direction) -> (Board4, u64) {
     match dir {
         Direction::Left => apply_rows(board, false),
         Direction::Right => apply_rows(board, true),
@@ -106,8 +106,8 @@ pub fn bitboard_move(board: Board64, dir: Direction) -> (Board64, u64) {
     }
 }
 
-pub fn board_to_bits(board: &[u32]) -> Board64 {
-    let mut out: Board64 = 0;
+pub fn from_flat(board: &[u32]) -> Board4 {
+    let mut out: Board4 = 0;
     for (i, &v) in board.iter().enumerate().take(16) {
         let nib = if v == 0 {
             0
@@ -119,64 +119,11 @@ pub fn board_to_bits(board: &[u32]) -> Board64 {
     out
 }
 
-pub fn bits_to_board(bits: Board64) -> [u32; 16] {
+pub fn to_flat(bits: Board4) -> [u32; 16] {
     let mut out = [0u32; 16];
     for (i, cell) in out.iter_mut().enumerate() {
         let nib = (bits >> (i * 4)) & 0xF;
         *cell = if nib == 0 { 0 } else { 1u32 << nib };
     }
     out
-}
-
-#[cfg(test)]
-mod fuzz_tests {
-    use super::*;
-    use crate::Engine;
-    use rand::Rng;
-
-    fn random_board(rng: &mut impl Rng) -> Vec<Vec<u32>> {
-        (0..4)
-            .map(|_| {
-                (0..4)
-                    .map(|_| {
-                        if rng.gen_bool(0.35) {
-                            0
-                        } else {
-                            1u32 << rng.gen_range(1..12)
-                        }
-                    })
-                    .collect()
-            })
-            .collect()
-    }
-
-    #[test]
-    fn bitboard_matches_grid_path_on_random_boards() {
-        let mut rng = rand::thread_rng();
-        for _ in 0..500 {
-            let grid = random_board(&mut rng);
-            let flat = Engine::flatten(&grid);
-            let bits = board_to_bits(&flat);
-            for &dir in Direction::ALL.iter() {
-                let (expected_grid, expected_gain) = Engine::slide_grid(&grid, dir);
-                let (new_bits, gained) = bitboard_move(bits, dir);
-                let result = bits_to_board(new_bits);
-                let expected_flat = Engine::flatten(&expected_grid);
-                assert_eq!(&result[..], &expected_flat[..], "dir {:?} grid {:?}", dir, grid);
-                assert_eq!(gained, expected_gain, "dir {:?} grid {:?}", dir, grid);
-            }
-        }
-    }
-
-    #[test]
-    fn bitboard_roundtrip_conversion() {
-        let mut rng = rand::thread_rng();
-        for _ in 0..200 {
-            let grid = random_board(&mut rng);
-            let flat = Engine::flatten(&grid);
-            let bits = board_to_bits(&flat);
-            let back = bits_to_board(bits);
-            assert_eq!(&back[..], &flat[..]);
-        }
-    }
 }

@@ -1,4 +1,4 @@
-import { makeParams, slideGrid, suggestMove } from "./algo.mjs";
+import { makeParams, makeParamsForUsage, slideGrid, suggestMove } from "./algo.mjs";
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -115,9 +115,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const games = parseInt(process.argv[2] || "8", 10);
   const depth = process.argv[3] ? parseInt(process.argv[3], 10) : undefined;
   const maxCells = process.argv[4] ? parseInt(process.argv[4], 10) : undefined;
+  const usageArg = process.argv.find((a) => a.startsWith("--usage="));
+  const usageName = usageArg ? usageArg.split("=")[1] : null;
   const verbose = process.argv.includes("--verbose");
-  const P = makeParams(maxCells ? { MAX_CELLS: maxCells } : {});
-  console.log(`Running ${games} games, depth=${depth ?? "default(5)"}, maxCells=${P.MAX_CELLS}...`);
+  const P = usageName
+    ? makeParamsForUsage(usageName, maxCells ? { MAX_CELLS: maxCells } : {})
+    : makeParams(maxCells ? { MAX_CELLS: maxCells } : {});
+  console.log(
+    `Running ${games} games, depth=${depth ?? "default(5)"}, usage=${usageName ?? "custom"}, maxCells=${P.MAX_CELLS}...`
+  );
   if (verbose) {
     for (let i = 0; i < games; i++) {
       const r = playGame({ depth, P, seed: 1 + i, verbose: true, maxWallMs: 20000 });

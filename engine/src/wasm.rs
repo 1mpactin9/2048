@@ -1,4 +1,4 @@
-use crate::{Action, Direction, Engine};
+use crate::{Action, Direction, Engine, UsageMode};
 use wasm_bindgen::prelude::*;
 
 fn direction_code(dir: Direction) -> u32 {
@@ -24,7 +24,7 @@ fn grid_from_flat(flat: &[u32], size: usize) -> Option<Vec<Vec<u32>>> {
 }
 
 #[wasm_bindgen]
-pub fn suggest_move(flat: &[u32], size: usize, depth: u32) -> u32 {
+pub fn suggest_move(flat: &[u32], size: usize, depth: u32, usage_code: u32) -> u32 {
     let grid = match grid_from_flat(flat, size) {
         Some(g) => g,
         None => return NO_MOVE,
@@ -34,7 +34,8 @@ pub fn suggest_move(flat: &[u32], size: usize, depth: u32) -> u32 {
     } else {
         Some(depth as usize)
     };
-    Engine::suggest_move_for(&grid, depth_opt).map_or(NO_MOVE, direction_code)
+    let usage = UsageMode::from_code(usage_code);
+    Engine::suggest_move_with_usage(&grid, depth_opt, usage).map_or(NO_MOVE, direction_code)
 }
 
 #[wasm_bindgen]
@@ -44,6 +45,7 @@ pub fn suggest_action(
     swaps_left: u32,
     deletes_left: u32,
     depth: u32,
+    usage_code: u32,
 ) -> Vec<u32> {
     let grid = match grid_from_flat(flat, size) {
         Some(g) => g,
@@ -54,7 +56,8 @@ pub fn suggest_action(
     } else {
         Some(depth as usize)
     };
-    match Engine::suggest_action_for(&grid, swaps_left, deletes_left, depth_opt) {
+    let usage = UsageMode::from_code(usage_code);
+    match Engine::suggest_action_with_usage(&grid, swaps_left, deletes_left, depth_opt, usage) {
         Action::Move(d) => vec![0, direction_code(d)],
         Action::Delete(r, c) => vec![1, r as u32, c as u32],
         Action::Swap(a, b) => vec![2, a.0 as u32, a.1 as u32, b.0 as u32, b.1 as u32],
@@ -70,6 +73,7 @@ pub fn suggest_move_det(
     seed: &[u32],
     calls: f64,
     manipulate: bool,
+    usage_code: u32,
 ) -> u32 {
     let grid = match grid_from_flat(flat, size) {
         Some(g) => g,
@@ -81,8 +85,16 @@ pub fn suggest_move_det(
         Some(depth as usize)
     };
     let key = Engine::derive_key(seed);
-    Engine::suggest_move_det_for(&grid, depth_opt, &key, calls as u64, manipulate)
-        .map_or(NO_MOVE, direction_code)
+    let usage = UsageMode::from_code(usage_code);
+    Engine::suggest_move_det_with_usage(
+        &grid,
+        depth_opt,
+        &key,
+        calls as u64,
+        manipulate,
+        usage,
+    )
+    .map_or(NO_MOVE, direction_code)
 }
 
 #[wasm_bindgen]
@@ -95,6 +107,7 @@ pub fn suggest_action_det(
     seed: &[u32],
     calls: f64,
     manipulate: bool,
+    usage_code: u32,
 ) -> Vec<u32> {
     let grid = match grid_from_flat(flat, size) {
         Some(g) => g,
@@ -106,7 +119,8 @@ pub fn suggest_action_det(
         Some(depth as usize)
     };
     let key = Engine::derive_key(seed);
-    match Engine::suggest_action_det_for(
+    let usage = UsageMode::from_code(usage_code);
+    match Engine::suggest_action_det_with_usage(
         &grid,
         swaps_left,
         deletes_left,
@@ -114,6 +128,7 @@ pub fn suggest_action_det(
         &key,
         calls as u64,
         manipulate,
+        usage,
     ) {
         Action::Move(d) => vec![0, direction_code(d)],
         Action::Delete(r, c) => vec![1, r as u32, c as u32],
@@ -129,6 +144,7 @@ pub fn predict_spawn(
     seed: &[u32],
     calls: f64,
     manipulate: bool,
+    usage_code: u32,
 ) -> Vec<u32> {
     let grid = match grid_from_flat(flat, size) {
         Some(g) => g,
@@ -137,7 +153,15 @@ pub fn predict_spawn(
     let n = grid.len();
     let mut board = Engine::flatten(&grid);
     let key = Engine::derive_key(seed);
-    match Engine::predict_spawn_flat(&mut board, n, &key, calls as u64, manipulate) {
+    let usage = UsageMode::from_code(usage_code);
+    match Engine::predict_spawn_flat_with_usage(
+        &mut board,
+        n,
+        &key,
+        calls as u64,
+        manipulate,
+        usage,
+    ) {
         Some((idx, value, draws)) => vec![idx as u32, value, draws as u32],
         None => vec![u32::MAX],
     }

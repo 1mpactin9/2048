@@ -19,6 +19,17 @@ export function makeParams(overrides = {}) {
   );
 }
 
+export const USAGE_PRESETS = {
+  max: { MAX_CELLS: 8, nodeBudgetScale: 2.5, timeBudgetMs: 800 },
+  balanced: { MAX_CELLS: 6, nodeBudgetScale: 1.0, timeBudgetMs: 200 },
+  limit: { MAX_CELLS: 4, nodeBudgetScale: 0.35, timeBudgetMs: 45 },
+};
+
+export function makeParamsForUsage(usageName, overrides = {}) {
+  const preset = USAGE_PRESETS[usageName] ?? USAGE_PRESETS.balanced;
+  return makeParams(Object.assign({ MAX_CELLS: preset.MAX_CELLS }, overrides));
+}
+
 function log2(v) {
   return v === 0 ? 0.0 : Math.log2(v);
 }

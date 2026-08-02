@@ -1,5 +1,6 @@
 import type { AutoAction, Direction, Engine, EngineContext } from "../core/types";
 import { PlaceholderEngine } from "./engine";
+import { usageModeToCode, DEFAULT_USAGE_MODE } from "../core/usage";
 
 const DIR_BY_CODE: readonly Direction[] = ["up", "down", "left", "right"];
 
@@ -16,6 +17,7 @@ interface WorkerRequest {
   manipulate: boolean;
   seed: Uint32Array;
   calls: number;
+  usageCode: number;
 }
 
 interface WorkerReply {
@@ -114,6 +116,7 @@ export const WasmEngine: Engine = {
       ? new Uint32Array(seedArr as number[])
       : new Uint32Array(0);
     const calls = ctx.rngCalls ?? 0;
+    const usageCode = usageModeToCode(ctx.usageMode ?? DEFAULT_USAGE_MODE);
 
     const reply = await request({
       flat,
@@ -125,6 +128,7 @@ export const WasmEngine: Engine = {
       manipulate,
       seed,
       calls,
+      usageCode,
     });
 
     if (!reply.ok) {

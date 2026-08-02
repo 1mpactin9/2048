@@ -1,3 +1,5 @@
+import type { UsageMode } from "./usage";
+
 export type Direction = "up" | "down" | "left" | "right";
 
 export const DIRECTIONS: readonly Direction[] = ["up", "down", "left", "right"];
@@ -79,6 +81,7 @@ export interface GameState {
   deltaHistory?: HistoryStep[];
   rngSeed?: number[];
   rngCalls?: number;
+  usageMode?: UsageMode;
 }
 
 export interface EngineContext {
@@ -92,6 +95,7 @@ export interface EngineContext {
   deterministic?: boolean;
   rngSeed?: number[];
   rngCalls?: number;
+  usageMode?: UsageMode;
 }
 
 export type AutoAction =

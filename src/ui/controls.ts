@@ -1,6 +1,7 @@
 import type { ThemePref } from "../core/storage";
 import { SIZES } from "../core/constants";
 import { Icons } from "./icons";
+import type { UsageMode } from "../core/usage";
 
 export interface SegOption {
   label: string;
@@ -65,7 +66,7 @@ export function createSegmented(
 export interface PopoverOpts {
   theme: ThemePref;
   autoOn: boolean;
-  autoSpeed: number;
+  usageMode: UsageMode;
   autoDepth: number;
   autoPowerups: boolean;
   rngManip: boolean;
@@ -76,7 +77,7 @@ export interface PopoverOpts {
   size: number;
   onTheme: (pref: ThemePref) => void;
   onAuto: (on: boolean) => void;
-  onAutoSpeed: (ms: number) => void;
+  onUsageMode: (mode: UsageMode) => void;
   onAutoDepth: (depth: number) => void;
   onAutoPowerups: (on: boolean) => void;
   onRngManip: (on: boolean) => void;
@@ -115,7 +116,7 @@ export class SettingsPopover {
     setActive: (v: string) => void;
     layout: () => void;
   };
-  private delaySeg!: {
+  private usageSeg!: {
     el: HTMLElement;
     setActive: (v: string) => void;
     layout: () => void;
@@ -284,22 +285,22 @@ export class SettingsPopover {
     depthField.className = "popover__field";
     depthField.append(depthLabel, this.depthSeg.el);
 
-    const delayLabel = document.createElement("div");
-    delayLabel.className = "popover__label";
-    delayLabel.textContent = "DELAY";
-    this.delaySeg = createSegmented(
+    const usageLabel = document.createElement("div");
+    usageLabel.className = "popover__label";
+    usageLabel.textContent = "USAGE";
+    this.usageSeg = createSegmented(
       [
-        { label: "Fast", value: "2" },
-        { label: "Normal", value: "120" },
-        { label: "Slow", value: "200" },
+        { label: "Max", value: "max" },
+        { label: "Balanced", value: "balanced" },
+        { label: "Limit", value: "limit" },
       ],
-      String(this.opts.autoSpeed),
-      (v) => this.opts.onAutoSpeed(Number(v)),
+      this.opts.usageMode,
+      (v) => this.opts.onUsageMode(v as UsageMode),
     );
 
-    const delayField = document.createElement("div");
-    delayField.className = "popover__field";
-    delayField.append(delayLabel, this.delaySeg.el);
+    const usageField = document.createElement("div");
+    usageField.className = "popover__field";
+    usageField.append(usageLabel, this.usageSeg.el);
 
     const backtrackRow = document.createElement("div");
     backtrackRow.className = "popover__row";
@@ -355,7 +356,7 @@ export class SettingsPopover {
       rngRow,
       detRow,
       depthField,
-      delayField,
+      usageField,
       backtrackRow,
       powerupRow,
     );
@@ -398,7 +399,7 @@ export class SettingsPopover {
     this.sizeSeg.layout();
     this.themeSeg.layout();
     this.depthSeg.layout();
-    this.delaySeg.layout();
+    this.usageSeg.layout();
   }
 
   close(): void {
@@ -424,8 +425,8 @@ export class SettingsPopover {
     }
     if (opts.autoDepth !== undefined)
       this.depthSeg.setActive(String(opts.autoDepth));
-    if (opts.autoSpeed !== undefined)
-      this.delaySeg.setActive(String(opts.autoSpeed));
+    if (opts.usageMode !== undefined)
+      this.usageSeg.setActive(opts.usageMode);
     if (opts.autoPowerups !== undefined) {
       this.powerupSwitch.classList.toggle("is-on", opts.autoPowerups);
       this.powerupSwitch.setAttribute(

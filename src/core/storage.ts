@@ -1,6 +1,7 @@
 import type { GameMode, GameState } from "./types";
 import { DEFAULT_MODE, DEFAULT_SIZE, gameKey } from "./constants";
 import { peekNextId, setNextId } from "./grid";
+import { DEFAULT_USAGE_MODE, type UsageMode } from "./usage";
 
 export type ThemePref = "light" | "dark" | "system";
 
@@ -9,7 +10,7 @@ export interface Settings {
   lastSize: number;
   lastMode: GameMode;
   autoOn: boolean;
-  autoSpeed: number;
+  usageMode: UsageMode;
   autoDepth: number;
   autoPowerups: boolean;
   rngManip: boolean;
@@ -32,7 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lastSize: DEFAULT_SIZE,
   lastMode: DEFAULT_MODE,
   autoOn: false,
-  autoSpeed: 180,
+  usageMode: DEFAULT_USAGE_MODE,
   autoDepth: 0,
   autoPowerups: true,
   rngManip: false,

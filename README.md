@@ -7,7 +7,7 @@
     </p>
 </div>
 
-A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game engine.
+A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game engine. Still in progress, but it works!
 
 ## Prerequisites
 
@@ -36,12 +36,12 @@ Run this sequence to start from a completely clean state:
 
 ```bash
 # remove generated artifacts
-rm -rf node_modules dist engine/pkg/engine2048_bg.wasm engine/pkg/engine2048.js engine/pkg/engine2048.d.ts
+rm -rf node_modules/ dist/ engine/pkg/ engine/target/
 
 # reinstall dependencies
 npm install
 
-# full build
+# clean full build
 npm run build
 ```
 

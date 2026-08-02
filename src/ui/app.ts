@@ -17,6 +17,7 @@ import {
 } from "../core/storage";
 import { GameSession, restoreSession } from "../core/session";
 import { hasMoves, emptyCells, createGrid } from "../core/grid";
+import { usageProfile, type UsageMode } from "../core/usage";
 import { move } from "../core/move";
 import { SecureRng } from "../core/rng";
 import {
@@ -102,7 +103,7 @@ export class App {
     this.popover = new SettingsPopover({
       theme: this.data.settings.theme,
       autoOn: this.data.settings.autoOn,
-      autoSpeed: this.data.settings.autoSpeed,
+      usageMode: this.data.settings.usageMode,
       autoDepth: this.data.settings.autoDepth,
       autoPowerups: this.data.settings.autoPowerups,
       rngManip: this.data.settings.rngManip,
@@ -113,7 +114,7 @@ export class App {
       size: this.size,
       onTheme: (p) => this.onThemePref(p),
       onAuto: (on) => this.toggleAuto(on),
-      onAutoSpeed: (ms) => this.onAutoSpeed(ms),
+      onUsageMode: (mode) => this.onUsageMode(mode),
       onAutoDepth: (d) => this.onAutoDepth(d),
       onAutoPowerups: (on) => this.onAutoPowerups(on),
       onRngManip: (on) => this.onRngManip(on),
@@ -290,6 +291,7 @@ export class App {
       this.persist();
     }
     this.session.setRngManipulation(this.data.settings.rngManip);
+    this.session.setUsageMode(this.data.settings.usageMode);
     this.pendingNew = false;
     this.board.setSize(size);
     this.board.fullRender(this.session.state.grid, !saved);
@@ -353,6 +355,7 @@ export class App {
       this.data.settings.rngManip,
     );
     this.session.setRngManipulation(this.data.settings.rngManip);
+    this.session.setUsageMode(this.data.settings.usageMode);
     this.wasOver = false;
     this.pendingNew = !prevOver;
     if (!this.pendingNew) this.saveCurrent();
@@ -370,6 +373,7 @@ export class App {
     }
     this.session = restoreSession(saved);
     this.session.setRngManipulation(this.data.settings.rngManip);
+    this.session.setUsageMode(this.data.settings.usageMode);
     this.pendingNew = false;
     this.wasOver = false;
     this.board.fullRender(this.session.state.grid);
@@ -645,10 +649,11 @@ export class App {
     save(this.data);
   }
 
-  private onAutoSpeed(ms: number): void {
-    this.data.settings.autoSpeed = ms;
+  private onUsageMode(mode: UsageMode): void {
+    this.data.settings.usageMode = mode;
+    this.session.setUsageMode(mode);
     this.persist();
-    this.popover.update({ autoSpeed: ms });
+    this.popover.update({ usageMode: mode });
   }
 
   private onAutoDepth(depth: number): void {
@@ -820,7 +825,7 @@ export class App {
       } else if (this.autoOn && !this.session.state.over) {
         this.autoTick();
       }
-    }, this.data.settings.autoSpeed);
+    }, usageProfile(this.data.settings.usageMode).tickDelayMs);
   }
 
   private boardSignature(): string {
@@ -943,7 +948,7 @@ export class App {
           }
           this.applyAutoAction(action);
           done++;
-          setTimeout(tick, this.data.settings.autoSpeed);
+          setTimeout(tick, usageProfile(this.data.settings.usageMode).tickDelayMs);
         })();
       };
       tick();
@@ -1242,11 +1247,12 @@ export class App {
   }
 
   __noDelay(): void {
-    this.data.settings.autoSpeed = 0;
+    this.data.settings.usageMode = "max";
+    this.session.setUsageMode("max");
     this.persist();
     if (!this.autoOn) this.startAuto();
-    this.popover.update({ autoSpeed: 0 });
-    console.log("[dev] __noDelay → engine started with zero delay");
+    this.popover.update({ usageMode: "max" });
+    console.log("[dev] __noDelay → engine started at max usage");
   }
 
   __nextNumber(): number {
@@ -1563,7 +1569,7 @@ export class App {
       engine: {
         name: WasmEngine.name,
         autoOn: this.autoOn,
-        autoSpeed: this.data.settings.autoSpeed,
+        usageMode: this.data.settings.usageMode,
         autoDepth: this.data.settings.autoDepth,
         autoPowerups: this.data.settings.autoPowerups,
         manipulate: this.session.toContext().manipulate ?? false,
@@ -1862,10 +1868,11 @@ export class App {
       `[dev]   depth=${depth}, manipulate=${manipulate}, initialBest=${initialBest}`,
     );
 
-    const prevSpeed = this.data.settings.autoSpeed;
-    this.data.settings.autoSpeed = 0;
+    const prevUsageMode = this.data.settings.usageMode;
+    this.data.settings.usageMode = "max";
+    this.session.setUsageMode("max");
     this.persist();
-    this.popover.update({ autoSpeed: 0 });
+    this.popover.update({ usageMode: "max" });
 
     let exceedCount = 0;
     let currentBest = initialBest;
@@ -1911,9 +1918,10 @@ export class App {
 
       if (exceedCount >= 3) {
         this.stopAuto();
-        this.data.settings.autoSpeed = prevSpeed;
+        this.data.settings.usageMode = prevUsageMode;
+        this.session.setUsageMode(prevUsageMode);
         this.persist();
-        this.popover.update({ autoSpeed: prevSpeed });
+        this.popover.update({ usageMode: prevUsageMode });
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log(
           `%c[dev] __afkHighScore → DONE%c`,

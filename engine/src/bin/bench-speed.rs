@@ -1,9 +1,15 @@
-use engine2048::Engine;
+use engine2048::{Engine, UsageMode};
 use std::env;
 use std::io::Write;
 use std::time::Instant;
 
 const SIZES: [usize; 5] = [3, 4, 5, 6, 8];
+
+const USAGE_MODES: [(UsageMode, &'static str); 3] = [
+    (UsageMode::Max, "max"),
+    (UsageMode::Balanced, "balanced"),
+    (UsageMode::Limit, "limit"),
+];
 
 const DEPTHS: [(usize, &'static str); 4] = [
     (0, "auto"),
@@ -211,6 +217,47 @@ fn main() {
                 plain,
                 det,
                 det as f64 / plain as f64
+            )
+            .unwrap();
+        }
+        out.flush().unwrap();
+    }
+
+    writeln!(out).unwrap();
+    writeln!(out, "── Phase 4: Usage modes (max / balanced / limit) ──").unwrap();
+    writeln!(
+        out,
+        "{:<8} {:<10} {:>12} {:>10}",
+        "Size", "Usage", "μs/move", "ratio vs max"
+    )
+    .unwrap();
+    writeln!(out, "{}", "─".repeat(46)).unwrap();
+    out.flush().unwrap();
+
+    for &size in &SIZES {
+        if let Some(f) = filter_size {
+            if size != f {
+                continue;
+            }
+        }
+        let danger = build_danger_board(size);
+        let mut max_us: u128 = 1;
+        for (mode, name) in &USAGE_MODES {
+            let t0 = Instant::now();
+            for _ in 0..DECISIONS_PER_CONFIG {
+                let _dir = Engine::suggest_move_with_usage(&danger, None, *mode);
+            }
+            let us = t0.elapsed().as_micros() / DECISIONS_PER_CONFIG as u128;
+            if *name == "max" {
+                max_us = us.max(1);
+            }
+            writeln!(
+                out,
+                "{:<8} {:<10} {:>12} {:>9.2}x",
+                size,
+                name,
+                us,
+                us as f64 / max_us as f64
             )
             .unwrap();
         }
