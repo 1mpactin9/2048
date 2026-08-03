@@ -391,6 +391,10 @@ impl Engine {
     ) -> Option<Direction> {
         Self::suggest_move_with_usage(&self.grid, depth, usage)
     }
+
+    pub fn suggest_move_for_guarantee(&self, usage: crate::UsageMode) -> Option<Direction> {
+        Self::suggest_move_guarantee(&self.grid, usage)
+    }
     pub(crate) fn flatten(grid: &Vec<Vec<u32>>) -> Vec<u32> {
         let n = grid.len();
         let mut out = Vec::with_capacity(n * n);

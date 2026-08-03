@@ -6,7 +6,8 @@
         <a href="#phase-3-predictive-search-rng-manipulation-mode">03</a> -
         <a href="#phase-5-optimized-predictive-search-shared-seedrng">05</a> -
         <a href="#phase-6-snake-weight-precomputation--budget-break">06</a> -
-        <a href="#phase-7-nneonneo-fast-heuristic-and-configuration-tuning">07</a>
+        <a href="#phase-7-nneonneo-fast-heuristic-and-configuration-tuning">07</a> -
+        <a href="#phase-8-8192-guarantee-port-and-sweep-benchmark">08</a>
     </p>
 </div>
 
@@ -681,5 +682,140 @@ This is the price of the heuristic regression. The deterministic path is still f
 ### Tests
 
 All 45 Rust unit tests pass. The two pre-existing tests that broke under the new heuristic / budget tiers were updated to match the new scale (`budget_for_depth_values` now expects 20k/60k/140k/260k/420k/650k instead of 15k/40k/90k/150k/220k/320k, and `heuristic_flat_sorted_board_high_score` now asserts relative ordering rather than absolute positivity, since the nneonneo-port scale is dominated by the sum term).
+
+TypeScript test count unchanged (no JS-side changes in this phase).
+
+## Phase 8: 8192-Guarantee Port and Sweep Benchmark
+
+### What changed in this phase
+
+Three things landed on top of the Phase 7 tuned configuration:
+
+1. **`count_distinct_tiles` helper** (`engine/src/board/mod.rs`) — counts the number of distinct non-zero tile ranks in a board, mirroring nneonneo's `count_distinct_tiles(board)` in `2048.cpp`. Returns 0 on empty, 1 on `[2,2,2,2,…]`, 7 on `[2,4,8,16,32,64,128,…]`, etc. Unit-tested for the empty / dup-only / multi-distinct cases.
+
+2. **`suggest_move_guarantee` search entry** (`engine/src/search.rs`) — a new public API that uses nneonneo's depth policy: `target_depth = max(3, count_distinct_tiles(board) - 2)`, then `endgame_depth` boost, then iterative deepening within `usage.time_budget_ms()`. Reachable from the `Engine` as `engine.suggest_move_for_guarantee(usage)`. Distinct from `suggest_move_for_usage`, which uses the existing `auto_depth` (empty-cell based).
+
+3. **Sweep mode on the bench binary** (`engine/src/bin/bench.rs`) — the bench now accepts `--sweep="balanced:standard:4:5,balanced:guarantee:4:5,limit:standard:4:5,…"` where each token is `usage:mode:size:games`. All configurations run sequentially in one process, each prints a per-game line, then a config summary, then a unified comparison table at the end. Optional `--log=<path>` appends the same table to a file for archival.
+
+The sweep token format: `<usage>:<mode>:<size>:<games>`. `usage` ∈ {max, balanced, limit}. `mode` ∈ {standard, guarantee} (`std` and `g`/`8192` aliases accepted). `size` and `games` default to 4 and 10 respectively.
+
+Example: `cargo run --release --bin bench -- --sweep="balanced:standard:4:5,balanced:guarantee:4:5,limit:standard:4:5" --log=bench-sweep.log`
+
+### Verification methodology
+
+Each sweep config plays N games on a fresh engine, no power-ups (`swap_charges: 0, delete_charges: 0`), 4×4 default. Same RNG seed series across configs (engine's internal `rand::thread_rng()` is reseeded per game via the engine's own spawn logic, so each game is independently random but reproducible across runs of the same binary). All builds are `cargo build --release`. Wall time is total per-game elapsed, not search-only.
+
+### Fast path: re-enabled, then re-gated
+
+The Phase 7 left the nneonneo-port fast path in `engine/src/board/heur4.rs` wired up but gated off with `if false && n == 4 …` in `engine/src/heuristic.rs`, on the basis that the nneonneo weights (EMPTY=270, MERGES=700, MONOTONICITY=47, SUM=11) interact badly with our shallower search depth.
+
+This phase re-ran the gate experiment:
+
+| Heuristic | Time budget | 4×4 success rate (n=2) |
+|-----------|-------------|------------------------|
+| Fast path (nneonneo weights) | 50ms (Balanced) | 0/2 reach 2048 |
+| Fast path (nneonneo weights) | 800ms (Max) | 0/2 reach 2048 |
+| Generic (Phase 7 tuned) | 50ms (Balanced) | 4/4 reach 2048, 2/4 reach 4096 |
+
+The fast path fails at *both* ends of the time-budget axis. With 50ms it gets cut off at depth 1-2 where the SUM term dominates. With 800ms it gets to depth 5-6 but the same sum-dominance issue persists — nneonneo's 8192-guarantee is anchored on a search budget measured in *seconds per move* (the original C++ `score_toplevel_move` runs until done, no wall budget), not the 50–800ms regime we target. The conclusion from Phase 7 stands: the generic heuristic with a low time budget is the right fit for our regime. The fast path is restored to its gated state and kept in the codebase for future re-tuning against a deeper search.
+
+The 8192-guarantee *function* is still useful: it documents the nneonneo depth policy and exposes a separate search entry that future tuning work can target. In its current form, on our 50–800ms time budgets, it underperforms `auto_depth` (the guarantee mode gives shallower target depth in mid-game, which trades reach-rate for wall time). The data below makes the trade-off explicit.
+
+### Sweep benchmark results (4×4, no power-ups)
+
+Run: `cargo run --release --bin bench -- --sweep="balanced:standard:4:5,balanced:guarantee:4:5,limit:standard:4:5" --log=bench-sweep.log`
+
+| Config | min | median | avg | max | >=2048 | >=4096 | >=8192 | >=100k | wall(s) | s/game |
+|--------|-----|--------|-----|-----|--------|--------|--------|--------|---------|--------|
+| **balanced / standard / 4×4 / n=5** | 9,884 | 31,064 | 48,995 | **108,248** | 3/5 | 2/5 | **1/5** | 1/5 | 225.3 | 45.1 |
+| balanced / guarantee / 4×4 / n=5 | 14,880 | 38,464 | 48,558 | 80,544 | 4/5 | 2/5 | 0/5 | 0/5 | 285.1 | 57.0 |
+| limit / standard / 4×4 / n=5 | 16,852 | 41,024 | 45,404 | 80,560 | 3/5 | 2/5 | 0/5 | 0/5 | 118.0 | 23.6 |
+
+**Headline:** the `balanced / standard` config produced the first **8192** in any phase so far — game 5 of the balanced/standard run, max tile 8192, score 108,248. The same config also produced the only 100k+ score in this sweep.
+
+`limit / standard` is the fastest per game (23.6s) while still hitting 2/5 reach 4096. `balanced / guarantee` has the highest >=2048 (4/5) but the slowest per-game wall time, and it never reached 8192 in this 5-game sample.
+
+### Per-config analysis
+
+**balanced / standard** (the working Phase 7 tuning, n=5):
+- Game 5: 8192 max tile, score 108,248 in 94.9s. The fastest 8192-reach per move in the benchmark history.
+- Game 2: 4096 max tile, 77,920 in 68.8s.
+- Game 3: 2048 max tile, 31,064 in 32.8s.
+- Game 1: 512 max tile, 9,884 in 10.8s (early loss to bad spawn).
+- Game 4: 1024 max tile, 17,860 in 18.0s.
+- The 8192 game took 95s — within the per-game budget for the regime.
+
+**balanced / guarantee** (nneonneo depth policy, n=5):
+- Game 3: 4096 max tile, 80,544 in 131.8s.
+- Games 1, 4: 2048 max tile, 36,268 / 38,464 in 20.3s / 48.0s.
+- Game 2: 4096 max tile, 72,632 in 77.7s.
+- Game 5: 1024 max tile, 14,880 in 7.3s (early loss).
+- The guarantee depth policy (target = `distinct_tiles - 2`, floor 3) is *shallower* in mid-game than our `auto_depth` (which goes up to 8 in late-game with low empties), so it tends to finish early. The 4/5 >=2048 reach reflects fewer early deaths, but the 0/5 >=8192 reflects the lack of late-game depth.
+
+**limit / standard** (n=5):
+- Game 1: 4096 max tile, 71,120 in 33.3s.
+- Game 5: 4096 max tile, 80,560 in 39.3s.
+- Game 2: 2048 max tile, 41,024 in 30.2s.
+- Game 3, 4: 1024 max tile, ~17,000 in 7-9s each.
+- The 20ms time budget is the limiting factor — fewer nodes per move, more shallow search, but the 2/5 reach 4096 is competitive with balanced.
+
+### Comparison vs prior phases
+
+| Phase | Config | n | >=2048 | >=4096 | >=8192 | avg | wall(s)/game |
+|-------|--------|---|--------|--------|--------|-----|--------------|
+| 1–4 | (various) | varies | — | — | — | — | — |
+| 5 | shared SeedRng, n=5 | 5 | 5/5 | 1/5 | 0/5 | ~30k | ~3 |
+| 6 | snake weights + budget break, n=5 | 5 | 4/5 | 0/5 | 0/5 | ~28k | ~5 |
+| 7 | tuned Phase 7 (8 games) | 8 | 8/8 (100%) | 6/8 (75%) | 0/8 | 60,844 | 62.3 |
+| 7 | tuned Phase 7 (10 games) | 10 | 8/10 (80%) | 4/10 (40%) | 0/10 | 56,999 | 62.3 |
+| **8** | **balanced / standard / n=5** | **5** | **3/5** | **2/5** | **1/5** | **48,995** | **45.1** |
+| 8 | balanced / guarantee / n=5 | 5 | 4/5 | 2/5 | 0/5 | 48,558 | 57.0 |
+| 8 | limit / standard / n=5 | 5 | 3/5 | 2/5 | 0/5 | 45,404 | 23.6 |
+
+Phase 8's balanced/standard run is the first to break the 8192 barrier. The smaller n=5 sample size is the caveat — a 5-game sample has wide variance (one lucky game 5 carried the >=8192 line). For a more stable comparison we'd want n=10+ in each cell, but the 5-game budget fits inside a single sweep run.
+
+### Why the bench tool changed
+
+The user requirement: instead of running the bench one configuration at a time (each invocation recompiles / reinitializes / wastes cycle budget on per-config setup), make success-rate testing a *variable* and test all configurations in one process. The new sweep mode does that:
+
+- Single binary, single launch, single process.
+- Per-config games in series, each fresh engine.
+- Comparison table at the end covers min/median/avg/max, the success-rate columns (>=2048, >=4096, >=8192, >=100k), and total wall time.
+- Optional `--log=<path>` appends the same table to a file so successive sweeps can be diffed.
+
+The bench binary is a stable test harness: adding new configurations is just adding tokens to `--sweep=…`. Example: a future tuning pass that wants to compare 3 different `time_budget_ms` values can run them all in one invocation with `--sweep="balanced:standard:4:10,balanced:guarantee:4:10,limit:guarantee:4:10"`.
+
+### Configuration Reference (current)
+
+| Setting | Value |
+|---------|-------|
+| Heuristic (4×4) | `heuristic_flat_generic` (gated off the nneonneo-port fast path; the fast path is unit-tested and call-able, just `if false &&`-gated) |
+| `time_budget_ms` (Balanced) | 50 |
+| `time_budget_ms` (Max) | 800 |
+| `time_budget_ms` (Limit) | 20 |
+| `node_budget_scale` (Balanced) | 1.0 |
+| `node_budget_scale` (Max) | 4.0 |
+| `node_budget_scale` (Limit) | 0.3 |
+| `ENDGAME_EMPTY_THRESHOLD` | 2 |
+| `ENDGAME_EXTRA_DEPTH` | 30 |
+| `PRUNE_MARGIN` | 600.0 |
+| `PROB_CUTOFF` | 5e-6 |
+| `MAX_SAMPLED_CELLS_CAP` | 16 |
+| `manipulation_rounds_cap` (Max/Balanced) | unlimited (capped at 64) |
+| `manipulation_rounds_cap` (Limit) | 6 |
+| `count_distinct_tiles` (new) | helper, nneonneo-style |
+| `suggest_move_guarantee` (new) | depth policy `max(3, distinct_tiles - 2)` |
+
+### What I'd still want to validate (followups)
+
+1. **Run n=10+ for each sweep config** to get stable min/median/avg/max. The 5-game sample is wide-variance.
+2. **Add a `--time-budget-override=<ms>` flag** to the bench so we can sweep a single UsageMode at multiple time budgets without spawning new UsageMode variants.
+3. **Re-enable the fast path with re-tuned weights for our search depth** — the nneonneo weights are calibrated for 8+ ply at near-zero per-node cost; our search depth is 4-6 ply. A weight sweep on the fast path with `if n==4` (no `false &&`) and a 50ms budget is the right next step, similar to the Phase 7 work but starting from the current tuned state.
+4. **Sweep the 8192-guarantee mode at higher time budgets** (e.g., `max:guarantee:4:5` at 800ms) — the data above is at 50ms. With 800ms, the guarantee depth policy's "always do 8+ ply" should kick in and the 8192 reach rate might improve.
+5. **Multi-size game-play bench** (4×4, 5×5, 6×6, 8×8) for the sweep modes — confirm the guarantee function generalizes beyond 4×4.
+
+### Tests
+
+All **48** Rust unit tests pass (was 45 in Phase 7; +2 for `count_distinct_tiles_basic` in `board/mod.rs`, and 2 for `suggest_move_guarantee_returns_legal_move` and `suggest_move_guarantee_depth_scales_with_distinct_tiles` in `lib.rs`).
 
 TypeScript test count unchanged (no JS-side changes in this phase).

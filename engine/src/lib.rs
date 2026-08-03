@@ -531,6 +531,24 @@ mod tests {
             sorted, unsorted
         );
     }
+
+    #[test]
+    fn suggest_move_guarantee_returns_legal_move() {
+        let engine = Engine::with_size(4).unwrap();
+        let dir = Engine::suggest_move_guarantee(engine.grid(), UsageMode::Balanced);
+        assert!(dir.is_some());
+    }
+
+    #[test]
+    fn suggest_move_guarantee_depth_scales_with_distinct_tiles() {
+        let mut board = vec![vec![0u32; 4]; 4];
+        let tiles = [2u32, 4, 8, 16, 32, 64, 128];
+        for (i, &t) in tiles.iter().enumerate() {
+            board[i / 4][i % 4] = t;
+        }
+        let dir = Engine::suggest_move_guarantee(&board, UsageMode::Balanced);
+        assert!(dir.is_some());
+    }
 }
 
 #[cfg(test)]

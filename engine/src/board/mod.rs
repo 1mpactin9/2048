@@ -9,6 +9,23 @@ pub fn all_powers_of_two(board: &[u32]) -> bool {
     board.iter().all(|&v| v == 0 || v.is_power_of_two())
 }
 
+pub fn count_distinct_tiles(board: &[u32]) -> usize {
+    let mut bitset: u32 = 0;
+    for &v in board.iter() {
+        if v == 0 || !v.is_power_of_two() {
+            continue;
+        }
+        let r = v.trailing_zeros().min(31);
+        bitset |= 1u32 << r;
+    }
+    let mut n = 0;
+    while bitset != 0 {
+        bitset &= bitset - 1;
+        n += 1;
+    }
+    n
+}
+
 pub fn slide_bits_into(board: &[u32], n: usize, dir: Direction, result: &mut [u32]) -> Option<u64> {
     if !all_powers_of_two(board) || !wide::fits_wide_board(n) {
         return None;
@@ -100,5 +117,15 @@ mod fuzz_tests {
         let flat = vec![3u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let mut result = vec![0u32; 16];
         assert!(slide_bits_into(&flat, 4, Direction::Left, &mut result).is_none());
+    }
+
+    #[test]
+    fn count_distinct_tiles_basic() {
+        let empty: Vec<u32> = vec![0; 16];
+        assert_eq!(count_distinct_tiles(&empty), 0);
+        let two_tiles: Vec<u32> = vec![2, 2, 4, 8, 16, 32, 64, 128, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(count_distinct_tiles(&two_tiles), 7);
+        let dup_only: Vec<u32> = vec![2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(count_distinct_tiles(&dup_only), 1);
     }
 }

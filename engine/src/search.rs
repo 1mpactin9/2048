@@ -18,6 +18,7 @@ fn now_ms() -> f64 {
         .unwrap_or(0.0)
 }
 
+use crate::board as bitboard_mod;
 use crate::transposition::{tt_get, tt_put, zobrist_hash};
 use crate::{Action, Direction, Engine, UsageMode};
 
@@ -43,6 +44,14 @@ impl Engine {
         let search_depth =
             Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)));
         Self::best_move(grid, search_depth, usage).0
+    }
+
+    pub fn suggest_move_guarantee(grid: &Vec<Vec<u32>>, usage: UsageMode) -> Option<Direction> {
+        let board = Self::flatten(grid);
+        let distinct = bitboard_mod::count_distinct_tiles(&board);
+        let base_depth = 3usize.max(distinct.saturating_sub(2));
+        let final_depth = Self::endgame_depth(grid, base_depth);
+        Self::best_move(grid, final_depth, usage).0
     }
 
     pub(crate) fn ordered_directions(board: &[u32], n: usize) -> [(Direction, bool, f64); 4] {

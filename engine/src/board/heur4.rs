@@ -2,10 +2,10 @@ use super::bits4::Board4;
 use std::sync::OnceLock;
 
 const MONOTONICITY_POWER: f64 = 4.0;
-const MONOTONICITY_WEIGHT: f64 = 25.0;
+const MONOTONICITY_WEIGHT: f64 = 47.0;
 const SUM_POWER: f64 = 3.5;
-const SUM_WEIGHT: f64 = -1.0;
-const MERGES_WEIGHT: f64 = 14.0;
+const SUM_WEIGHT: f64 = 11.0;
+const MERGES_WEIGHT: f64 = 700.0;
 const EMPTY_WEIGHT: f64 = 270.0;
 
 fn nibble(row: u16, col: usize) -> u16 {

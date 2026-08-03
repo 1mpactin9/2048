@@ -56,17 +56,6 @@ static SNAKE_WEIGHTS: [[f64; MAX_CELLS]; 4 * MAX_BOARD_SIZE] = build_all_snake_w
 
 impl Engine {
     pub(crate) fn heuristic_flat(board: &[u32], n: usize) -> f64 {
-        if false && n == 4 && bitboard_mod::all_powers_of_two(board) {
-            let bits = bitboard_mod::bits4::from_flat(board);
-            let fast = bitboard_mod::heur4::heur_score_board4(bits);
-            const W_CORNER: f64 = 10.0;
-            const W_SNAKE: f64 = 46.0;
-            const W_CONSISTENCY: f64 = 18.0;
-            return fast
-                + W_CORNER * Self::corner_reward_flat(board, n)
-                + W_SNAKE * Self::snake_score_flat(board, n)
-                + W_CONSISTENCY * Self::snake_consistency_flat(board, n);
-        }
         Self::heuristic_flat_generic(board, n)
     }
 
