@@ -22,6 +22,17 @@ use crate::board as bitboard_mod;
 use crate::transposition::{tt_get, tt_put, zobrist_hash};
 use crate::{Action, Direction, Engine, UsageMode};
 
+fn prob_bucket_hash(hash: u64, prob: f64) -> u64 {
+    let bucket = if prob >= 1.0 {
+        0u64
+    } else if prob <= 0.0 {
+        63u64
+    } else {
+        (-prob.log2()).floor().clamp(0.0, 63.0) as u64
+    };
+    hash ^ bucket.wrapping_mul(0x9E3779B97F4A7C15)
+}
+
 impl Engine {
     pub(crate) fn endgame_depth(grid: &Vec<Vec<u32>>, depth: usize) -> usize {
         let empties = grid.iter().flatten().filter(|&&v| v == 0).count();
@@ -297,7 +308,7 @@ impl Engine {
         if depth == 0 || *budget == 0 || prob < PROB_CUTOFF {
             return Self::heuristic_flat(board, n);
         }
-        let hash = zobrist_hash(board);
+        let hash = prob_bucket_hash(zobrist_hash(board), prob);
         if let Some(cached) = tt_get(hash, depth) {
             return cached;
         }
@@ -361,7 +372,7 @@ impl Engine {
         if num_empties == 0 || depth == 0 {
             return Self::heuristic_flat(board, n);
         }
-        let hash = zobrist_hash(board);
+        let hash = prob_bucket_hash(zobrist_hash(board), prob);
         if let Some(cached) = tt_get(hash, depth) {
             return cached;
         }

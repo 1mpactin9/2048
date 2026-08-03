@@ -440,9 +440,11 @@ impl Engine {
         if let Some(gained) = bitboard_mod::slide_bits_into(board, n, dir, result) {
             return gained;
         }
+        const MAX_LINE: usize = 256;
+        let cap = n.min(MAX_LINE);
         let mut gained: u64 = 0;
         for i in 0..n {
-            let mut values = [0u32; 16];
+            let mut values = [0u32; MAX_LINE];
             let mut v_count = 0;
             for j in 0..n {
                 let idx = match dir {
@@ -451,13 +453,13 @@ impl Engine {
                     Direction::Up => j * n + i,
                     Direction::Down => (n - 1 - j) * n + i,
                 };
-                if board[idx] != 0 && v_count < 16 {
+                if board[idx] != 0 && v_count < cap {
                     values[v_count] = board[idx];
                     v_count += 1;
                 }
             }
 
-            let mut merged = [0u32; 16];
+            let mut merged = [0u32; MAX_LINE];
             let mut m_count = 0;
             let mut k = 0;
             while k < v_count {

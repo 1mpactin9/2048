@@ -130,8 +130,6 @@ impl SeedRng {
     }
 }
 
-const MANIPULATION_ROUNDS_DEFAULT: usize = 5;
-
 impl Engine {
     pub fn derive_key(seed: &[u32]) -> [u32; 8] {
         let mut out = [0u32; 8];
@@ -175,10 +173,12 @@ impl Engine {
         let start_calls = rng.calls;
         const PROB_4: f64 = 0.1;
         let (spot, value) = if manipulate && num_empties > 1 {
-            let cap = usage
-                .manipulation_rounds_cap()
-                .max(MANIPULATION_ROUNDS_DEFAULT)
-                .min(64);
+            let raw_cap = usage.manipulation_rounds_cap();
+            let cap = if raw_cap == usize::MAX {
+                64
+            } else {
+                raw_cap.min(64).max(1)
+            };
             let rounds = cap.min(num_empties);
             let mut best_spot = empties[0];
             let mut best_value: u32 = 2;
@@ -191,7 +191,7 @@ impl Engine {
                 let cand_spot = empties[(rng.next() * num_empties as f64) as usize];
                 let cand_value: u32 = if rng.next() < PROB_4 { 4 } else { 2 };
                 board[cand_spot] = cand_value;
-                let score = Self::heuristic_flat(board, n);
+                let score = score_spawn_candidate_flat(board, n);
                 board[cand_spot] = 0;
                 if score > best_score {
                     best_score = score;
