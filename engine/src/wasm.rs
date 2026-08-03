@@ -154,12 +154,14 @@ pub fn predict_spawn(
     let mut board = Engine::flatten(&grid);
     let key = Engine::derive_key(seed);
     let usage = UsageMode::from_code(usage_code);
+    let mut budget: u64 = u64::MAX;
     match Engine::predict_spawn_flat_with_usage(
         &mut board,
         n,
         &mut SeedRng::init(&key, calls as u64),
         manipulate,
         usage,
+        &mut budget,
     ) {
         Some((idx, value, draws)) => vec![idx as u32, value, draws as u32],
         None => vec![u32::MAX],

@@ -395,6 +395,16 @@ impl Engine {
     pub fn suggest_move_for_guarantee(&self, usage: crate::UsageMode) -> Option<Direction> {
         Self::suggest_move_guarantee(&self.grid, usage)
     }
+
+    pub fn suggest_move_for_det_guarantee(
+        &self,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+        usage: crate::UsageMode,
+    ) -> Option<Direction> {
+        Self::suggest_move_det_guarantee(&self.grid, key, calls, manipulate, usage)
+    }
     pub(crate) fn flatten(grid: &Vec<Vec<u32>>) -> Vec<u32> {
         let n = grid.len();
         let mut out = Vec::with_capacity(n * n);

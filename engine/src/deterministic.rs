@@ -369,6 +369,23 @@ impl Engine {
         Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage).0
     }
 
+    pub fn suggest_move_det_guarantee(
+        grid: &Vec<Vec<u32>>,
+        key: &[u32; 8],
+        calls: u64,
+        manipulate: bool,
+        usage: UsageMode,
+    ) -> Option<Direction> {
+        let board = Self::flatten(grid);
+        let distinct = crate::board::count_distinct_tiles(&board);
+        let base_depth = 3usize.max(distinct.saturating_sub(2));
+        let target_depth = base_depth + DET_DEPTH_BONUS;
+        let search_depth = Self::endgame_depth(grid, target_depth);
+        let mut budget = Self::scaled_budget_for_depth(search_depth, usage.node_budget_scale());
+        let mut rng = SeedRng::init(key, calls);
+        Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage).0
+    }
+
     pub fn suggest_action_det_for(
         grid: &Vec<Vec<u32>>,
         swaps_left: u32,

@@ -3,6 +3,7 @@ pub enum UsageMode {
     Max,
     Balanced,
     Limit,
+    Custom(u64),
 }
 
 impl UsageMode {
@@ -19,6 +20,7 @@ impl UsageMode {
             UsageMode::Max => 0,
             UsageMode::Balanced => 1,
             UsageMode::Limit => 2,
+            UsageMode::Custom(_) => 1,
         }
     }
 
@@ -27,6 +29,7 @@ impl UsageMode {
             UsageMode::Max => 800,
             UsageMode::Balanced => 50,
             UsageMode::Limit => 20,
+            UsageMode::Custom(ms) => ms,
         }
     }
 
@@ -35,6 +38,7 @@ impl UsageMode {
             UsageMode::Max => 4.0,
             UsageMode::Balanced => 1.0,
             UsageMode::Limit => 0.3,
+            UsageMode::Custom(_) => 2.0,
         }
     }
 
@@ -43,6 +47,7 @@ impl UsageMode {
             UsageMode::Max => 0,
             UsageMode::Balanced => 60,
             UsageMode::Limit => 160,
+            UsageMode::Custom(_) => 30,
         }
     }
 
@@ -51,6 +56,7 @@ impl UsageMode {
             UsageMode::Max => 12,
             UsageMode::Balanced => 8,
             UsageMode::Limit => 5,
+            UsageMode::Custom(_) => 10,
         }
     }
 
@@ -59,6 +65,16 @@ impl UsageMode {
             UsageMode::Max => usize::MAX,
             UsageMode::Balanced => usize::MAX,
             UsageMode::Limit => 6,
+            UsageMode::Custom(_) => usize::MAX,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            UsageMode::Max => "Max",
+            UsageMode::Balanced => "Balanced",
+            UsageMode::Limit => "Limit",
+            UsageMode::Custom(_) => "Custom",
         }
     }
 }

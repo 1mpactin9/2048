@@ -1,4 +1,3 @@
-use crate::board as bitboard_mod;
 use crate::Engine;
 
 const MAX_BOARD_SIZE: usize = 8;

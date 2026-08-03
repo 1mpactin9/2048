@@ -6,10 +6,19 @@ use std::time::Instant;
 enum HeuristicMode {
     Standard,
     Guarantee,
+    Deterministic,
+    DetGuarantee,
 }
 
 fn parse_usage(raw: &str) -> Option<UsageMode> {
-    match raw.to_ascii_lowercase().as_str() {
+    let lower = raw.to_ascii_lowercase();
+    if let Some(rest) = lower.strip_prefix("custom=") {
+        if let Ok(ms) = rest.parse() {
+            return Some(UsageMode::Custom(ms));
+        }
+        return None;
+    }
+    match lower.as_str() {
         "max" => Some(UsageMode::Max),
         "balanced" => Some(UsageMode::Balanced),
         "limit" => Some(UsageMode::Limit),
@@ -20,7 +29,9 @@ fn parse_usage(raw: &str) -> Option<UsageMode> {
 fn parse_mode(raw: &str) -> Option<HeuristicMode> {
     match raw.to_ascii_lowercase().as_str() {
         "standard" | "std" => Some(HeuristicMode::Standard),
-        "guarantee" | "8192" | "g" => Some(HeuristicMode::Guarantee),
+        "guarantee" | "g" => Some(HeuristicMode::Guarantee),
+        "deterministic" | "det" | "d" => Some(HeuristicMode::Deterministic),
+        "det_guarantee" | "detg" | "dg" => Some(HeuristicMode::DetGuarantee),
         _ => None,
     }
 }
@@ -64,7 +75,7 @@ fn parse_sweep_token(tok: &str, default_size: usize, default_games: usize) -> Op
     } else {
         default_games
     };
-    let label = format!("{}/{:?}/{}x{}/n={}", usage_str, mode, size, size, games);
+    let label = format!("{}/{:?}/{}x{}/n={}", usage.label(), mode, size, size, games);
     Some(ConfigSpec {
         label,
         usage,
@@ -158,6 +169,8 @@ fn run_one(spec: &ConfigSpec) -> RunStats {
     let mut max_tiles: Vec<u32> = Vec::with_capacity(spec.games);
     let start = Instant::now();
 
+    let base_seed: [u32; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+
     for i in 0..spec.games {
         let mut engine = Engine::new(Config {
             size: spec.size,
@@ -167,6 +180,9 @@ fn run_one(spec: &ConfigSpec) -> RunStats {
         })
         .expect("valid config");
 
+        let mut game_seed = base_seed;
+        game_seed[0] = game_seed[0].wrapping_add(i as u32);
+
         let game_start = Instant::now();
         loop {
             let outcome = match spec.mode {
@@ -175,6 +191,22 @@ fn run_one(spec: &ConfigSpec) -> RunStats {
                 }
                 HeuristicMode::Guarantee => {
                     let dir = engine.suggest_move_for_guarantee(spec.usage);
+                    dir.map(|d| engine.make_move(d))
+                }
+                HeuristicMode::Deterministic => {
+                    let grid = engine.grid().clone();
+                    let key = Engine::derive_key(&game_seed);
+                    let dir = Engine::suggest_move_det_with_usage(
+                        &grid, None, &key, 0, true, spec.usage,
+                    );
+                    dir.map(|d| engine.make_move(d))
+                }
+                HeuristicMode::DetGuarantee => {
+                    let grid = engine.grid().clone();
+                    let key = Engine::derive_key(&game_seed);
+                    let dir = engine.suggest_move_for_det_guarantee(
+                        &key, 0, true, spec.usage,
+                    );
                     dir.map(|d| engine.make_move(d))
                 }
             };
