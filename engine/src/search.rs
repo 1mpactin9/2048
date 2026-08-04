@@ -2,8 +2,8 @@ const ENDGAME_EMPTY_THRESHOLD: usize = 2;
 const PROB_CUTOFF: f64 = 5e-6;
 const PRUNE_MARGIN: f64 = 600.0;
 const MAX_SAMPLED_CELLS_CAP: usize = 16;
-const TIME_CHECK_NODE_INTERVAL: u64 = 2048;
-const HARD_TIME_MULTIPLIER: f64 = 3.0;
+const TIME_CHECK_NODE_INTERVAL: u64 = 512;
+const HARD_TIME_MULTIPLIER: f64 = 2.0;
 
 fn endgame_extra_depth(n: usize) -> usize {
     match n {
@@ -347,7 +347,7 @@ impl Engine {
         prob: f64,
         max_cells: usize,
     ) -> f64 {
-        if depth == 0 || *budget == 0 || prob < PROB_CUTOFF || deadline_hit() {
+        if deadline_hit() || depth == 0 || *budget == 0 || prob < PROB_CUTOFF {
             return Self::heuristic_flat(board, n);
         }
         let hash = prob_bucket_hash(zobrist_hash(board), prob);
@@ -400,7 +400,7 @@ impl Engine {
         prob: f64,
         max_cells: usize,
     ) -> f64 {
-        if *budget == 0 || prob < PROB_CUTOFF || deadline_hit() {
+        if deadline_hit() || *budget == 0 || prob < PROB_CUTOFF {
             return Self::heuristic_flat(board, n);
         }
         let mut empties = [0usize; 256];

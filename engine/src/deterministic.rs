@@ -2,7 +2,7 @@ use crate::search::{clear_search_deadline, deadline_hit, now_ms, sampled_pairs, 
 use crate::transposition::{tt_get, tt_put, zobrist_hash};
 use crate::{Action, Direction, Engine, UsageMode};
 
-const DET_HARD_TIME_MULTIPLIER: f64 = 3.0;
+const DET_HARD_TIME_MULTIPLIER: f64 = 2.0;
 
 const DET_PRUNE_MARGIN: f64 = 600.0;
 const DET_DEPTH_BONUS: usize = 4;
@@ -220,7 +220,7 @@ impl Engine {
         manipulate: bool,
         usage: UsageMode,
     ) -> f64 {
-        if depth == 0 || *budget == 0 || deadline_hit() {
+        if deadline_hit() || depth == 0 || *budget == 0 {
             return Self::heuristic_flat(board, n);
         }
         let hash = mix_calls(zobrist_hash(board), rng.calls);
@@ -273,7 +273,7 @@ impl Engine {
         manipulate: bool,
         usage: UsageMode,
     ) -> f64 {
-        if *budget == 0 || deadline_hit() {
+        if deadline_hit() || *budget == 0 {
             return Self::heuristic_flat(board, n);
         }
         let empties = board.iter().filter(|&&v| v == 0).count();

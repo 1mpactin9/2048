@@ -57,6 +57,27 @@ thresholds, `budget_for_depth`) were changed — those are legitimate knobs you 
 you'd want to sweep yourself, and the deadline guard now makes it safe to
 experiment with them aggressively without risking another runaway run.
 
+### Follow-up fix: the deadline check was never actually firing
+After the first round of testing, `Balanced/Guarantee/6x6` hung and had to be
+killed manually. Root cause: all four `deadline_hit()` call sites were placed
+**last** in a short-circuiting `||` condition, e.g.
+`if depth == 0 || *budget == 0 || prob < PROB_CUTOFF || deadline_hit()`. Rust's
+`||` short-circuits — if `depth == 0` is already true (which it is at every leaf
+node, the overwhelming majority of calls in any tree search), `deadline_hit()`
+never runs at all. Since `deadline_hit()`'s tick counter only advances when it's
+actually called, this meant the deadline was checked far less often than
+intended, and on an expensive board (6x6, `Guarantee` mode's `distinct - 2` depth
+formula pushing search deep) the gap between real checks could be large enough in
+wall-clock terms to look like a full freeze.
+
+Fixed by moving `deadline_hit()` to the front of every one of these conditions,
+unconditional and first, so it always executes and the tick counter always
+advances at the true call rate regardless of which other condition would
+otherwise have short-circuited it first. Also tightened
+`TIME_CHECK_NODE_INTERVAL` (2048→512) and `HARD_TIME_MULTIPLIER` /
+`DET_HARD_TIME_MULTIPLIER` (3.0→2.0), since the check is now reliably reached and
+doesn't need as much slack.
+
 ## 1. `heuristic.rs` — 4x4 fast path exists but is gated OFF (reverted)
 `heur_score_board4` (precomputed per-row lookup table in `board/heur4.rs`) was
 originally unused dead code, so I wired it into `heuristic_flat` for 4x4 boards.
