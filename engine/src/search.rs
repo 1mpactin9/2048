@@ -1,16 +1,25 @@
 const ENDGAME_EMPTY_THRESHOLD: usize = 2;
-const ENDGAME_EXTRA_DEPTH: usize = 30;
 const PROB_CUTOFF: f64 = 5e-6;
 const PRUNE_MARGIN: f64 = 600.0;
 const MAX_SAMPLED_CELLS_CAP: usize = 16;
+const TIME_CHECK_NODE_INTERVAL: u64 = 2048;
+const HARD_TIME_MULTIPLIER: f64 = 3.0;
+
+fn endgame_extra_depth(n: usize) -> usize {
+    match n {
+        0..=4 => 10,
+        5..=6 => 7,
+        _ => 5,
+    }
+}
 
 #[cfg(target_arch = "wasm32")]
-fn now_ms() -> f64 {
+pub(crate) fn now_ms() -> f64 {
     js_sys::Date::now()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn now_ms() -> f64 {
+pub(crate) fn now_ms() -> f64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -21,6 +30,34 @@ fn now_ms() -> f64 {
 use crate::board as bitboard_mod;
 use crate::transposition::{tt_get, tt_put, zobrist_hash};
 use crate::{Action, Direction, Engine, UsageMode};
+
+use std::cell::Cell;
+
+thread_local! {
+    static SEARCH_DEADLINE_MS: Cell<f64> = Cell::new(f64::INFINITY);
+    static SEARCH_NODE_TICK: Cell<u64> = Cell::new(0);
+}
+
+pub(crate) fn set_search_deadline(deadline_ms: f64) {
+    SEARCH_DEADLINE_MS.with(|d| d.set(deadline_ms));
+    SEARCH_NODE_TICK.with(|t| t.set(0));
+}
+
+pub(crate) fn clear_search_deadline() {
+    SEARCH_DEADLINE_MS.with(|d| d.set(f64::INFINITY));
+}
+
+pub(crate) fn deadline_hit() -> bool {
+    let should_check = SEARCH_NODE_TICK.with(|t| {
+        let v = t.get().wrapping_add(1);
+        t.set(v);
+        v % TIME_CHECK_NODE_INTERVAL == 0
+    });
+    if !should_check {
+        return false;
+    }
+    SEARCH_DEADLINE_MS.with(|d| now_ms() >= d.get())
+}
 
 fn prob_bucket_hash(hash: u64, prob: f64) -> u64 {
     let bucket = if prob >= 1.0 {
@@ -37,7 +74,7 @@ impl Engine {
     pub(crate) fn endgame_depth(grid: &Vec<Vec<u32>>, depth: usize) -> usize {
         let empties = grid.iter().flatten().filter(|&&v| v == 0).count();
         if empties <= ENDGAME_EMPTY_THRESHOLD {
-            depth.max(ENDGAME_EXTRA_DEPTH)
+            depth.max(endgame_extra_depth(grid.len()))
         } else {
             depth
         }
@@ -135,6 +172,7 @@ impl Engine {
         let time_budget_ms = usage.time_budget_ms();
         let scale = usage.node_budget_scale();
         let max_cells = usage.max_sampled_cells().min(MAX_SAMPLED_CELLS_CAP);
+        set_search_deadline(start + time_budget_ms as f64 * HARD_TIME_MULTIPLIER);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
         let mut depth = 1;
@@ -150,6 +188,7 @@ impl Engine {
             }
             depth += 1;
         }
+        clear_search_deadline();
         (best_dir, best_val)
     }
 
@@ -181,6 +220,8 @@ impl Engine {
             return best_dir.map(Action::Move).unwrap_or(Action::None);
         }
         const POWERUP_MARGIN: f64 = 90.0;
+        let powerup_start = now_ms();
+        set_search_deadline(powerup_start + usage.time_budget_ms() as f64 * HARD_TIME_MULTIPLIER);
 
         let mut best_delete: Option<(usize, usize)> = None;
         let mut best_delete_val = f64::NEG_INFINITY;
@@ -220,6 +261,7 @@ impl Engine {
                 }
             }
         }
+        clear_search_deadline();
 
         let mut chosen = best_dir.map(Action::Move).unwrap_or(Action::None);
         let mut chosen_val = move_val;
@@ -305,7 +347,7 @@ impl Engine {
         prob: f64,
         max_cells: usize,
     ) -> f64 {
-        if depth == 0 || *budget == 0 || prob < PROB_CUTOFF {
+        if depth == 0 || *budget == 0 || prob < PROB_CUTOFF || deadline_hit() {
             return Self::heuristic_flat(board, n);
         }
         let hash = prob_bucket_hash(zobrist_hash(board), prob);
@@ -358,7 +400,7 @@ impl Engine {
         prob: f64,
         max_cells: usize,
     ) -> f64 {
-        if *budget == 0 || prob < PROB_CUTOFF {
+        if *budget == 0 || prob < PROB_CUTOFF || deadline_hit() {
             return Self::heuristic_flat(board, n);
         }
         let mut empties = [0usize; 256];

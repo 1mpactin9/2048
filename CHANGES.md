@@ -1,22 +1,86 @@
 # Engine changes
 
-## 1. `heuristic.rs` — 4x4 fast path wired up
-`heur_score_board4` (precomputed per-row lookup table in `board/heur4.rs`) existed
-but was never called. `heuristic_flat` now dispatches to it for 4x4 boards made of
-plain powers of two, falling back to the generic path otherwise (non-power-of-two
-tiles, or n != 4).
+## 0. CRITICAL — fixed the runaway search time / bad small-board quality bug
+This was the cause of the 25-hour runs and the bad 3x3/4x4 results. Two compounding bugs:
 
-This changes the *composition* of the 4x4 heuristic, not just its speed: the table
-scores rows on empties/merges/monotonicity/sum with its own weights, then snake +
-consistency + corner terms are added on top (same weights as the generic path).
-Net effect should be faster eval and a merges-aware component that the old 4x4 path
-didn't have — but the scoring surface is different enough that you'll want to run
-the quality sweep on 4x4 specifically and compare against baseline.
+**Bug A: `ENDGAME_EXTRA_DEPTH` was a flat 30, for every board size.** Whenever a
+board had ≤2 empty cells (which is most of a game's lifetime), `endgame_depth`
+forced the search target to depth 30 — completely blind to board size. On a
+3x3/4x4 board, depth 30 alternating max/chance plies is a combinatorial explosion
+regardless of low branching factor. On top of that, `auto_depth` separately adds
+up to `+8` for sparse-empty boards, and `suggest_move_for_det_guarantee` /
+`suggest_action_det_with_usage` add another flat `DET_DEPTH_BONUS = 4` on top of
+whatever `auto_depth`/`endgame_depth` already produced — so deterministic-mode
+searches could target depth 34.
 
-5x5–8x8 still use the generic path. A precomputed table for those sizes was
+**Bug B: the wall-clock time budget was only checked *between* iterative-deepening
+passes, and the deterministic search path had no time check at all.** `best_move`'s
+loop calls `best_move_fixed` once per depth (1, 2, 3, ... up to the target), and
+only checks `time_budget_ms` after each full pass completes. If a single pass at
+depth 20+ takes minutes (or hours), the 50ms `Balanced` budget never gets a chance
+to fire — the node `budget` counter (which for depth ≥13 allows up to 1,000,000
+nodes, and up to 4x that under `Max` mode's `node_budget_scale`) is the only thing
+stopping it, and that counter has no relationship to wall-clock time. The
+deterministic path (`best_move_det`) didn't even have a node-budget iterative loop
+to check between — it was one giant fixed-depth search with nothing but the node
+counter as a backstop, which is why your 6x6 Guarantee game took 6+ hours on a
+single move.
+
+This also explains the *quality* problem, not just speed: a search that gets cut
+off mid-tree by an arbitrary node-budget exhaustion partway through a depth-30
+target produces a worse move than a search that's allowed to complete cleanly at
+a realistic depth. The engine was spending almost all its time chasing an
+unreachable target instead of finishing a useful one.
+
+**Fix:**
+- `ENDGAME_EXTRA_DEPTH` (30, flat) replaced with `endgame_extra_depth(n)`: 10 for
+  n≤4, 7 for n=5-6, 5 for n≥7. Still gives real extra depth when the board is
+  nearly full and branching has collapsed, without being a size-blind number that
+  was never reachable anyway.
+- Added a real wall-clock deadline (`set_search_deadline` / `deadline_hit` in
+  `search.rs`, exposed to `deterministic.rs`) that the recursive search checks
+  every 2048 nodes (cheap — piggybacks on the existing budget counter, no extra
+  `now_ms()` calls per node) and bails out to the static heuristic immediately if
+  exceeded. This is wired into every search entry point in both `search.rs` and
+  `deterministic.rs` — plain move suggestions, guarantee mode, deterministic mode,
+  det_guarantee mode, and the delete/swap power-up evaluation loops (which
+  previously had zero time protection even in the standard path, since they run
+  after `best_move`'s own internal deadline was already cleared).
+- The hard deadline is `time_budget_ms * 3` (`HARD_TIME_MULTIPLIER` /
+  `DET_HARD_TIME_MULTIPLIER`) rather than exactly `time_budget_ms`, so an
+  iteration that's almost done finishing cleanly isn't needlessly cut off right
+  at the soft limit — but nothing can run unbounded anymore. This 3x is a
+  tunable constant if you want it tighter or looser once you see real timings.
+
+None of the depth/budget *tuning tables* (`default_depth`, the `auto_depth` ratio
+thresholds, `budget_for_depth`) were changed — those are legitimate knobs you said
+you'd want to sweep yourself, and the deadline guard now makes it safe to
+experiment with them aggressively without risking another runaway run.
+
+## 1. `heuristic.rs` — 4x4 fast path exists but is gated OFF (reverted)
+`heur_score_board4` (precomputed per-row lookup table in `board/heur4.rs`) was
+originally unused dead code, so I wired it into `heuristic_flat` for 4x4 boards.
+**This was wrong and I've reverted it.** `docs/benchmark.md` in this repo already
+documents someone trying exactly this change and hitting a severe regression:
+0/8 games reaching 2048 vs. a 9/10 baseline, because the table's
+`SUM_WEIGHT=11 * rank^3.5` term produces score magnitudes (10⁵–10⁶ for late-game
+boards) on a completely different scale than `PRUNE_MARGIN` (600) and the rest of
+the search's tuning, which was calibrated around the generic heuristic's scale.
+The search converged on "confidently wrong" positions — boards with big tiles
+ready to merge scored *lower* than near-empty boards, so the engine learned to
+avoid merging.
+
+The dispatch is now `if false && n == 4 && ...` — same pattern the previous
+author used — so the fast-path code stays in the codebase for future tuning work
+(the table + snake/corner terms are all still there), but every board size
+currently runs the generic heuristic, matching the documented working baseline.
+If you want to revisit this, it needs its own dedicated re-scaling and sweep, not
+a quiet re-enable — don't just flip the `if false` back on.
+
+5x5–8x8 still use the generic path only. A precomputed table for those sizes was
 evaluated and rejected — a full row table at 5 bits/cell needs 256MB+ at n=5 and
 scales absurdly worse beyond that, so it's not a safe unconditional win the way
-n=4 was.
+a (properly re-scaled) n=4 table might be.
 
 ## 2. `game.rs` — fixed a latent overflow bug in the non-bitboard slide fallback
 `slide_flat_into`'s fallback path (used only when the bitboard path can't handle
@@ -80,8 +144,16 @@ subtree's RNG state and doesn't have this ambiguity.
   performance win available there without risking a real behavior change.
 
 ## What to test
-Run `scripts/run_quality_sweep.sh <games>` for score/tile quality across sizes,
-usage modes, and modes (standard/guarantee/deterministic/det_guarantee).
-Run `scripts/run_speed_sweep.sh` for per-decision timing across all sizes.
-If you kept your original repo around, `scripts/compare_before_after.sh
-<path-to-original-repo> <games>` runs both and diffs the summary tables.
+Windows (PowerShell): run `scripts\run_full_bundle.ps1 -Games <n>` for a single
+combined run — quality sweep followed by speed sweep, both logged with a shared
+timestamp (`quality_sweep_<ts>.log` in `engine/`, `speed_sweep_<ts>.log` in the
+repo root). Or run `scripts\run_quality_sweep.ps1` / `scripts\run_speed_sweep.ps1`
+separately if you only want one.
+
+Mac/Linux: `scripts/run_quality_sweep.sh <games>` and `scripts/run_speed_sweep.sh`.
+
+Given the 4x4 fast-path heuristic is currently gated off (see #1), this run
+should be directly comparable to whatever numbers you had before that change —
+the only things different from your original engine now are the timing/depth
+fixes (#0) and the smaller correctness fixes (#2-#5) below, none of which touch
+heuristic scoring.

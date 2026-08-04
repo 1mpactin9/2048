@@ -1,6 +1,8 @@
-use crate::search::sampled_pairs;
+use crate::search::{clear_search_deadline, deadline_hit, now_ms, sampled_pairs, set_search_deadline};
 use crate::transposition::{tt_get, tt_put, zobrist_hash};
 use crate::{Action, Direction, Engine, UsageMode};
+
+const DET_HARD_TIME_MULTIPLIER: f64 = 3.0;
 
 const DET_PRUNE_MARGIN: f64 = 600.0;
 const DET_DEPTH_BONUS: usize = 4;
@@ -218,7 +220,7 @@ impl Engine {
         manipulate: bool,
         usage: UsageMode,
     ) -> f64 {
-        if depth == 0 || *budget == 0 {
+        if depth == 0 || *budget == 0 || deadline_hit() {
             return Self::heuristic_flat(board, n);
         }
         let hash = mix_calls(zobrist_hash(board), rng.calls);
@@ -271,7 +273,7 @@ impl Engine {
         manipulate: bool,
         usage: UsageMode,
     ) -> f64 {
-        if *budget == 0 {
+        if *budget == 0 || deadline_hit() {
             return Self::heuristic_flat(board, n);
         }
         let empties = board.iter().filter(|&&v| v == 0).count();
@@ -366,7 +368,11 @@ impl Engine {
             + DET_DEPTH_BONUS;
         let mut budget = Self::scaled_budget_for_depth(search_depth, usage.node_budget_scale());
         let mut rng = SeedRng::init(key, calls);
-        Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage).0
+        let start = now_ms();
+        set_search_deadline(start + usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER);
+        let result = Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage).0;
+        clear_search_deadline();
+        result
     }
 
     pub fn suggest_move_det_guarantee(
@@ -383,7 +389,11 @@ impl Engine {
         let search_depth = Self::endgame_depth(grid, target_depth);
         let mut budget = Self::scaled_budget_for_depth(search_depth, usage.node_budget_scale());
         let mut rng = SeedRng::init(key, calls);
-        Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage).0
+        let start = now_ms();
+        set_search_deadline(start + usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER);
+        let result = Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage).0;
+        clear_search_deadline();
+        result
     }
 
     pub fn suggest_action_det_for(
@@ -421,12 +431,15 @@ impl Engine {
         let d = depth.unwrap_or_else(|| Self::auto_depth(grid)) + DET_DEPTH_BONUS;
         let mut budget = Self::scaled_budget_for_depth(d, usage.node_budget_scale());
         let mut rng = SeedRng::init(key, calls);
+        let start = now_ms();
+        set_search_deadline(start + usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER);
 
         let (best_dir, move_val) =
             Self::best_move_det(grid, d, &mut budget, &mut rng, manipulate, usage);
 
         let stuck = best_dir.is_none();
         if !stuck && !Self::is_dangerous(grid) {
+            clear_search_deadline();
             return best_dir.map(Action::Move).unwrap_or(Action::None);
         }
 
@@ -486,6 +499,7 @@ impl Engine {
             let (a, b) = best_swap.unwrap();
             chosen = Action::Swap(a, b);
         }
+        clear_search_deadline();
         chosen
     }
 }

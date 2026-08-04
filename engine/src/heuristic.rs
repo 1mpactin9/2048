@@ -67,7 +67,7 @@ fn bits4_compatible(board: &[u32]) -> bool {
 
 impl Engine {
     pub(crate) fn heuristic_flat(board: &[u32], n: usize) -> f64 {
-        if n == 4 && bits4_compatible(board) {
+        if false && n == 4 && bits4_compatible(board) {
             return Self::heuristic_flat_4(board);
         }
         Self::heuristic_flat_generic(board, n)
