@@ -1,5 +1,26 @@
 # Engine changes
 
+## 0b. `bin/bench.rs` — added a per-game move/time cap to the benchmark harness
+After the deadline fix, `Balanced/Guarantee/6x6` ran for **6.8 hours on a single
+game** (score 12.8M, max tile 524288) instead of hanging. That's not a bug in the
+search — per-move timing checked out (~100ms/move cap, consistent with the fix),
+and a 524288 tile needs ~19-20 distinct tile values, which is exactly what makes
+`Guarantee` mode's `distinct - 2` depth formula push search deep and, apparently,
+play well enough to almost never lose. The actual problem: `bench.rs`'s game loop
+had no cap at all — it only breaks on `game_over`, so a sufficiently strong
+config can run one game essentially indefinitely with no way to bound total
+sweep time.
+
+Added `MAX_MOVES_PER_GAME` (20,000) and `MAX_SECONDS_PER_GAME` (120s) to the
+harness. A game hitting either cap is cut short and printed with a
+`[CAPPED, not game-over]` tag so you don't mistake a capped game's score for a
+real game-over — it's a lower bound on what that config could have reached, not
+a natural stopping point. Also added a `moves = N` column to the per-game output
+line since move count is directly relevant now.
+
+This only changes the benchmark binary, not the engine itself — `Engine`'s public
+API and the actual search/heuristic code are untouched here.
+
 ## 0. CRITICAL — fixed the runaway search time / bad small-board quality bug
 This was the cause of the 25-hour runs and the bad 3x3/4x4 results. Two compounding bugs:
 

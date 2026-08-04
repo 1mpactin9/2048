@@ -2,6 +2,9 @@ use engine2048::{Config, Engine, UsageMode};
 use std::env;
 use std::time::Instant;
 
+const MAX_MOVES_PER_GAME: u64 = 20_000;
+const MAX_SECONDS_PER_GAME: f64 = 120.0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HeuristicMode {
     Standard,
@@ -184,7 +187,15 @@ fn run_one(spec: &ConfigSpec) -> RunStats {
         game_seed[0] = game_seed[0].wrapping_add(i as u32);
 
         let game_start = Instant::now();
+        let mut moves_made: u64 = 0;
+        let mut capped = false;
         loop {
+            if moves_made >= MAX_MOVES_PER_GAME
+                || game_start.elapsed().as_secs_f64() >= MAX_SECONDS_PER_GAME
+            {
+                capped = true;
+                break;
+            }
             let outcome = match spec.mode {
                 HeuristicMode::Standard => {
                     engine.auto_play_step_with_usage(None, spec.usage)
@@ -212,6 +223,7 @@ fn run_one(spec: &ConfigSpec) -> RunStats {
             };
             match outcome {
                 Some(Ok(out)) => {
+                    moves_made += 1;
                     if out.game_over {
                         break;
                     }
@@ -221,13 +233,16 @@ fn run_one(spec: &ConfigSpec) -> RunStats {
         }
 
         let max_tile = engine.grid().iter().flatten().copied().max().unwrap_or(0);
+        let cap_label = if capped { "  [CAPPED, not game-over]" } else { "" };
         println!(
-            "  [{}] game {:>3}: score = {:>7}  max tile = {:>6}  ({:.1}s)",
+            "  [{}] game {:>3}: score = {:>7}  max tile = {:>6}  moves = {:>7}  ({:.1}s){}",
             spec.label,
             i + 1,
             engine.score(),
             max_tile,
-            game_start.elapsed().as_secs_f64()
+            moves_made,
+            game_start.elapsed().as_secs_f64(),
+            cap_label
         );
         scores.push(engine.score());
         max_tiles.push(max_tile);
