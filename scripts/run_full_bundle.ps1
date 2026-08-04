@@ -11,31 +11,39 @@ $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $qualityLog = "quality_sweep_$timestamp.log"
 $speedLog = Join-Path $rootDir "speed_sweep_$timestamp.log"
 
-Write-Host "=== Run 1/2: Quality sweep ($Games games/config, 14 configs) ==="
+$MinGames = 5
+$g3 = [Math]::Max($MinGames, $Games + 5)
+$g4 = [Math]::Max($MinGames, $Games)
+$g5 = [Math]::Max($MinGames, $Games - 2)
+$g6 = [Math]::Max($MinGames, $Games - 5)
+
+Write-Host "=== Run 1/2: Quality sweep ==="
+Write-Host "  3x3: $g3 games   4x4: $g4 games   5x5: $g5 games   6x6: $g6 games   8x8: skipped"
 Set-Location $engineDir
 $sweep = @(
-    "balanced:standard:3:$Games",
-    "balanced:standard:4:$Games",
-    "balanced:standard:5:$Games",
-    "balanced:standard:6:$Games",
-    "balanced:standard:8:$Games",
-    "max:standard:4:$Games",
-    "limit:standard:4:$Games",
-    "balanced:guarantee:4:$Games",
-    "balanced:guarantee:6:$Games",
-    "balanced:deterministic:4:$Games",
-    "balanced:deterministic:6:$Games",
-    "balanced:det_guarantee:4:$Games",
-    "balanced:det_guarantee:6:$Games",
-    "max:deterministic:4:$Games"
+    "balanced:standard:3:$g3",
+    "balanced:standard:4:$g4",
+    "balanced:standard:5:$g5",
+    "balanced:standard:6:$g6",
+    "max:standard:4:$g4",
+    "limit:standard:4:$g4",
+    "balanced:guarantee:4:$g4",
+    "balanced:guarantee:6:$g6",
+    "balanced:deterministic:4:$g4",
+    "balanced:deterministic:6:$g6",
+    "balanced:det_guarantee:4:$g4",
+    "balanced:det_guarantee:6:$g6",
+    "max:deterministic:4:$g4"
 ) -join ","
 
 cargo run --release --bin bench -- --sweep="$sweep" --log="$qualityLog"
 
 Write-Host ""
-Write-Host "=== Run 2/2: Speed sweep ==="
-$speedOutput = cargo run --release --bin bench-speed 2>&1 | Tee-Object -Variable speedCapture
-$speedCapture | Out-File -FilePath $speedLog -Encoding utf8
+Write-Host "=== Run 2/2: Speed sweep (3,4,5,6 only, 8x8 skipped) ==="
+if (Test-Path $speedLog) { Remove-Item $speedLog }
+foreach ($size in 3, 4, 5, 6) {
+    cargo run --release --bin bench-speed -- $size 2>&1 | Tee-Object -FilePath $speedLog -Append
+}
 
 Write-Host ""
 Write-Host "=== Done ==="

@@ -2,5 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../engine"
 
-echo "Running full speed sweep across all board sizes (3,4,5,6,8)"
-cargo run --release --bin bench-speed
+echo "Running speed sweep across board sizes 3,4,5,6 (8x8 skipped)"
+for size in 3 4 5 6; do
+    cargo run --release --bin bench-speed -- "$size"
+done

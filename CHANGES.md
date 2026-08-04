@@ -144,13 +144,30 @@ subtree's RNG state and doesn't have this ambiguity.
   performance win available there without risking a real behavior change.
 
 ## What to test
-Windows (PowerShell): run `scripts\run_full_bundle.ps1 -Games <n>` for a single
-combined run — quality sweep followed by speed sweep, both logged with a shared
-timestamp (`quality_sweep_<ts>.log` in `engine/`, `speed_sweep_<ts>.log` in the
-repo root). Or run `scripts\run_quality_sweep.ps1` / `scripts\run_speed_sweep.ps1`
-separately if you only want one.
+All sweep scripts now scale games per board size and skip 8x8 entirely (it was
+the dominant source of total runtime — one 8x8 game alone was taking 10-90+
+minutes even before the timing bugs above). Games-per-size scale off a single
+`-Games`/`$1` input, floored at 5:
 
-Mac/Linux: `scripts/run_quality_sweep.sh <games>` and `scripts/run_speed_sweep.sh`.
+| size | games |
+|------|-------|
+| 3x3  | input + 5 |
+| 4x4  | input |
+| 5x5  | input - 2 |
+| 6x6  | input - 5 |
+| 8x8  | skipped |
+
+e.g. `-Games 10` → 15/10/8/5 games for 3x3/4x4/5x5/6x6.
+
+Windows (PowerShell): `scripts\run_full_bundle.ps1 -Games <n>` for a single
+combined run — quality sweep followed by speed sweep (speed sweep now also runs
+per-size via `bench-speed`'s existing single-size filter arg, sizes 3/4/5/6
+only), both logged with a shared timestamp (`quality_sweep_<ts>.log` in
+`engine/`, `speed_sweep_<ts>.log` in the repo root). Or run
+`scripts\run_quality_sweep.ps1` / `scripts\run_speed_sweep.ps1` separately.
+
+Mac/Linux: `scripts/run_quality_sweep.sh <games>` and `scripts/run_speed_sweep.sh`
+(no games arg needed for the speed script — it just runs each size once).
 
 Given the 4x4 fast-path heuristic is currently gated off (see #1), this run
 should be directly comparable to whatever numbers you had before that change —
