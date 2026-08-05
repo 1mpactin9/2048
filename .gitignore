@@ -24,6 +24,7 @@ dist-ssr
 
 .claude/
 .codegraph/
+results.json
 
 engine/pkg/
 engine/target/

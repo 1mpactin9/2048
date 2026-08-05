@@ -10,6 +10,7 @@ struct Weights {
     float sum_weight           = 11.0f;
     float merges_weight        = 700.0f;
     float empty_weight         = 270.0f;
+    float corner_weight        = 0.0f; // bonus for keeping the max tile anchored in a corner
 };
 
 } // namespace eng

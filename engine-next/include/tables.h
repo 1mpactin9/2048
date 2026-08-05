@@ -20,6 +20,7 @@ public:
         col_down.resize(65536);
         heur_score.resize(65536);
         raw_score.resize(65536);
+        corner_weight_ = w.corner_weight;
         build(w);
     }
 
@@ -74,7 +75,9 @@ public:
     }
 
     inline float score_heur(board_t board) const {
-        return score_helper(board, heur_score) + score_helper(transpose(board), heur_score);
+        float base = score_helper(board, heur_score) + score_helper(transpose(board), heur_score);
+        if (corner_weight_ != 0.0f) base += corner_bonus(board) * corner_weight_;
+        return base;
     }
 
     inline float score_actual(board_t board) const {
@@ -82,6 +85,41 @@ public:
     }
 
 private:
+    float corner_weight_ = 0.0f;
+
+    // Cheap whole-board term: reward configurations where the maximum tile sits
+    // in a corner AND its immediate neighbors decrease monotonically away from
+    // that corner (an actual "snake" anchor), rather than just rewarding corner
+    // placement alone, which can be satisfied by otherwise poor boards.
+    inline float corner_bonus(board_t board) const {
+        int nibs[16];
+        board_t tmp = board;
+        int max_rank = 0, max_pos = 0;
+        for (int i = 0; i < 16; ++i) {
+            nibs[i] = int(tmp & 0xf);
+            tmp >>= 4;
+            if (nibs[i] > max_rank) { max_rank = nibs[i]; max_pos = i; }
+        }
+        // nibble layout: row = pos/4, col = pos%4 (matches board.h packing order)
+        int row = max_pos / 4, col = max_pos % 4;
+        bool in_corner = (row == 0 || row == 3) && (col == 0 || col == 3);
+        if (!in_corner) return 0.0f;
+
+        int row_step = (row == 0) ? 1 : -1;
+        int col_step = (col == 0) ? 1 : -1;
+        float snake_score = 0.0f;
+        for (int r = 0; r < 4; ++r) {
+            int expected_prev = -1;
+            for (int c = 0; c < 4; ++c) {
+                int rr = (row_step > 0) ? r : 3 - r;
+                int cc = (col_step > 0) ? c : 3 - c;
+                int idx = rr * 4 + cc;
+                if (expected_prev >= 0 && nibs[idx] <= expected_prev) snake_score += 1.0f;
+                expected_prev = nibs[idx];
+            }
+        }
+        return float(max_rank) + snake_score;
+    }
     void build(const Weights& w) {
         for (unsigned row = 0; row < 65536; ++row) {
             unsigned line[4] = {

@@ -9,6 +9,8 @@
 
 A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game engine. Still in progress, but it works! Currently has a guarantee high success rate for 4x4 boards to get to **8192**!
 
+NOTE that the engine will include features such as RNG Manipulation and Deterministic Algorithms, to explore best case scenarios, in such way the game is NOT random and NOT fair. It is not applicable to real games. meanwhile there are also support for COMPLETELY LEGIT GAMEPLAY.
+
 ## Prerequisites
 
 | Tool | Why | Minimum version |

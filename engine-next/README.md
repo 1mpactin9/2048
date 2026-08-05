@@ -60,8 +60,6 @@ engine2048/
 
 ```
 ./scripts/build.sh
-# or
-.\build.ps1
 ```
 
 Requires a C++17 compiler (g++ or clang++). No external dependencies.
@@ -72,8 +70,6 @@ Requires a C++17 compiler (g++ or clang++). No external dependencies.
 ./engine2048 --games 5 --time-budget 0.1 --tt-bits 22 --verbose
 ./engine2048 --help          # full list of flags
 ```
-
-use .\engine2048.exe
 
 Key flags:
 

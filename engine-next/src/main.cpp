@@ -43,6 +43,7 @@ static Args parse_args(int argc, char** argv) {
         else if (k == "--sum-weight") a.w.sum_weight = argf(next());
         else if (k == "--merges-weight") a.w.merges_weight = argf(next());
         else if (k == "--empty-weight") a.w.empty_weight = argf(next());
+        else if (k == "--corner-weight") a.w.corner_weight = argf(next());
         else if (k == "--verbose") a.verbose = true;
         else if (k == "--help") {
             printf("Usage: engine2048 [options]\n"
@@ -54,12 +55,12 @@ static Args parse_args(int argc, char** argv) {
                    "  --depth-bias N          depth_limit = distinct_tiles - depth_bias (default 2)\n"
                    "  --tt-bits N             transposition table size = 2^N entries (default 22)\n"
                    "  --no-cache              disable transposition table\n"
-                   "  --max-depth N           hard ceiling on search depth (default 12)\n"
+                   "  --max-depth N           hard ceiling on search depth (default 8)\n"
                    "  --time-budget F         per-move time budget in seconds for iterative deepening\n"
                    "                          (default 0.2; set 0 to disable and use fixed depth)\n"
                    "  --reset-cache-each-game clear cache between games (isolates per-game timing)\n"
                    "  --lost-penalty F, --mono-power F, --mono-weight F, --sum-power F,\n"
-                   "  --sum-weight F, --merges-weight F, --empty-weight F   heuristic weights\n"
+                   "  --sum-weight F, --merges-weight F, --empty-weight F, --corner-weight F  heuristic weights\n"
                    "  --verbose               print per-game results\n");
             exit(0);
         }

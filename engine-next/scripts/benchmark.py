@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BINARY = ROOT / "engine2048"
+BINARY = ROOT / "engine2048.exe"
 PRESETS_FILE = ROOT / "configs" / "presets.json"
 
 WEIGHT_FLAGS = {
@@ -19,6 +19,7 @@ WEIGHT_FLAGS = {
     "sum_weight": "--sum-weight",
     "merges_weight": "--merges-weight",
     "empty_weight": "--empty-weight",
+    "corner_weight": "--corner-weight",
 }
 
 SUMMARY_RE = re.compile(
