@@ -175,7 +175,8 @@ impl Engine {
         set_search_deadline(start + time_budget_ms as f64 * HARD_TIME_MULTIPLIER);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
-        let mut depth = 1;
+        const WARMUP_PASSES: usize = 2;
+        let mut depth = max_depth.saturating_sub(WARMUP_PASSES).max(1);
         loop {
             let mut budget = Self::scaled_budget_for_depth(depth, scale);
             let (dir, val) = Self::best_move_fixed(grid, depth, &mut budget, max_cells);
