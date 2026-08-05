@@ -1,5 +1,51 @@
 # Engine changes
 
+## 0c. Two more timing-related quality bugs found from the second test run
+The move/game caps held (sweep finished in ~46 min, no hangs), but the results
+exposed two real quality bugs, both downstream of the deadline fix actually
+working correctly now:
+
+**`Balanced/Guarantee/6x6` collapsed to ~36-40k (vs. 500k+ for `Standard/6x6`
+on the same board), and every single game hit the 120s cap.** Cause:
+`suggest_move_guarantee` → `best_move` uses classic iterative deepening —
+depth 1, then 2, then 3, ... re-searching from scratch each time. That's a good
+technique when there's enough time to reach a useful depth. But `Guarantee`
+mode's target depth (`distinct_tiles - 2`, `DET_DEPTH_BONUS` doesn't apply here)
+can be 13+ on a board with many tile values, while `Balanced`'s time budget is
+only 50ms soft / 100ms hard. Starting from depth 1 every time meant almost the
+entire budget got burned on cheap, low-value early passes, and the loop never
+got anywhere near the depth that actually mattered — so every move was
+effectively a depth-2-or-3 decision dressed up as a "guarantee" search.
+
+Fixed by starting iterative deepening near the target depth (`max_depth - 2`)
+instead of always at depth 1, so the budget goes toward depths that matter. This
+still runs a couple of cheap warm-up passes when there's room, it just doesn't
+waste time on passes 10+ levels below the target when the deadline won't allow
+reaching it anyway. `search.rs`, `best_move`.
+
+**`Deterministic`/`DetGuarantee` at 4x4 scored noticeably worse than `Standard`
+at the same board size, and `6x6/Deterministic` scores were suspiciously tight
+across different seeds.** Cause: `best_move_det` (used by `Deterministic` and
+`DetGuarantee` modes) is a single-shot fixed-depth search with no iterative
+deepening — unlike `best_move`, there's no cheap shallow pass to fall back on.
+When the deadline cuts off a deep attempt partway through, the top-level loop
+over 4 directions still completes (it's not itself deadline-gated), but the
+*recursive* evaluations backing each direction get cut short inconsistently,
+so the choice between directions is based on partially-computed, uneven data —
+worse than either a completed shallow search or a completed deep one.
+
+Fixed by running a cheap depth-3 warm-up pass first (with its own independently
+seeded `SeedRng` — sharing one `SeedRng` mutably between two passes would have
+advanced the RNG state and desynced the deep pass's spawn predictions from the
+real game state, which would have broken deterministic mode's whole premise),
+then the real target-depth attempt, and keeping whichever of the two produced
+the higher evaluated value. This gives deterministic mode the same "graceful
+degradation" property iterative deepening gives the standard path, without
+actually switching it to iterative deepening (which isn't a good fit for a
+single-shot manipulation-aware search). Applied to `suggest_move_det_with_usage`,
+`suggest_move_det_guarantee`, and `suggest_action_det_with_usage` in
+`deterministic.rs`.
+
 ## 0b. `bin/bench.rs` — added a per-game move/time cap to the benchmark harness
 After the deadline fix, `Balanced/Guarantee/6x6` ran for **6.8 hours on a single
 game** (score 12.8M, max tile 524288) instead of hanging. That's not a bug in the
