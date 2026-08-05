@@ -1,0 +1,93 @@
+{
+  "baseline": {
+    "description": "Defaults, mirrors nneonneo's original weights, moderate time budget",
+    "time_budget": 0.2,
+    "tt_bits": 22,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": {}
+  },
+  "fast": {
+    "description": "Tight time budget for quick iteration / weaker but faster play",
+    "time_budget": 0.05,
+    "tt_bits": 20,
+    "cache_depth_limit": 12,
+    "min_depth": 3,
+    "depth_bias": 3,
+    "max_depth": 7,
+    "weights": {}
+  },
+  "strong": {
+    "description": "Larger time budget and cache, deeper max depth for stronger play",
+    "time_budget": 0.5,
+    "tt_bits": 24,
+    "cache_depth_limit": 18,
+    "min_depth": 3,
+    "depth_bias": 1,
+    "max_depth": 9,
+    "weights": {}
+  },
+  "no_cache": {
+    "description": "Cache disabled entirely, isolates the speedup the transposition table provides",
+    "time_budget": 0.2,
+    "tt_bits": 22,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "no_cache": true,
+    "weights": {}
+  },
+  "small_cache": {
+    "description": "Small transposition table to test memory/hit-rate tradeoff",
+    "time_budget": 0.2,
+    "tt_bits": 16,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": {}
+  },
+  "huge_cache": {
+    "description": "Very large transposition table (2^26 entries, ~1GB) to test upper bound of cache benefit",
+    "time_budget": 0.2,
+    "tt_bits": 26,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": {}
+  },
+  "empty_focused": {
+    "description": "Heuristic variant emphasizing empty-cell count over merges",
+    "time_budget": 0.2,
+    "tt_bits": 22,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "empty_weight": 400.0, "merges_weight": 500.0 }
+  },
+  "monotonicity_focused": {
+    "description": "Heuristic variant emphasizing monotonicity (corner-stacking strategy)",
+    "time_budget": 0.2,
+    "tt_bits": 22,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "monotonicity_weight": 80.0, "sum_weight": 8.0 }
+  },
+  "shallow_deep_depthbias": {
+    "description": "Aggressive depth_bias=0 for deepest search relative to distinct tile count",
+    "time_budget": 0.3,
+    "tt_bits": 23,
+    "cache_depth_limit": 16,
+    "min_depth": 3,
+    "depth_bias": 0,
+    "max_depth": 9,
+    "weights": {}
+  }
+}
