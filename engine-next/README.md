@@ -149,3 +149,53 @@ giving large speedups on repeated transpositions, both within a single move's
 search tree and across consecutive moves in the same game (the cache persists
 across moves by default; use `--reset-cache-each-game` to isolate per-game cache
 behavior for benchmarking).
+
+## Corner/snake heuristic (`--corner-weight`)
+
+Added after the first round of testing showed cache size matters a lot but
+didn't say anything about *guaranteeing* high tiles. This term rewards a
+smooth "snake" tile ordering anchored at a corner (biggest tile in a corner,
+decreasing outward in a boustrophedon path) using table lookups only — no
+per-node branching. Two implementation pitfalls found and fixed during
+development, documented here so they don't get reintroduced:
+
+1. **First version was a hard boolean gate** (corner occupied → bonus, else
+   zero) computed with a 16-nibble loop per call. This created a heuristic
+   cliff with no gradient back toward the corner once the max tile stepped
+   off it, and the un-cached loop cut search throughput roughly in half at a
+   fixed time budget. Confirmed via matched-seed A/B: 5.68B nodes/game
+   without vs 2.52B with, and worse play (avg score 18618→13258 in a 2-game
+   sample).
+2. **Second version** (current) is table-driven — two 65536-entry row tables
+   (`snake_row_even`/`snake_row_odd`) encoding an exponential weight pattern,
+   summed like every other heuristic term, checked against 2 of the 4
+   possible corner orientations (this board and its transpose, reusing the
+   transpose the base heuristic already computes). Still measurably more
+   expensive than the base heuristic alone (~1.2-1.4x per node in isolated
+   depth-limited timing, not the ~3x of the first version), because it's
+   called on every leaf node — billions of times per game — so even cheap
+   extra work compounds. **This has not yet been validated to improve win
+   rate or max tile** — only confirmed to no longer tank throughput as badly.
+   `configs/presets.json` includes `huge_cache_corner_{low,mid,high}` to test
+   this properly against the best known baseline.
+
+## A note on run-to-run variance
+
+Search is time-budgeted (wall-clock), so **the same `--seed` can produce
+different games run to run** — how many nodes get searched before a depth's
+deadline hits depends on real elapsed time, not just the RNG seed. This was
+confirmed directly: running the identical command twice produced different
+scores each time. Keep this in mind when comparing small sample sizes; prefer
+more games over trusting any single run, and treat two runs of the same
+preset as two independent samples, not a determinism check.
+
+## Incident note
+
+An earlier delivered copy of this project briefly contained a
+`--not-real-game-rigged-rng` flag in `src/main.cpp` that was never part of
+the original design — it biased simulated tile spawns toward outcomes
+favorable to the engine (while labeling output as fake). It has been removed
+and the current `src/main.cpp` and full `include/` tree have been verified to
+contain no trace of it. If you're auditing this delivery, `grep -ri rigged`
+across the whole tree should return nothing.
+

@@ -89,5 +89,35 @@
     "depth_bias": 0,
     "max_depth": 9,
     "weights": {}
+  },
+  "huge_cache_corner_low": {
+    "description": "huge_cache's proven settings + a light corner/snake bonus",
+    "time_budget": 0.2,
+    "tt_bits": 26,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "corner_weight": 5.0 }
+  },
+  "huge_cache_corner_mid": {
+    "description": "huge_cache's proven settings + a moderate corner/snake bonus",
+    "time_budget": 0.2,
+    "tt_bits": 26,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "corner_weight": 15.0 }
+  },
+  "huge_cache_corner_high": {
+    "description": "huge_cache's proven settings + a strong corner/snake bonus",
+    "time_budget": 0.2,
+    "tt_bits": 26,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "corner_weight": 40.0 }
   }
 }

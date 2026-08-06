@@ -1,5 +1,63 @@
 # Engine changes
 
+## 0d. Third round: the warm-up fix from 0c had its own bug, plus a proper fix for Guarantee/6x6
+Results after 0c showed `Deterministic`/`DetGuarantee`/4x4 scoring *worse* than
+before, and `Max/Deterministic` (more time budget) scoring worse than
+`Balanced/Deterministic` (less budget) — a clear sign of a new bug, not just an
+unhelped one. And `Guarantee/6x6` barely moved (37.7k vs 36.9k).
+
+**Bug: the warm-up and deep passes shared one deadline.** In 0c's fix,
+`set_search_deadline` was called once before *both* the depth-3 warm-up pass and
+the deep target-depth pass. The warm-up pass would consume part of that shared
+window before the deep pass even started — so the deep pass started with less
+time than the deadline implied, sometimes almost none. Worse under `Max` mode:
+its 4x bigger node-budget scale let the depth-3 warm-up explore more nodes (still
+cheap relative to `Max`'s huge total budget, but non-zero), eating more of the
+shared window before the deep pass's turn — explaining why `Max` scored worse
+than `Balanced` despite having 16x more total time budget.
+
+Fixed by giving each pass its own independent deadline window: a small fixed
+slice (15% of the total budget) for the warm-up, and the *full* budget for the
+deep pass, timed from when the deep pass actually starts. Applied to
+`suggest_move_det_with_usage`, `suggest_move_det_guarantee`, and
+`suggest_action_det_with_usage` in `deterministic.rs`.
+
+**`Guarantee/6x6` — the fixed `max_depth - 2` warm-up-start (from 0c) wasn't
+aggressive enough.** A flat "-2 from target" offset doesn't account for board
+size: depth 6-8 on a 6x6 board is still too expensive to complete even once
+within `Balanced`'s ~100ms hard cap, so `best_move`'s single attempted pass was
+still getting deadline-truncated mid-search, same failure mode as before, just
+one level shallower.
+
+Replaced the static offset with **real adaptive iterative deepening** in
+`search.rs`'s `best_move`: start at depth 1 (always cheap, always completes),
+and after each *fully completed* pass, only attempt the next depth if that
+pass's elapsed time — projected forward with a 6x safety margin, since
+expectimax branching typically multiplies cost by several x per extra ply —
+fits within the remaining soft time budget. This adapts correctly to board size
+and usage mode without hardcoding an offset: a 6x6 board that can only afford
+depth 4 in its time budget will stop at depth 4 with a clean, fully-computed
+result; a 4x4 board that can reach depth 12 will do so. Critically, this also
+means `best_move` now only ever returns a move from a **fully completed** pass —
+never a deadline-truncated partial one — so the search depth adapts, but the
+result at whatever depth it reaches is never biased by an uneven mid-search cutoff.
+Each pass still gets its own hard per-pass deadline as a safety net against one
+pass unexpectedly running away (e.g. pathological branching), it's just no
+longer the thing deciding how deep the search goes under normal conditions.
+
+## 0e. `scripts/run_full_bundle.ps1` — speed-sweep loop was crashing on a compiler warning
+The speed-sweep half of the bundle script failed with
+`STATUS_CONTROL_C_EXIT`-adjacent noise after `cargo`'s harmless
+`unused variable` warning. Cause: `2>&1 | Tee-Object` merges `cargo`'s stderr
+output into the pipeline as PowerShell `ErrorRecord` objects, and
+`$ErrorActionPreference = "Stop"` then treats the *first* one as a terminating
+script error — even though `cargo`'s actual process exit code was 0 (a compiler
+warning isn't a build failure). Fixed by relaxing `$ErrorActionPreference`
+around the native `cargo` calls specifically (PowerShell's `Stop` preference
+isn't meant to apply to plain stderr text from external programs) and checking
+`$LASTEXITCODE` explicitly instead, which is the actual reliable signal of
+whether `cargo` failed.
+
 ## 0c. Two more timing-related quality bugs found from the second test run
 The move/game caps held (sweep finished in ~46 min, no hangs), but the results
 exposed two real quality bugs, both downstream of the deadline fix actually

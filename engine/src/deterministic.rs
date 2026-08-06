@@ -367,18 +367,24 @@ impl Engine {
         let search_depth = Self::endgame_depth(grid, depth.unwrap_or_else(|| Self::auto_depth(grid)))
             + DET_DEPTH_BONUS;
         let scale = usage.node_budget_scale();
-        let start = now_ms();
-        set_search_deadline(start + usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER);
+        let total_budget_ms = usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER;
 
         const WARMUP_DEPTH: usize = 3;
+        const WARMUP_TIME_FRACTION: f64 = 0.15;
         let (warmup_dir, warmup_val) = if search_depth > WARMUP_DEPTH {
+            let warmup_start = now_ms();
+            set_search_deadline(warmup_start + total_budget_ms * WARMUP_TIME_FRACTION);
             let mut warmup_rng = SeedRng::init(key, calls);
             let mut warmup_budget = Self::scaled_budget_for_depth(WARMUP_DEPTH, scale);
-            Self::best_move_det(grid, WARMUP_DEPTH, &mut warmup_budget, &mut warmup_rng, manipulate, usage)
+            let result = Self::best_move_det(grid, WARMUP_DEPTH, &mut warmup_budget, &mut warmup_rng, manipulate, usage);
+            clear_search_deadline();
+            result
         } else {
             (None, f64::NEG_INFINITY)
         };
 
+        let deep_start = now_ms();
+        set_search_deadline(deep_start + total_budget_ms);
         let mut rng = SeedRng::init(key, calls);
         let mut budget = Self::scaled_budget_for_depth(search_depth, scale);
         let (deep_dir, deep_val) = Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage);
@@ -405,18 +411,24 @@ impl Engine {
         let target_depth = base_depth + DET_DEPTH_BONUS;
         let search_depth = Self::endgame_depth(grid, target_depth);
         let scale = usage.node_budget_scale();
-        let start = now_ms();
-        set_search_deadline(start + usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER);
+        let total_budget_ms = usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER;
 
         const WARMUP_DEPTH: usize = 3;
+        const WARMUP_TIME_FRACTION: f64 = 0.15;
         let (warmup_dir, warmup_val) = if search_depth > WARMUP_DEPTH {
+            let warmup_start = now_ms();
+            set_search_deadline(warmup_start + total_budget_ms * WARMUP_TIME_FRACTION);
             let mut warmup_rng = SeedRng::init(key, calls);
             let mut warmup_budget = Self::scaled_budget_for_depth(WARMUP_DEPTH, scale);
-            Self::best_move_det(grid, WARMUP_DEPTH, &mut warmup_budget, &mut warmup_rng, manipulate, usage)
+            let result = Self::best_move_det(grid, WARMUP_DEPTH, &mut warmup_budget, &mut warmup_rng, manipulate, usage);
+            clear_search_deadline();
+            result
         } else {
             (None, f64::NEG_INFINITY)
         };
 
+        let deep_start = now_ms();
+        set_search_deadline(deep_start + total_budget_ms);
         let mut rng = SeedRng::init(key, calls);
         let mut budget = Self::scaled_budget_for_depth(search_depth, scale);
         let (deep_dir, deep_val) = Self::best_move_det(grid, search_depth, &mut budget, &mut rng, manipulate, usage);
@@ -464,18 +476,24 @@ impl Engine {
         let size = grid.len();
         let d = depth.unwrap_or_else(|| Self::auto_depth(grid)) + DET_DEPTH_BONUS;
         let scale = usage.node_budget_scale();
-        let start = now_ms();
-        set_search_deadline(start + usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER);
+        let total_budget_ms = usage.time_budget_ms() as f64 * DET_HARD_TIME_MULTIPLIER;
 
         const WARMUP_DEPTH: usize = 3;
+        const WARMUP_TIME_FRACTION: f64 = 0.15;
         let (warmup_dir, warmup_val) = if d > WARMUP_DEPTH {
+            let warmup_start = now_ms();
+            set_search_deadline(warmup_start + total_budget_ms * WARMUP_TIME_FRACTION);
             let mut warmup_rng = SeedRng::init(key, calls);
             let mut warmup_budget = Self::scaled_budget_for_depth(WARMUP_DEPTH, scale);
-            Self::best_move_det(grid, WARMUP_DEPTH, &mut warmup_budget, &mut warmup_rng, manipulate, usage)
+            let result = Self::best_move_det(grid, WARMUP_DEPTH, &mut warmup_budget, &mut warmup_rng, manipulate, usage);
+            clear_search_deadline();
+            result
         } else {
             (None, f64::NEG_INFINITY)
         };
 
+        let deep_start = now_ms();
+        set_search_deadline(deep_start + total_budget_ms);
         let mut rng = SeedRng::init(key, calls);
         let mut budget = Self::scaled_budget_for_depth(d, scale);
         let (deep_dir, deep_val) =

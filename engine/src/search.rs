@@ -169,27 +169,32 @@ impl Engine {
         usage: UsageMode,
     ) -> (Option<Direction>, f64) {
         let start = now_ms();
-        let time_budget_ms = usage.time_budget_ms();
+        let time_budget_ms = usage.time_budget_ms() as f64;
         let scale = usage.node_budget_scale();
         let max_cells = usage.max_sampled_cells().min(MAX_SAMPLED_CELLS_CAP);
-        set_search_deadline(start + time_budget_ms as f64 * HARD_TIME_MULTIPLIER);
         let mut best_dir = None;
         let mut best_val = f64::NEG_INFINITY;
-        const WARMUP_PASSES: usize = 2;
-        let mut depth = max_depth.saturating_sub(WARMUP_PASSES).max(1);
+        let mut depth = 1;
+        const GROWTH_SAFETY_FACTOR: f64 = 6.0;
         loop {
+            let pass_start = now_ms();
+            set_search_deadline(pass_start + time_budget_ms * HARD_TIME_MULTIPLIER);
             let mut budget = Self::scaled_budget_for_depth(depth, scale);
             let (dir, val) = Self::best_move_fixed(grid, depth, &mut budget, max_cells);
+            clear_search_deadline();
+            let pass_elapsed = now_ms() - pass_start;
             if dir.is_some() {
                 best_dir = dir;
                 best_val = val;
             }
-            if depth >= max_depth || now_ms() - start >= time_budget_ms as f64 {
+            let elapsed = now_ms() - start;
+            let remaining = time_budget_ms - elapsed;
+            let projected_next = pass_elapsed * GROWTH_SAFETY_FACTOR;
+            if depth >= max_depth || remaining <= 0.0 || projected_next > remaining {
                 break;
             }
             depth += 1;
         }
-        clear_search_deadline();
         (best_dir, best_val)
     }
 

@@ -37,13 +37,27 @@ $sweep = @(
 ) -join ","
 
 cargo run --release --bin bench -- --sweep="$sweep" --log="$qualityLog"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Quality sweep failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+    exit $LASTEXITCODE
+}
 
 Write-Host ""
 Write-Host "=== Run 2/2: Speed sweep (3,4,5,6 only, 8x8 skipped) ==="
 if (Test-Path $speedLog) { Remove-Item $speedLog }
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 foreach ($size in 3, 4, 5, 6) {
-    cargo run --release --bin bench-speed -- $size 2>&1 | Tee-Object -FilePath $speedLog -Append
+    cargo run --release --bin bench-speed -- $size 2>&1 |
+        ForEach-Object { $_.ToString() } |
+        Tee-Object -FilePath $speedLog -Append
+    if ($LASTEXITCODE -ne 0) {
+        $ErrorActionPreference = $prevEap
+        Write-Host "Speed sweep failed on size $size (exit code $LASTEXITCODE)" -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
 }
+$ErrorActionPreference = $prevEap
 
 Write-Host ""
 Write-Host "=== Done ==="

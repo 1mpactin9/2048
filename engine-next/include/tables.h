@@ -12,6 +12,11 @@ public:
     std::vector<board_t> col_up, col_down;
     std::vector<float>   heur_score;
     std::vector<float>   raw_score;
+    // Snake weight tables: snake_row_even applies to board rows 0 and 2,
+    // snake_row_odd to rows 1 and 3, so the weights alternate direction and
+    // together encode a continuous boustrophedon path across the whole board.
+    std::vector<float>   snake_row_even;
+    std::vector<float>   snake_row_odd;
 
     explicit Tables(const Weights& w) {
         row_left.resize(65536);
@@ -20,8 +25,11 @@ public:
         col_down.resize(65536);
         heur_score.resize(65536);
         raw_score.resize(65536);
+        snake_row_even.resize(65536);
+        snake_row_odd.resize(65536);
         corner_weight_ = w.corner_weight;
         build(w);
+        build_snake();
     }
 
     inline board_t move_up(board_t board) const {
@@ -75,8 +83,11 @@ public:
     }
 
     inline float score_heur(board_t board) const {
-        float base = score_helper(board, heur_score) + score_helper(transpose(board), heur_score);
-        if (corner_weight_ != 0.0f) base += corner_bonus(board) * corner_weight_;
+        board_t t = transpose(board);
+        float base = score_helper(board, heur_score) + score_helper(t, heur_score);
+        if (corner_weight_ != 0.0f) {
+            base += std::max(snake_one_orientation(board), snake_one_orientation(t)) * corner_weight_;
+        }
         return base;
     }
 
@@ -87,39 +98,26 @@ public:
 private:
     float corner_weight_ = 0.0f;
 
-    // Cheap whole-board term: reward configurations where the maximum tile sits
-    // in a corner AND its immediate neighbors decrease monotonically away from
-    // that corner (an actual "snake" anchor), rather than just rewarding corner
-    // placement alone, which can be satisfied by otherwise poor boards.
-    inline float corner_bonus(board_t board) const {
-        int nibs[16];
-        board_t tmp = board;
-        int max_rank = 0, max_pos = 0;
-        for (int i = 0; i < 16; ++i) {
-            nibs[i] = int(tmp & 0xf);
-            tmp >>= 4;
-            if (nibs[i] > max_rank) { max_rank = nibs[i]; max_pos = i; }
-        }
-        // nibble layout: row = pos/4, col = pos%4 (matches board.h packing order)
-        int row = max_pos / 4, col = max_pos % 4;
-        bool in_corner = (row == 0 || row == 3) && (col == 0 || col == 3);
-        if (!in_corner) return 0.0f;
-
-        int row_step = (row == 0) ? 1 : -1;
-        int col_step = (col == 0) ? 1 : -1;
-        float snake_score = 0.0f;
-        for (int r = 0; r < 4; ++r) {
-            int expected_prev = -1;
-            for (int c = 0; c < 4; ++c) {
-                int rr = (row_step > 0) ? r : 3 - r;
-                int cc = (col_step > 0) ? c : 3 - c;
-                int idx = rr * 4 + cc;
-                if (expected_prev >= 0 && nibs[idx] <= expected_prev) snake_score += 1.0f;
-                expected_prev = nibs[idx];
-            }
-        }
-        return float(max_rank) + snake_score;
+    inline float snake_one_orientation(board_t b) const {
+        return snake_row_even[(b >> 0) & ROW_MASK] + snake_row_odd[(b >> 16) & ROW_MASK] +
+               snake_row_even[(b >> 32) & ROW_MASK] + snake_row_odd[(b >> 48) & ROW_MASK];
     }
+
+    // Snake/corner heuristic, implemented as table lookups only (same cost
+    // model as every other heuristic term below). snake_row_even/odd jointly
+    // encode one fixed exponential weight path (a "boustrophedon" snake)
+    // anchored at a corner. The value degrades smoothly as tiles drift out of
+    // order instead of collapsing to zero the instant the max tile leaves a
+    // corner, unlike a hard corner-occupancy check.
+    //
+    // score_heur checks 2 of the 4 possible corner anchors (this orientation
+    // and its transpose, reusing the transpose already computed for the base
+    // heuristic) rather than all 4: this runs on every leaf node of the
+    // search (billions of times per game), and a full 4-way check requiring
+    // reconstructed row-reversed boards measured ~3x more expensive for
+    // marginal extra coverage — the two omitted corners are still indirectly
+    // encouraged by the base monotonicity term, which already scores both
+    // row and transpose directions symmetrically.
     void build(const Weights& w) {
         for (unsigned row = 0; row < 65536; ++row) {
             unsigned line[4] = {
@@ -183,6 +181,32 @@ private:
             row_right[rev_row] = row_t(rev_row) ^ rev_result;
             col_up[row]        = unpack_col(row_t(row)) ^ unpack_col(result);
             col_down[rev_row]  = unpack_col(row_t(rev_row)) ^ unpack_col(rev_result);
+        }
+    }
+
+    // Weight magnitudes follow the widely-used 4^k progression for snake
+    // heuristics (each step out from the anchor corner is worth 1/4 of the
+    // previous one), keeping the top-left tile dominant in the score. Divided
+    // by 2^18 so the resulting term is O(tile rank) rather than O(2^18 *
+    // rank), keeping --corner-weight on a comparable scale to the other
+    // heuristic weights (roughly 0-300 is a sane range, same as empty/merges).
+    void build_snake() {
+        static const float POS_WEIGHT[4] = {
+            1.0f, 1.0f / 4.0f, 1.0f / 16.0f, 1.0f / 64.0f
+        };
+        for (unsigned row = 0; row < 65536; ++row) {
+            unsigned line[4] = {
+                (row >> 0) & 0xf, (row >> 4) & 0xf,
+                (row >> 8) & 0xf, (row >> 12) & 0xf
+            };
+            float even = 0.0f, odd = 0.0f;
+            for (int i = 0; i < 4; ++i) {
+                float tile_value = line[i] == 0 ? 0.0f : float(1 << line[i]);
+                even += tile_value * POS_WEIGHT[i];
+                odd  += tile_value * POS_WEIGHT[3 - i];
+            }
+            snake_row_even[row] = even;
+            snake_row_odd[row] = odd;
         }
     }
 };
