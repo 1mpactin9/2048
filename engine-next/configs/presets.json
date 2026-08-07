@@ -119,5 +119,45 @@
     "depth_bias": 2,
     "max_depth": 8,
     "weights": { "corner_weight": 40.0 }
+  },
+  "corner_sweep_10": {
+    "description": "Fine sweep around the round-1 winner (weight=15): corner_weight=10",
+    "time_budget": 0.2,
+    "tt_bits": 26,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "corner_weight": 10.0 }
+  },
+  "corner_sweep_15": {
+    "description": "Fine sweep around the round-1 winner: corner_weight=15, more games for confidence (same as huge_cache_corner_mid, rerun for a larger combined sample)",
+    "time_budget": 0.2,
+    "tt_bits": 26,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "corner_weight": 15.0 }
+  },
+  "corner_sweep_20": {
+    "description": "Fine sweep around the round-1 winner: corner_weight=20",
+    "time_budget": 0.2,
+    "tt_bits": 26,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "corner_weight": 20.0 }
+  },
+  "corner_sweep_25": {
+    "description": "Fine sweep around the round-1 winner: corner_weight=25",
+    "time_budget": 0.2,
+    "tt_bits": 26,
+    "cache_depth_limit": 15,
+    "min_depth": 3,
+    "depth_bias": 2,
+    "max_depth": 8,
+    "weights": { "corner_weight": 25.0 }
   }
 }
