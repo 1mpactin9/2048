@@ -1,5 +1,65 @@
 # Engine changes
 
+## 0f. Fourth round: converted the deterministic path's callers to real adaptive iterative deepening too
+Results after 0d/0e showed `Deterministic`/`DetGuarantee`/4x4 still scoring below
+`Standard`/4x4 (17.9k/21.5k vs 49.2k avg) — the two-tier "cheap depth-3 warm-up,
+then one attempt at the full target depth" scheme from 0c/0d was still leaving a
+gap: on boards/usage-modes where the target depth was unreachable in the
+remaining 85% of the budget, there was nothing *between* depth 3 and the
+(unreachable) target — no depth 5, 6, 7... to fall back on. `search.rs`'s
+`best_move` already had a much better fix for this exact problem (0d): real
+adaptive iterative deepening, where the loop climbs one depth at a time and only
+attempts the next depth if the previous *fully completed* pass's timing
+projects safely within budget.
+
+Converted the deterministic path to the same pattern. Added
+`best_move_det_adaptive` / `best_move_det_adaptive_val` (the latter also
+returns the evaluated score, needed by `suggest_action_det_with_usage`'s
+power-up comparison) and replaced the two-tier scheme in
+`suggest_move_det_with_usage`, `suggest_move_det_guarantee`, and
+`suggest_action_det_with_usage`. Each pass still gets a fresh
+`SeedRng::init(key, calls)` — never a shared/advancing one — since every pass
+must see the actual game's real RNG state at the given `calls` count regardless
+of which depth it's trying.
+
+**Side effect caught while doing this:** `suggest_action_det_with_usage`'s
+delete/swap power-up evaluation loops call `best_move_det` directly, and
+previously relied on a deadline that had been set before the (now-removed)
+warm-up/deep block and was still active when those loops ran. Once the move
+search moved to the adaptive helper (which sets and clears its own deadline
+internally, per pass), those loops were left with **no deadline at all** —
+exactly the class of bug from section 0. Added an explicit
+`set_search_deadline`/`clear_search_deadline` around just that section so it's
+protected independently of whatever the move-search helper does internally.
+
+## Known tradeoff, not fixed: `Guarantee`/`DetGuarantee` at 6x6 hit the per-game wall-clock cap every time, and that's now doing real work
+After the adaptive-depth fix, `Guarantee/6x6` improved 5x (37.7k → 184k avg) but
+every game still hit the harness's 120-second cap — it's not close to the
+20,000-move cap. `DetGuarantee/6x6` actually went *down* between runs (551k →
+431k) despite the fix being a correctness improvement, and the pattern lines up
+exactly with hitting the full 120s cap every game in the newer run vs. not in
+the older one.
+
+This isn't a bug — it's the expected shape of the fix. `Guarantee`/`DetGuarantee`
+now spend real time completing full passes at each depth before deciding whether
+to go deeper, which is exactly what makes each individual move better-considered
+— but it also means those modes now make meaningfully fewer total moves per
+wall-clock second than `Standard`/`Deterministic`, which have much cheaper
+per-move search. The 120-second-per-game cap in `bench.rs` (`MAX_SECONDS_PER_GAME`)
+applies equally to every config, which means slower-but-more-thorough modes get
+cut off after fewer moves than faster-but-shallower ones, and it's not obvious
+from a benchmark's perspective whether "431k after being cut off at 120s" is
+actually worse play than "551k after being cut off at 120s" once you're
+comparing different numbers of moves made under the same wall-clock budget
+rather than the same search quality.
+
+I didn't raise `MAX_SECONDS_PER_GAME` to compensate, since that would slow down
+every config in the sweep, not just these two, which cuts against wanting fast
+turnaround. If you want a fairer read on `Guarantee`/`DetGuarantee` at larger
+board sizes specifically, run just those two configs with a longer per-game cap
+(or a raised `MAX_MOVES_PER_GAME` if you'd rather bound on moves than wall time)
+in an isolated run, rather than folding it into the full sweep.
+
 ## 0d. Third round: the warm-up fix from 0c had its own bug, plus a proper fix for Guarantee/6x6
 Results after 0c showed `Deterministic`/`DetGuarantee`/4x4 scoring *worse* than
 before, and `Max/Deterministic` (more time budget) scoring worse than
