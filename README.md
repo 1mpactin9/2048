@@ -1,11 +1,12 @@
 <div align="center">
     <h1>2048 Engine</h1>
-</div>
 
 > * [Prerequisites](#prerequisites) • [Installation](#quick-start) • [Development](#build) *
 
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Actions](https://img.shields.io/github/actions/workflow/status/1mpactin9/engine2048/ci.yml?branch=main)](https://github.com/1mpactin9/engine2048/actions)
+
+</div>
 
 A clean, responsive 2048 game built with TypeScript, Vite, and a Rust/WASM game engine. Still in progress, but it works! Currently has a guarantee high success rate for 4x4 boards to get to **8192**!
 
