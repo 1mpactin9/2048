@@ -1,7 +1,7 @@
 <div align="center">
     <h1>2048 Engine</h1>
 
-> * [Prerequisites](#prerequisites) • [Installation](#quick-start) • [Development](#build) *
+> [Prerequisites](#prerequisites) • [Installation](#quick-start) • [Development](#build)
 
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Actions](https://img.shields.io/github/actions/workflow/status/1mpactin9/engine2048/ci.yml?branch=main)](https://github.com/1mpactin9/engine2048/actions)
