@@ -1,7 +1,6 @@
 {
   "baseline": {
-    "description": "Defaults, mirrors nneonneo's original weights, moderate time budget",
-    "time_budget": 0.2,
+    "description": "nneonneo's exact proven settings: depth = max(3, distinct-2), cache 2^22 entries",
     "tt_bits": 22,
     "cache_depth_limit": 15,
     "min_depth": 3,
@@ -9,29 +8,8 @@
     "max_depth": 8,
     "weights": {}
   },
-  "fast": {
-    "description": "Tight time budget for quick iteration / weaker but faster play",
-    "time_budget": 0.05,
-    "tt_bits": 20,
-    "cache_depth_limit": 12,
-    "min_depth": 3,
-    "depth_bias": 3,
-    "max_depth": 7,
-    "weights": {}
-  },
-  "strong": {
-    "description": "Larger time budget and cache, deeper max depth for stronger play",
-    "time_budget": 0.5,
-    "tt_bits": 24,
-    "cache_depth_limit": 18,
-    "min_depth": 3,
-    "depth_bias": 1,
-    "max_depth": 9,
-    "weights": {}
-  },
   "no_cache": {
-    "description": "Cache disabled entirely, isolates the speedup the transposition table provides",
-    "time_budget": 0.2,
+    "description": "Cache disabled entirely; isolates how much the transposition table helps at fixed depth",
     "tt_bits": 22,
     "cache_depth_limit": 15,
     "min_depth": 3,
@@ -40,19 +18,8 @@
     "no_cache": true,
     "weights": {}
   },
-  "small_cache": {
-    "description": "Small transposition table to test memory/hit-rate tradeoff",
-    "time_budget": 0.2,
-    "tt_bits": 16,
-    "cache_depth_limit": 15,
-    "min_depth": 3,
-    "depth_bias": 2,
-    "max_depth": 8,
-    "weights": {}
-  },
   "huge_cache": {
-    "description": "Very large transposition table (2^26 entries, ~1GB) to test upper bound of cache benefit",
-    "time_budget": 0.2,
+    "description": "Same fixed-depth search as baseline, much larger cache (2^26 entries, ~1GB) to isolate cache-size effect alone",
     "tt_bits": 26,
     "cache_depth_limit": 15,
     "min_depth": 3,
@@ -60,64 +27,31 @@
     "max_depth": 8,
     "weights": {}
   },
-  "empty_focused": {
-    "description": "Heuristic variant emphasizing empty-cell count over merges",
-    "time_budget": 0.2,
-    "tt_bits": 22,
-    "cache_depth_limit": 15,
-    "min_depth": 3,
-    "depth_bias": 2,
-    "max_depth": 8,
-    "weights": { "empty_weight": 400.0, "merges_weight": 500.0 }
-  },
-  "monotonicity_focused": {
-    "description": "Heuristic variant emphasizing monotonicity (corner-stacking strategy)",
-    "time_budget": 0.2,
-    "tt_bits": 22,
-    "cache_depth_limit": 15,
-    "min_depth": 3,
-    "depth_bias": 2,
-    "max_depth": 8,
-    "weights": { "monotonicity_weight": 80.0, "sum_weight": 8.0 }
-  },
-  "shallow_deep_depthbias": {
-    "description": "Aggressive depth_bias=0 for deepest search relative to distinct tile count",
-    "time_budget": 0.3,
-    "tt_bits": 23,
+  "deeper_search": {
+    "description": "depth_bias=1 instead of 2: searches one ply deeper at every tile count than nneonneo's original",
+    "tt_bits": 24,
     "cache_depth_limit": 16,
     "min_depth": 3,
-    "depth_bias": 0,
+    "depth_bias": 1,
     "max_depth": 9,
     "weights": {}
   },
-  "huge_cache_corner_low": {
-    "description": "huge_cache's proven settings + a light corner/snake bonus",
-    "time_budget": 0.2,
-    "tt_bits": 26,
-    "cache_depth_limit": 15,
-    "min_depth": 3,
-    "depth_bias": 2,
-    "max_depth": 8,
-    "weights": { "corner_weight": 5.0 }
-  },
-  "huge_cache_corner_mid": {
-    "description": "huge_cache's proven settings + a moderate corner/snake bonus",
-    "time_budget": 0.2,
-    "tt_bits": 26,
+  "corner_15": {
+    "description": "baseline + snake/corner heuristic term, weight=15 (best candidate from prior noisy testing, re-tested now that search is deterministic)",
+    "tt_bits": 22,
     "cache_depth_limit": 15,
     "min_depth": 3,
     "depth_bias": 2,
     "max_depth": 8,
     "weights": { "corner_weight": 15.0 }
   },
-  "huge_cache_corner_high": {
-    "description": "huge_cache's proven settings + a strong corner/snake bonus",
-    "time_budget": 0.2,
+  "corner_15_huge_cache": {
+    "description": "corner_15 combined with the huge cache, if both individually help this tests whether they stack",
     "tt_bits": 26,
     "cache_depth_limit": 15,
     "min_depth": 3,
     "depth_bias": 2,
     "max_depth": 8,
-    "weights": { "corner_weight": 40.0 }
+    "weights": { "corner_weight": 15.0 }
   }
 }

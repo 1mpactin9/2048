@@ -34,7 +34,6 @@ static Args parse_args(int argc, char** argv) {
         else if (k == "--tt-bits") a.cfg.tt_size_pow2 = size_t(1) << argi(next());
         else if (k == "--no-cache") a.cfg.use_cache = false;
         else if (k == "--max-depth") a.cfg.max_search_depth = argi(next());
-        else if (k == "--time-budget") a.cfg.time_budget_sec = atof(next());
         else if (k == "--reset-cache-each-game") a.reset_cache_each_game = true;
         else if (k == "--lost-penalty") a.w.lost_penalty = argf(next());
         else if (k == "--mono-power") a.w.monotonicity_power = argf(next());
@@ -55,9 +54,8 @@ static Args parse_args(int argc, char** argv) {
                    "  --depth-bias N          depth_limit = distinct_tiles - depth_bias (default 2)\n"
                    "  --tt-bits N             transposition table size = 2^N entries (default 22)\n"
                    "  --no-cache              disable transposition table\n"
-                   "  --max-depth N           hard ceiling on search depth (default 8)\n"
-                   "  --time-budget F         per-move time budget in seconds for iterative deepening\n"
-                   "                          (default 0.2; set 0 to disable and use fixed depth)\n"
+                   "  --max-depth N           hard ceiling on search depth (default 8; matches nneonneo's\n"
+                   "                          proven design plus this cap for boards with many distinct tiles)\n"
                    "  --reset-cache-each-game clear cache between games (isolates per-game timing)\n"
                    "  --lost-penalty F, --mono-power F, --mono-weight F, --sum-power F,\n"
                    "  --sum-weight F, --merges-weight F, --empty-weight F, --corner-weight F  heuristic weights\n"
