@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BINARY = ROOT / "engine2048.exe"
+BINARY = ROOT / "engine2048"
 PRESETS_FILE = ROOT / "configs" / "presets.json"
 
 WEIGHT_FLAGS = {
@@ -34,7 +34,6 @@ SUMMARY_RE = re.compile(
 
 def build_command(preset_name, preset, games, seed):
     cmd = [str(BINARY), "--games", str(games), "--seed", str(seed)]
-    cmd += ["--time-budget", str(preset.get("time_budget", 0.2))]
     cmd += ["--tt-bits", str(preset.get("tt_bits", 22))]
     cmd += ["--cache-depth-limit", str(preset.get("cache_depth_limit", 15))]
     cmd += ["--min-depth", str(preset.get("min_depth", 3))]
@@ -58,7 +57,7 @@ def run_preset(preset_name, preset, games, seed, timeout):
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
-        print(f"  TIMEOUT after {timeout}s — reduce --games or lower this preset's time_budget")
+        print(f"  TIMEOUT after {timeout}s — reduce --games or lower this preset's max_depth")
         return {"preset": preset_name, "error": "timeout"}
     wall = time.time() - start
 

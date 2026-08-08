@@ -72,7 +72,6 @@ static void test_cache_respects_depth() {
 static void test_engine_produces_legal_move() {
     Weights w;
     SearchConfig cfg;
-    cfg.time_budget_sec = 0.05;
     cfg.max_search_depth = 5;
     Engine engine(w, cfg);
 
@@ -102,6 +101,28 @@ static void test_engine_terminal_board() {
     }
 }
 
+static void test_determinism() {
+    // The whole point of the fixed-depth rewrite: two fresh engines given the
+    // exact same board must choose the exact same move, every time, with no
+    // dependence on wall-clock timing. This was NOT true of the earlier
+    // time-budgeted iterative-deepening design and caused unreproducible
+    // benchmark results.
+    Weights w;
+    SearchConfig cfg;
+    board_t board = 0x0000000000112342ULL;
+
+    Engine engine1(w, cfg);
+    Engine engine2(w, cfg);
+    int move1 = engine1.best_move(board, nullptr);
+    int move2 = engine2.best_move(board, nullptr);
+    CHECK(move1 == move2, "two independent engine instances pick the same move for the same board");
+
+    Engine engine3(w, cfg);
+    int move3 = engine3.best_move(board, nullptr);
+    int move3b = engine3.best_move(board, nullptr);
+    CHECK(move3 == move3b, "the same engine instance picks the same move when asked twice for the same board");
+}
+
 int main() {
     test_transpose_involution();
     test_reverse_row_involution();
@@ -109,6 +130,7 @@ int main() {
     test_moves_basic();
     test_move_noop_detection();
     test_cache_respects_depth();
+    test_determinism();
     test_engine_produces_legal_move();
     test_engine_terminal_board();
 
