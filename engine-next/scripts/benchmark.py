@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BINARY = ROOT / "engine2048"
+BINARY = ROOT / "engine2048.exe"
 PRESETS_FILE = ROOT / "configs" / "presets.json"
 
 WEIGHT_FLAGS = {
